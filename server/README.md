@@ -66,7 +66,7 @@ a clear error and falls back to the local model (LM Studio).
 # From your computer (replace user@host with your VPS login):
 ssh user@host
 # On the VPS:
-git clone https://github.com/<username>/localbotz.git
+git clone https://github.com/webginet-sys/localbotz.git
 cd localbotz/server
 cp .env.example .env
 nano .env   # set PREMIUM_API_TOKEN + your provider keys (see below)

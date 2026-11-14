@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download LocalBotz — Your own personal AI agent, on your own computer</title>
+<meta name="description" content="Download LocalBotz for Windows or Mac. No terminal, no jargon — just download, double-click, and chat with your own personal AI agent.">
+<style>
+  :root {
+    --pink: #ec2a8a;
+    --purple: #7c3aed;
+    --violet: #9333ea;
+    --ink: #1f1b2e;
+    --muted: #5b5566;
+    --line: #e9e4f2;
+    --soft: #faf7ff;
+    --green: #15803d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #fff;
+    line-height: 1.6;
+  }
+  a { color: var(--purple); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  header.top {
+    border-bottom: 1px solid var(--line);
+    padding: 16px 0;
+  }
+  header.top .wrap { display: flex; align-items: center; gap: 12px; }
+  header.top img { height: 44px; width: auto; }
+  header.top .name { font-weight: 800; font-size: 20px; }
+  header.top nav { margin-left: auto; font-size: 15px; }
+  header.top nav a { margin-left: 18px; text-decoration: none; font-weight: 600; }
+
+  .hero {
+    text-align: center;
+    padding: 56px 20px 32px;
+    background: linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 100%);
+  }
+  .hero img.logo { max-width: 320px; width: 80%; height: auto; }
+  .hero h1 { font-size: 34px; line-height: 1.2; margin: 24px 0 8px; }
+  .hero p.tagline {
+    font-size: 20px; color: var(--muted); margin: 0 auto 8px; max-width: 640px;
+  }
+  .hero p.sub { color: var(--muted); max-width: 640px; margin: 12px auto 0; }
+  .gradient-text {
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .need {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px;
+    padding: 20px 24px; margin: 32px auto 0; max-width: 960px;
+  }
+  .need h2 { margin: 0 0 8px; font-size: 20px; }
+  .need ul { margin: 0; padding-left: 20px; }
+  .need li { margin: 4px 0; }
+
+  h2.section { font-size: 26px; margin: 48px 0 8px; text-align: center; }
+  p.lead { text-align: center; color: var(--muted); max-width: 680px; margin: 0 auto 24px; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 8px; }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px;
+    background: var(--soft); text-align: center;
+  }
+  .card .icon { font-size: 44px; line-height: 1; }
+  .card h3 { font-size: 22px; margin: 12px 0 4px; }
+  .card p { color: var(--muted); margin: 0 0 20px; }
+  .btn {
+    display: inline-block;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    color: #fff !important; text-decoration: none; font-weight: 700;
+    font-size: 18px; padding: 14px 26px; border-radius: 999px;
+  }
+  .btn:hover { opacity: 0.92; }
+  .btn.small { font-size: 15px; padding: 10px 18px; }
+  .fine { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  .fine a { color: var(--purple); }
+
+  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+  @media (max-width: 700px) { .steps { grid-template-columns: 1fr; } }
+  .steps-box { border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
+  .steps-box h3 { margin-top: 0; font-size: 20px; }
+  ol { padding-left: 22px; margin: 0; }
+  ol li { margin: 12px 0; }
+  ol li strong { display: block; }
+  code {
+    background: #f3f0fa; border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 6px; font-size: 0.92em;
+  }
+  .note {
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;
+    padding: 14px 18px; margin-top: 16px; font-size: 15px;
+  }
+  .note strong { color: var(--green); }
+
+  .lmstudio {
+    border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-top: 20px;
+    background: #fff;
+  }
+  .lmstudio h3 { margin-top: 0; }
+
+  .faq { margin-top: 8px; }
+  .faq details {
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+    margin: 10px 0; background: #fff;
+  }
+  .faq summary { font-weight: 700; cursor: pointer; font-size: 17px; }
+  .faq p { margin: 10px 0 0; color: var(--muted); }
+
+  footer {
+    margin-top: 56px; border-top: 1px solid var(--line);
+    padding: 28px 0 40px; text-align: center; color: var(--muted); font-size: 15px;
+  }
+  footer a { margin: 0 10px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <img src="assets/logo.png" alt="LocalBotz logo">
+    <span class="name">LocalBotz</span>
+    <nav>
+      <a href="https://github.com/webginet-sys/localbotz">GitHub</a>
+      <a href="README.md">Guide</a>
+      <a href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <img class="logo" src="assets/logo.png" alt="LocalBotz — localbotz in pink to purple with a robot face">
+      <h1>Your own personal AI agent,<br><span class="gradient-text">on your own computer.</span></h1>
+      <p class="tagline">LocalBotz is a friendly helper that lives on your computer. It can answer questions, do research, organise your day, and use your browser — with your own AI model, not someone else's cloud.</p>
+      <p class="sub">Free. Private by design. No account needed to get started.</p>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="need" aria-label="What you need first">
+      <h2>✅ What you need first</h2>
+      <ul>
+        <li><strong>A computer</strong> — Windows 10 or 11, or a Mac with macOS 13 or newer.</li>
+        <li><strong>Internet for the first setup</strong> — to download LocalBotz and your AI model. After that, it works offline.</li>
+        <li><strong>LM Studio + Qwen3.5 (free)</strong> — this is the AI brain that runs on your computer. See the simple steps below.</li>
+      </ul>
+    </section>
+
+    <h2 class="section" id="download">Download LocalBotz</h2>
+    <p class="lead">Pick your computer below. You will go to our GitHub page, then click the green <strong>Code</strong> button and choose <strong>Download ZIP</strong>. That is all — no account, no payment, no terminal.</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="icon" aria-hidden="true">🪟</div>
+        <h3>Download for Windows</h3>
+        <p>For Windows 10 and Windows 11.</p>
+        <a class="btn" href="https://github.com/webginet-sys/localbotz">Get LocalBotz for Windows</a>
+        <p class="fine">Goes to our GitHub page.<br>Then click <strong>Code → Download ZIP</strong>.<br>Or <a href="https://github.com/webginet-sys/localbotz/archive/refs/heads/main.zip">download the ZIP directly</a>.</p>
+      </div>
+      <div class="card">
+        <div class="icon" aria-hidden="true">🍎</div>
+        <h3>Download for Mac</h3>
+        <p>For Mac with Apple Silicon (M1 / M2 / M3 / M4) and Intel Macs.</p>
+        <a class="btn" href="https://github.com/webginet-sys/localbotz">Get LocalBotz for Mac</a>
+        <p class="fine">Goes to our GitHub page.<br>Then click <strong>Code → Download ZIP</strong>.<br>Or <a href="https://github.com/webginet-sys/localbotz/archive/refs/heads/main.zip">download the ZIP directly</a>.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:16px;">Prefer ready-made installers? Check <a href="https://github.com/webginet-sys/localbotz/releases">Releases on GitHub</a> when they are available.</p>
+
+    <h2 class="section">First, get your AI model (5 minutes, once)</h2>
+    <p class="lead">LocalBotz needs an AI model on your computer. We use LM Studio — a free app — with the Qwen3.5 model. You only do this once.</p>
+    <div class="lmstudio">
+      <h3>🧠 Set up LM Studio + Qwen3.5</h3>
+      <ol>
+        <li><strong>Download LM Studio</strong> — go to <a href="https://lmstudio.ai/">lmstudio.ai</a> and download it for Windows or Mac, then install it like any normal app.</li>
+        <li><strong>Download the Qwen3.5 model</strong> — open LM Studio, search for <strong>Qwen3.5</strong>, and download it.</li>
+        <li><strong>Start the local server</strong> — in LM Studio, open the <strong>Developer</strong> tab (the <code>&lt;/&gt;</code> icon on the left), load Qwen3.5, and press <strong>Start Server</strong>. Leave LM Studio open while you use LocalBotz.</li>
+      </ol>
+      <div class="note"><strong>Tip:</strong> If LM Studio shows a longer name for the model, for example <code>qwen/qwen3.5-…</code>, that is fine — just copy that exact name into LocalBotz later if it asks for it. The normal name is <code>qwen3.5</code>.</div>
+    </div>
+
+    <h2 class="section">Then, install LocalBotz</h2>
+    <div class="steps">
+      <div class="steps-box">
+        <h3>🪟 On Windows — 5 steps</h3>
+        <ol>
+          <li><strong>Click “Get LocalBotz for Windows” above.</strong><br>You will see our GitHub page. Click the green <strong>Code</strong> button, then <strong>Download ZIP</strong>.</li>
+          <li><strong>Open the downloaded ZIP.</strong><br>Find it in your Downloads folder, open it, and click <strong>Extract All</strong>. Choose a folder you will remember, for example your Desktop.</li>
+          <li><strong>Double-click <code>start.bat</code>.</strong><br>It is in the folder you just extracted. A small black window will appear — that is normal, it is setting LocalBotz up for you. The first time takes a few minutes.</li>
+          <li><strong>Wait while it sets itself up.</strong><br>It installs what it needs and then starts LocalBotz. Please leave the black window open while you use LocalBotz.</li>
+          <li><strong>LocalBotz opens in your browser.</strong><br>Your browser should open to <code>localhost:8000</code> — that is LocalBotz running on your own computer. If it does not open by itself, type <code>localhost:8000</code> into your browser's address bar.</li>
+        </ol>
+        <div class="note"><strong>What you will see:</strong> a chat screen where you can make a bot, pick a template, and start talking. Your first bot is ready to go.</div>
+      </div>
+      <div class="steps-box">
+        <h3>🍎 On Mac — 5 steps</h3>
+        <ol>
+          <li><strong>Click “Get LocalBotz for Mac” above.</strong><br>You will see our GitHub page. Click the green <strong>Code</strong> button, then <strong>Download ZIP</strong>.</li>
+          <li><strong>Open the ZIP.</strong><br>Find it in your Downloads folder and double-click it. It will open into a folder called <code>localbotz</code>.</li>
+          <li><strong>Double-click <code>start.command</code>.</strong><br>It is in the <code>localbotz</code> folder. If your Mac says it cannot be opened, right-click it (or hold Control and click), choose <strong>Open</strong>, then click <strong>Open</strong> again. A small window will appear — that is normal.</li>
+          <li><strong>Wait while it sets itself up.</strong><br>It installs what it needs and then starts LocalBotz. The first time takes a few minutes. Please leave that window open while you use LocalBotz.</li>
+          <li><strong>LocalBotz opens in your browser.</strong><br>Your browser should open to <code>localhost:8000</code> — that is LocalBotz running on your own computer. If it does not open by itself, type <code>localhost:8000</code> into your browser's address bar.</li>
+        </ol>
+        <div class="note"><strong>Apple Silicon or Intel?</strong> Both work. The same download works on M1, M2, M3, M4 Macs and on older Intel Macs — you do not need to choose.</div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:16px;">To stop LocalBotz, just close the small window (Windows: the black window; Mac: the Terminal window). To start it again, double-click <code>start.bat</code> (Windows) or <code>start.command</code> (Mac) again.</p>
+
+    <h2 class="section">Questions people ask</h2>
+    <div class="faq">
+      <details>
+        <summary>Is it free?</summary>
+        <p>Yes. LocalBotz itself is free, and the Qwen3.5 model in LM Studio is free. You only pay if you choose to use paid online models (like Claude or GPT) — and then only to that provider, if you add your own key.</p>
+      </details>
+      <details>
+        <summary>Is my data private?</summary>
+        <p>Yes. With the local model, your chats, files and browsing stay on your own computer. Nothing is sent to a cloud service unless you choose an online provider yourself.</p>
+      </details>
+      <details>
+        <summary>Do I need to type commands?</summary>
+        <p>No. You only need to download a ZIP, extract it, and double-click one file. The steps above are the whole thing. There is a terminal version for developers in the guide, but you do not need it.</p>
+      </details>
+      <details>
+        <summary>What if it doesn't open?</summary>
+        <p>First, check that the small setup window is still open — LocalBotz stops when you close it. Then open your browser and type <code>localhost:8000</code> in the address bar. If you see an error about Python, install Python 3.11 or newer from <a href="https://www.python.org/downloads/">python.org</a> (on Windows, tick “Add python.exe to PATH” during install), then double-click the start file again.</p>
+      </details>
+      <details>
+        <summary>What if LM Studio isn't running?</summary>
+        <p>LocalBotz will tell you it cannot reach LM Studio. Open LM Studio, make sure Qwen3.5 is loaded, press <strong>Start Server</strong> in the Developer tab, and try again. LocalBotz will reconnect automatically.</p>
+      </details>
+      <details>
+        <summary>Can I use Claude, GPT or Gemini instead?</summary>
+        <p>Yes, when you have internet. In LocalBotz, go to Settings → Connectors and add the key for the provider you want. You can use whichever model is available — local or online — and switch per bot.</p>
+      </details>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="README.md">Full guide (README)</a> ·
+      <a href="DOWNLOAD.md">Download instructions</a> ·
+      <a href="https://github.com/webginet-sys/localbotz">GitHub: webginet-sys/localbotz</a> ·
+      <a href="https://github.com/webginet-sys/localbotz/issues">Support / report a problem</a>
+    </p>
+    <p>LocalBotz — free, open, and yours. Your own personal AI agent, on your own computer.</p>
+  </div>
+</footer>
+
+</body>
+</html>

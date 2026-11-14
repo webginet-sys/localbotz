@@ -8,15 +8,30 @@ history and memory file. The agent can search the web, drive a real browser
 (Playwright/Chromium), read/write files in `./workspace`, and run safe shell
 commands — driven by a downloaded local model in **LM Studio**.
 
+## Download — for everyone
+
+**You do not need to know how to use a terminal.** If you have never
+downloaded an app from GitHub before, start here:
+
+- **Open the download page:** [download.html](download.html) — also at
+  `docs/download.html` for GitHub Pages — or read the plain-language
+  steps in [DOWNLOAD.md](DOWNLOAD.md).
+- **🪟 [Download for Windows](https://github.com/webginet-sys/localbotz)** — Windows 10 / 11. On GitHub, click **Code → Download ZIP**, extract it, then double-click `start.bat`.
+- **🍎 [Download for Mac](https://github.com/webginet-sys/localbotz)** — Apple Silicon (M1 / M2 / M3 / M4) and Intel. On GitHub, click **Code → Download ZIP**, open the ZIP, then double-click `start.command`.
+- Then open your browser to `http://localhost:8000`. First, set up LM Studio + Qwen3.5 (free, 5 minutes, once) — the download page walks you through it step by step.
+
+GitHub repo: https://github.com/webginet-sys/localbotz
+
 ## Install from GitHub (terminal)
 
 ```bash
-git clone https://github.com/<username>/localbotz.git
+git clone https://github.com/webginet-sys/localbotz.git
 cd localbotz
 ```
 
-Then run it — Windows: `start.bat`, macOS / Linux: `./start.sh`
-(first run: `chmod +x start.sh`). The starter creates a venv, installs
+Then run it — Windows: `start.bat`, macOS: double-click `start.command`
+(or `./start.sh`), Linux: `./start.sh`
+(first run: `chmod +x start.sh start.command`). The starter creates a venv, installs
 the dependencies and starts the app on http://localhost:8000.
 
 **Lightweight install** (core only, no browser automation — smaller and
