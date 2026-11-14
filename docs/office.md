@@ -50,16 +50,33 @@ already has.
   shared office memory + what the previous member did, and hands
   its result to the next member. The final result is the last
   member's output plus every step, shown on the Office page.
+- **Auditor + approval gate.** Every job is audited by default
+  (untick "Audit this job" to skip it). An independent Auditor
+  pass — not a team member, answering only to you — re-reads the
+  brief and every step's output and checks facts, prices, dates
+  and consistency, with a verdict: pass, pass with fixes, or fail.
+  The finished job is then a **draft awaiting your approval**: it
+  is not written into the shared office memory until you approve
+  it. Approve it (`POST /api/offices/{id}/jobs/{job}/approve`) and
+  it counts as done and goes into the memory; ask for changes
+  (`.../request-changes`, with a note saying what to fix) and it
+  stays a draft — run it again with the fix in the brief. In mock
+  mode (no model running) the audit is honest about that: it lists
+  the figures and dates in the outputs for you to check, and flags
+  any step that ran in mock mode. There is also an **Independent
+  Auditor** bot template, so you can ask an auditor to check any
+  finished piece of work on its own. "AI suggests, humans decide."
 
 ## What it is not (yet)
 
 Compared with Munder Difflin: no 2D office floor with avatars
-walking to desks, no live terminal per agent, no voice dictation,
-and no approvals queue for spend / destructive operations — the
-Permissions page (Ask / Auto / Full) is the leash instead. The
-team runs one job at a time, in order, not in parallel. Those are
-the natural next steps; the structure (`OFFICE_ROLES`,
-`run_office_job` in `app.py`) is where they plug in.
+walking to desks, no live terminal per agent, no voice dictation.
+Jobs do have an approval gate now (Auditor + your approval above),
+but spend / destructive operations are still gated only by the
+Permissions page (Ask / Auto / Full). The team runs one job at a
+time, in order, not in parallel. Those are the natural next steps;
+the structure (`OFFICE_ROLES`, `run_office_job` in `app.py`) is
+where they plug in.
 
 ## API
 
@@ -72,8 +89,10 @@ the natural next steps; the structure (`OFFICE_ROLES`,
 | `POST /api/offices/{id}/members` | Hire — `{name, role, template?, provider?, model?}` |
 | `DELETE /api/offices/{id}/members/{member_id}` | Remove a member |
 | `POST /api/offices/{id}/memory` | Add to shared memory — `{text}` |
-| `POST /api/offices/{id}/jobs` | Run a team job — `{title, brief}` |
-| `GET /api/offices/{id}/jobs` | Job history |
+| `POST /api/offices/{id}/jobs` | Run a team job — `{title, brief, audit?}` (audit on by default) |
+| `GET /api/offices/{id}/jobs` | Job history (steps, audit verdict, approval) |
+| `POST /api/offices/{id}/jobs/{job}/approve` | Approve a draft job — `{note?}` — writes it into office memory |
+| `POST /api/offices/{id}/jobs/{job}/request-changes` | Send a draft back — `{note}` (required) |
 
 ## Rules that stay in place
 

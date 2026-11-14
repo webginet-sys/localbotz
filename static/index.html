@@ -499,7 +499,15 @@ async function officeHtml(){
   const roleOpts=(()=>{const groups={}; officeRoles.forEach(r=>{const g=r.sector+' — '+r.group; (groups[g]=groups[g]||[]).push(r);});
     return Object.entries(groups).map(([g,rs])=>`<optgroup label="${esc(g)}">${rs.map(r=>`<option value="${esc(r.id)}">${esc(r.avatar+' '+r.label+(r.job?' — '+r.job:''))}</option>`).join('')}</optgroup>`).join('');})();
   const memRows=o.members.map(m=>`<tr><td>${esc(m.avatar||'🤖')} <b>${esc(m.name)}</b></td><td>${esc(roleLabel[m.role]||m.role)}</td><td>${m.role==='boss'?'(boss — cannot be removed)':`<button class="small" data-member-del="${m.id}">Remove</button>`}</td></tr>`).join('');
-  const jobRows=(o.jobs||[]).slice().reverse().map(j=>`<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}</details>`).join('');
+  const jobRows=(o.jobs||[]).slice().reverse().map(j=>{
+    const a=j.audit||null;
+    const auditHtml=a?`<h4>🧐 Auditor — verdict: ${esc(a.verdict)}</h4><p style="white-space:pre-wrap">${esc(a.summary||'')}</p>${(a.issues||[]).length?`<ul>${a.issues.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`:''}`:'';
+    const ap=j.approval||null;
+    const apprHtml=j.status==='awaiting_approval'
+      ?`<p><b>Draft — waiting for your approval.</b> Nothing from this job is in the office memory yet.</p><button class="small" data-job-approve="${j.id}">✓ Approve</button> <button class="small" data-job-changes="${j.id}">✎ Request changes</button>`
+      :ap?`<p class="note">Approval: ${esc(ap.status)}${ap.note?` — ${esc(ap.note)}`:''}${ap.decided_at?` · ${new Date(ap.decided_at*1000).toLocaleString()}`:''}</p>`:'';
+    return `<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)}${a?` · audit: ${esc(a.verdict)}`:''} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${auditHtml}${apprHtml}${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}</details>`;
+  }).join('');
   const board=(o.blackboard||[]).slice().reverse().map(b=>`<tr><td>${new Date(b.ts*1000).toLocaleTimeString()}</td><td>${esc(b.from)} → ${esc(b.to)}</td><td>${esc(b.text)}</td></tr>`).join('');
   return `<h2>🏢 ${esc(o.name)}</h2><p class="note">${esc(o.description||'')}</p>
   <p><button class="ghost small" id="off-back">← All offices</button> <button class="ghost small" data-office-del="${o.id}">Delete this office</button></p>
@@ -513,6 +521,7 @@ async function officeHtml(){
   <p class="note">The boss assigns the work in order — core team first (Researcher, Developer, Writer…), then the sector roles you hired, Analyst last. Each member sees the brief, the shared office memory, and what the previous member did.</p>
   <label>Job title</label><input id="off-job-title" type="text" placeholder="e.g. Research competitors and write a one-page brief">
   <label>Brief for the team</label><textarea id="off-job-brief" rows="3" placeholder="What should the team do?"></textarea>
+  <label><input type="checkbox" id="off-audit" checked> Audit this job and hold it for my approval — an independent Auditor checks prices, dates and facts before it counts as done</label>
   <div style="margin:8px 0"><button id="off-run-job">Run job with the team</button></div>
   <h3>Jobs</h3>${jobRows||'<p class="note">No jobs yet.</p>'}
   <h3>Shared office memory</h3>
@@ -789,7 +798,9 @@ function bindPage(name){
   if(q('off-create')) q('off-create').onclick=async()=>{try{const o=await api('/api/offices',{method:'POST',body:JSON.stringify({name:q('off-name').value,description:q('off-desc').value,boss_name:q('off-boss').value||'Boss'})}); currentOffice=o.id; renderPage(name);}catch(e){msg(e.message);}};
   if(q('off-hire')) q('off-hire').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/members`,{method:'POST',body:JSON.stringify({name:q('off-mem-name').value,role:q('off-mem-role').value})}); renderPage(name);}catch(e){msg(e.message);}};
   if(q('off-mem-add')) q('off-mem-add').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/memory`,{method:'POST',body:JSON.stringify({text:q('off-mem-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
-  if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value})}); msg('Job done — see the results below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
+  if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value,audit:q('off-audit')?q('off-audit').checked:true})}); msg('Job finished — check the audit and approve it below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
+  document.querySelectorAll('[data-job-approve]').forEach(el=>el.onclick=async()=>{try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobApprove}/approve`,{method:'POST',body:JSON.stringify({})}); msg('Job approved — it is now in the office memory.'); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-job-changes]').forEach(el=>el.onclick=async()=>{const note=prompt('What should the team fix?'); if(note===null) return; try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobChanges}/request-changes`,{method:'POST',body:JSON.stringify({note})}); msg('Changes requested — the job stays a draft. Run it again with the fix in the brief.'); renderPage(name);}catch(e){msg(e.message);}});
   // Workroom
   document.querySelectorAll('[data-workroom-open]').forEach(el=>el.onclick=async()=>{currentWorkroom=el.dataset.workroomOpen; renderPage(name);});
   document.querySelectorAll('[data-workroom-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workroom? Its documents, questions and notes go too.')) return; await api('/api/workrooms/'+el.dataset.workroomDel,{method:'DELETE'}); if(currentWorkroom===el.dataset.workroomDel) currentWorkroom=null; renderPage(name);});

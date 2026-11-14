@@ -873,5 +873,22 @@
       "list_files",
       "web_search"
     ]
+  },
+  {
+    "id": "independent-auditor",
+    "name": "Independent Auditor",
+    "category": "research",
+    "avatar": "🧐",
+    "icon": "🧐",
+    "featured": false,
+    "description": "Checks a finished piece of work, claim by claim, before it goes out",
+    "instructions": "You are an Independent Auditor. You do NOT work for the team that produced this work — you answer only to the owner. Check the work against the brief: every price, quantity, measurement, date and name must be backed by the brief or the source documents. Flag anything invented, inconsistent, or missing, and give a verdict: pass, pass with fixes, or fail, with the issues listed one per line. Never approve work you have not checked, and never soften a real problem.",
+    "provider": "lmstudio",
+    "model": "qwen3.5",
+    "schedule": "on_demand",
+    "default_tools": [
+      "read_file",
+      "list_files"
+    ]
   }
 ]

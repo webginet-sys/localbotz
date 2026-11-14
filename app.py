@@ -2605,6 +2605,92 @@ def add_office_memory(office_id: str, body: dict):
     append_office_memory(office_id, f"- {text}")
     return {"memory": load_office_memory(office_id)}
 
+def _audit_office_job(office, title, brief, steps, boss):
+    """Independent Auditor pass on a finished team job. The Auditor is
+    NOT a team member and answers only to the user: it re-reads the
+    brief and every step's output and checks facts, prices, dates and
+    consistency. Returns {verdict, issues, summary, checked_at} with
+    verdict one of pass / pass_with_fixes / fail / error.
+    In mock mode there is no model to check with, so the audit is
+    honest about that: it lists the figures and dates in the outputs
+    for the user to check, and flags any step that ran in mock mode."""
+    work = "\n\n".join(
+        f"--- {s['member']} ({s['role']}):\n{s['output']}" for s in steps)
+    if MOCK_MODE:
+        figures = sorted({f.rstrip(",").strip() for f in
+                          re.findall(r"(?:AED|QAR|USD|SAR|EUR|GBP|\$|£|€)\s?[\d,]+(?:\.\d+)?|\b\d+(?:\.\d+)?\s?(?:%|percent)|\b\d+\s(?:months?|weeks?|days?|years?)\b|\b\d{1,2}\s(?:January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}\b|\b\d{4}-\d{2}-\d{2}\b",
+                                     work)})[:20]
+        issues = []
+        if any("[MOCK MODE" in s["output"] for s in steps):
+            issues.append("One or more steps ran in mock mode — no real model produced or checked this output. Treat the job as a draft until a real model runs it.")
+        if figures:
+            issues.append("Figures and dates in the outputs still need checking against the source documents: " + ", ".join(figures) + ".")
+        return {"verdict": "pass_with_fixes" if issues else "pass",
+                "issues": issues,
+                "summary": ("[MOCK MODE — no model ran the audit] The Auditor read the brief and "
+                            f"{len(steps)} step(s). It could not verify facts without a model, so "
+                            "check the figures and dates it listed before you approve this job."),
+                "checked_at": int(time.time())}
+    boss_bot = get_bot(boss["bot_id"]) if boss else None
+    provider = (boss_bot or {}).get("provider") or DEFAULT_PROVIDER
+    model = (boss_bot or {}).get("model") or ""
+    cfg = get_provider_config(provider)
+    if not model:
+        model = cfg["default_model"]
+    system = ("You are an independent Auditor. You do NOT work for the team that "
+              "produced this work — you answer only to the owner. Check the team's "
+              "output against the brief: every price, quantity, measurement, date "
+              "and name must be backed by the brief or the shared memory. Flag "
+              "anything invented, inconsistent between steps, or missing. "
+              "Reply in exactly this shape:\n"
+              "VERDICT: pass | pass_with_fixes | fail\n"
+              "ISSUES:\n- <one issue per line, or the single line 'none'>\n"
+              "SUMMARY: <two sentences: what is sound, and what must be fixed before this goes out>")
+    user_text = (f"Office: {office['name']}\nJob: {title}\nBrief: {brief}\n\n"
+                 f"Team output:\n{work[:6000]}")
+    try:
+        reply = llm_chat([{"role": "system", "content": system},
+                          {"role": "user", "content": user_text}], model, provider)
+    except Exception as e:
+        return {"verdict": "error",
+                "issues": [f"The audit could not run: {e}"],
+                "summary": "The audit did not run, so this job is held for your approval with no verdict. Read the steps yourself before approving.",
+                "checked_at": int(time.time())}
+    verdict = "pass_with_fixes"
+    m = re.search(r"VERDICT:\s*(pass_with_fixes|pass|fail)", reply, re.IGNORECASE)
+    if m:
+        verdict = m.group(1).lower()
+    issues = []
+    m = re.search(r"ISSUES:\s*(.*?)(?:\nSUMMARY:|\Z)", reply, re.IGNORECASE | re.DOTALL)
+    if m:
+        issues = [ln.strip("- ").strip() for ln in m.group(1).strip().splitlines()
+                  if ln.strip() and ln.strip().lower() != "none"]
+    summary = reply.strip()[:1000]
+    m = re.search(r"SUMMARY:\s*(.*)", reply, re.IGNORECASE | re.DOTALL)
+    if m:
+        summary = m.group(1).strip()[:1000]
+    return {"verdict": verdict, "issues": issues, "summary": summary,
+            "checked_at": int(time.time())}
+
+
+def _save_office_job(office_id: str, job: dict):
+    """Replace one job in the stored office and save. Returns the job."""
+    offices = load_offices()
+    for o in offices:
+        if o["id"] == office_id:
+            o["jobs"] = [job if j.get("id") == job.get("id") else j
+                         for j in o.get("jobs", [])]
+    save_offices(offices)
+    return job
+
+
+def _job_memory_line(job, steps):
+    return (f"- Job '{job['title']}' ({time.strftime('%Y-%m-%d')}): "
+            f"{job['brief'][:200]} "
+            f"Done by: {', '.join(s['member'] for s in steps) or 'nobody (no team yet)'}. "
+            f"Audited: {job.get('audit', {}).get('verdict', 'not audited')}.")
+
+
 @app.post("/api/offices/{office_id}/jobs")
 def run_office_job(office_id: str, body: dict):
     office = get_office(office_id)
@@ -2614,6 +2700,11 @@ def run_office_job(office_id: str, body: dict):
     brief = (body.get("brief") or "").strip()
     if not title or not brief:
         raise HTTPException(400, "Give the job a title and a brief for the team.")
+    # Auditor + approval gate (on by default): the finished job is
+    # audited by an independent pass and held as a draft until the
+    # user approves it. Send {"audit": false} to run a job the old
+    # way — done immediately, no audit, no approval.
+    audit_requested = body.get("audit", True) not in (False, "false", "no", 0)
     members = [m for m in office.get("members", []) if m["role"] != "boss"]
     members.sort(key=lambda m: ROLE_ORDER.index(m["role"]) if m["role"] in ROLE_ORDER else 99)
     boss = next((m for m in office.get("members", []) if m["role"] == "boss"), None)
@@ -2638,17 +2729,24 @@ def run_office_job(office_id: str, body: dict):
         append_blackboard(office_id, member["name"], "Boss",
                           f"Done with my part of '{title}'.")
     job = {"id": uuid.uuid4().hex[:8], "title": title, "brief": brief,
-           "status": "done", "steps": steps, "created_at": int(time.time())}
+           "status": "done", "steps": steps, "created_at": int(time.time()),
+           "audit_requested": audit_requested}
+    if audit_requested:
+        job["audit"] = _audit_office_job(office, title, brief, steps, boss)
+        job["status"] = "awaiting_approval"
+        job["approval"] = {"status": "pending", "decided_at": None, "note": ""}
+        append_blackboard(office_id, "Auditor", "Boss",
+                          f"Job '{title}' is a draft until you approve it. "
+                          f"Audit verdict: {job['audit']['verdict']}.")
     offices = load_offices()
     for o in offices:
         if o["id"] == office_id:
             o.setdefault("jobs", []).append(job)
             o["jobs"] = o["jobs"][-20:]
     save_offices(offices)
-    append_office_memory(
-        office_id,
-        f"- Job '{title}' ({time.strftime('%Y-%m-%d')}): {brief[:200]} "
-        f"Done by: {', '.join(s['member'] for s in steps) or 'nobody (no team yet)'}.")
+    if not audit_requested:
+        # No audit, no gate: the job counts as done, as before.
+        append_office_memory(office_id, _job_memory_line(job, steps))
     return job
 
 @app.get("/api/offices/{office_id}/jobs")
@@ -2657,6 +2755,53 @@ def list_office_jobs(office_id: str):
     if not office:
         raise HTTPException(404, "Office not found")
     return office.get("jobs", [])
+
+
+@app.post("/api/offices/{office_id}/jobs/{job_id}/approve")
+def approve_office_job(office_id: str, job_id: str, body: dict):
+    """Approval gate: only an approved job counts as done. Approving
+    writes the job into the shared office memory — until then the job
+    is a draft and the memory does not mention it."""
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    job = next((j for j in office.get("jobs", []) if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This job is {job.get('status')} — it is not waiting for approval.")
+    note = (body.get("note") or "").strip()
+    job["status"] = "done"
+    job["approval"] = {"status": "approved", "decided_at": int(time.time()), "note": note}
+    _save_office_job(office_id, job)
+    append_office_memory(office_id, _job_memory_line(job, job.get("steps", [])) + " Approved by you.")
+    append_blackboard(office_id, "You", "Boss",
+                      f"Approved '{job['title']}'" + (f" — {note}" if note else "."))
+    return job
+
+
+@app.post("/api/offices/{office_id}/jobs/{job_id}/request-changes")
+def request_office_job_changes(office_id: str, job_id: str, body: dict):
+    """Send a draft back: the job stays out of the office memory, and
+    the note tells the team what to fix. Run the job again with the
+    note in the brief."""
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    job = next((j for j in office.get("jobs", []) if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This job is {job.get('status')} — it is not waiting for approval.")
+    note = (body.get("note") or "").strip()
+    if not note:
+        raise HTTPException(400, "Say what the team should fix, so they can run it again.")
+    job["status"] = "changes_requested"
+    job["approval"] = {"status": "changes_requested", "decided_at": int(time.time()), "note": note}
+    _save_office_job(office_id, job)
+    append_blackboard(office_id, "You", "Boss",
+                      f"Changes requested on '{job['title']}': {note}")
+    return job
 
 
 # ---- Document workroom ----

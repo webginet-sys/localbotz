@@ -301,14 +301,14 @@ Click **＋ Make a bot** in the sidebar:
 
 - **Avatar picker** — 8 choices (🤖 👔 🔬 🌅 📰 📝 💬 👀), stored per bot.
 - **Name your bot** + **Describe the job** — the job becomes part of the bot's instructions when you create it from scratch.
-- **Template tabs** — Featured, Personal Assistant, Productivity, Research, Sectors, More (More shows all 45 templates).
+- **Template tabs** — Featured, Personal Assistant, Productivity, Research, Sectors, More (More shows all 46 templates).
 - **Template cards** — each has an icon, name and short description. Clicking one pre-fills name, instructions, avatar, provider/model (default LM Studio / Qwen3.5), enabled tools and schedule — all still editable before you press Create bot.
 
 Templates (in `templates.json`, copied to `data/templates.json` on first run):
 
 | Tab | Templates |
 |---|---|
-| Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher, VC Due Diligence, Journalist, Earnings Call Analyst, HN Briefing, Release Radar, Legal Researcher, Document Reviewer, Tender Comparator, Contract Checker, Evidence Checker |
+| Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher, VC Due Diligence, Journalist, Earnings Call Analyst, HN Briefing, Release Radar, Legal Researcher, Document Reviewer, Tender Comparator, Contract Checker, Evidence Checker, Independent Auditor |
 | Personal Assistant | Chief of Staff, Email Drafting, Morning Brief, Meeting Prep, Follow-Up Tracker, WhatsApp Agent, Travel Planner, Health & Fitness Coach, Financial Coach, Business Consultant, Teacher |
 | Productivity | Task Planner, Meeting Notes, Research Scout, Inbox Triage, Data Analyst, System Architect, Sales Intelligence, Doc Q&A |
 | Sectors | Construction Office, MEP Office, Electrical Engineering Office, IT Services Office, E-commerce Office, Real Estate Office, Clinic & Healthcare Office, Logistics Office, Manufacturing Office, Hotel & Hospitality Office, BOQ Reviewer |
@@ -385,7 +385,10 @@ agent can actually do), and give the team a job. One boss
 agent (the Office Manager) plans the work and assigns it — you only
 brief the boss. The team shares one office memory (`memory.md`) that
 survives sessions, passes work to each other on a blackboard, and
-writes every finished job into the memory. Runs on the local model
+writes every finished job into the memory. Every job is checked by
+an independent Auditor first (prices, dates, facts — verdict pass,
+pass with fixes, or fail) and held as a draft until you approve it;
+only an approved job goes into the memory. Runs on the local model
 by default. See `docs/office.md`.
 
 15 of the templates, 5 office roles and 6 skills come from
