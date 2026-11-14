@@ -81,6 +81,7 @@
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
     <button class="navbtn" data-view="office">🏢 Office — your AI team</button>
     <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
+    <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -463,6 +464,7 @@ async function renderPage(name){
     if(name==='admin') el.innerHTML=await adminHtml();
     else if(name==='office') el.innerHTML=await officeHtml();
     else if(name==='workroom') el.innerHTML=await workroomHtml();
+    else if(name==='routines') el.innerHTML=await routinesHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -476,6 +478,28 @@ async function renderPage(name){
     bindPage(name);
   }catch(e){ el.innerHTML='<h2>Error</h2><p>'+esc(e.message)+'</p>'; }
 }
+async function routinesHtml(){
+  const routines=await api('/api/routines');
+  const bots=await api('/api/bots');
+  const botName=id=>(bots.find(b=>b.id===id)||{}).name||'deleted bot';
+  const rows=routines.map(r=>`<tr><td><b>${esc(r.name)}</b><br><span class="note">${esc((r.task||'').slice(0,120))}</span></td><td>${esc(botName(r.bot_id))}</td><td>${esc(r.schedule_text||'')}</td><td>${r.next_run?new Date(r.next_run*1000).toLocaleString():'—'}</td><td>${r.enabled?'✅ On':'⏸ Off'}${r.last_status?`<br><span class="note">last: ${esc(r.last_status)}${r.last_run?` · ${new Date(r.last_run*1000).toLocaleString()}`:''}</span>`:''}</td><td><button class="small" data-rt-run="${r.id}">▶ Run now</button> <button class="small" data-rt-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-rt-del="${r.id}">Delete</button></td></tr>`).join('');
+  const runsHtml=routines.flatMap(r=>(r.runs||[]).slice(-3).map(run=>`<li><b>${esc(r.name)}</b> — ${esc(run.status)} · ${new Date(run.at*1000).toLocaleString()} — ${esc((run.summary||'').slice(0,200))}</li>`)).join('');
+  return `<h2>⏰ Routines — work that runs itself</h2>
+  <p class="note">A routine is a bot with a job and a clock. It runs on its own while LocalBotz is open — daily at 09:00, every hour, once on Friday. If the app was closed when a routine was due, it runs once when you open it again, then goes back to its normal time. Nothing runs while the app is closed.</p>
+  <h3>New routine</h3>
+  <label>Name</label><input id="rt-name" type="text" placeholder="e.g. Daily BOQ price check">
+  <label>Bot</label><select id="rt-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>
+  <label>What should the bot do, every time?</label><textarea id="rt-task" rows="3" placeholder="e.g. Check the price list in the workspace and tell me what changed since yesterday."></textarea>
+  <label>When</label><select id="rt-kind"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every … minutes</option><option value="once">Once</option></select>
+  <div id="rt-time-row"><label>Time</label><input id="rt-time" type="time" value="09:00"></div>
+  <div id="rt-weekday-row" style="display:none"><label>Weekday</label><select id="rt-weekday"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select></div>
+  <div id="rt-interval-row" style="display:none"><label>Every</label><select id="rt-interval"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option><option value="240">4 hours</option><option value="1440">1 day</option></select></div>
+  <div style="margin:8px 0"><button id="rt-create">Create routine</button></div>
+  <h3>Your routines</h3>
+  ${routines.length?`<table><tr><th>Routine</th><th>Bot</th><th>Schedule</th><th>Next run</th><th>Status</th><th></th></tr>${rows}</table>`:'<p class="note">No routines yet. Create one above — for example, a daily price check or a weekly sales summary.</p>'}
+  ${runsHtml?`<h3>Recent runs</h3><ul>${runsHtml}</ul>`:''}`;
+}
+
 let currentOffice=null;
 async function officeHtml(){
   if(!currentOffice){
@@ -801,6 +825,11 @@ function bindPage(name){
   if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value,audit:q('off-audit')?q('off-audit').checked:true})}); msg('Job finished — check the audit and approve it below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
   document.querySelectorAll('[data-job-approve]').forEach(el=>el.onclick=async()=>{try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobApprove}/approve`,{method:'POST',body:JSON.stringify({})}); msg('Job approved — it is now in the office memory.'); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-job-changes]').forEach(el=>el.onclick=async()=>{const note=prompt('What should the team fix?'); if(note===null) return; try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobChanges}/request-changes`,{method:'POST',body:JSON.stringify({note})}); msg('Changes requested — the job stays a draft. Run it again with the fix in the brief.'); renderPage(name);}catch(e){msg(e.message);}});
+  if(q('rt-kind')) q('rt-kind').onchange=()=>{const k=q('rt-kind').value; q('rt-time-row').style.display=(k==='interval')?'none':'block'; q('rt-weekday-row').style.display=(k==='weekly')?'block':'none'; q('rt-interval-row').style.display=(k==='interval')?'block':'none';};
+  if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value)})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-rt-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/routines/${el.dataset.rtToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
+  document.querySelectorAll('[data-rt-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this routine?')) return; await api(`/api/routines/${el.dataset.rtDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom
   document.querySelectorAll('[data-workroom-open]').forEach(el=>el.onclick=async()=>{currentWorkroom=el.dataset.workroomOpen; renderPage(name);});
   document.querySelectorAll('[data-workroom-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workroom? Its documents, questions and notes go too.')) return; await api('/api/workrooms/'+el.dataset.workroomDel,{method:'DELETE'}); if(currentWorkroom===el.dataset.workroomDel) currentWorkroom=null; renderPage(name);});

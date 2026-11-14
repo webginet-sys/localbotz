@@ -322,7 +322,7 @@ hospitality. Each one knows the trade's own documents and words —
 BOQs and tenders, SOWs and SLAs, listings and campaigns — and never
 invents a price, a measurement or a date that is not confirmed.
 
-Each template stores its full instructions, default tools and a schedule (e.g. `daily 07:00`, `on_demand`). The schedule is stored per bot and shown in the sidebar; scheduled *running* of bots is not built yet in v1 — bots run when you chat with them.
+Each template stores its full instructions, default tools and a schedule (e.g. `daily 07:00`, `on_demand`). The schedule is stored per bot and shown in the sidebar; to make a bot actually run on a clock, use **Routines** (sidebar → Routines) — daily, weekly, every N minutes, or once. See "Scheduled routines" below.
 
 ## Library
 
@@ -397,6 +397,23 @@ by default. See `docs/office.md`.
 templates, roles and skills. See `docs/awesome-llm-apps.md` for the full
 mapping, and what we deliberately did not take (voice, image/video
 generation, game agents, fine-tuning).
+
+## Scheduled routines — work that runs itself
+
+A **routine** is a bot + a job + a clock. Sidebar → Routines → give
+it a name, pick a bot, write what the bot should do every time, and
+pick when: **daily at a time** (e.g. 09:00), **weekly** on a weekday
+at a time, **every N minutes**, or **once**. A background worker
+checks every 30 seconds and runs any routine whose time has arrived
+— the same worker that runs persistent agents' tasks. Each run is
+recorded (time, done/failed, a short summary) and the bot remembers
+it in its own memory, like a Hermes task.
+
+If LocalBotz was closed when a routine was due, it runs **once**
+when you open the app again, then goes back to its normal time —
+it never fires a backlog of missed runs. Nothing runs while the app
+is closed: routines are not a system service. Pause, resume, run
+now, or delete a routine from the same page. See `docs/routines.md`.
 
 ## Document workroom — documents with proof
 
@@ -721,9 +738,7 @@ data/                  bots.json, chats/, memory/, screenshots/, templates.json,
 
 No live WhatsApp/Telegram/Discord messaging
 (config + approved senders only, status Not connected), no live
-Gmail/Drive/Calendar connectors (config + setup instructions only), and
-no scheduled routines — a bot's schedule (e.g. `daily 07:00`) is stored
-and shown, but nothing runs it yet; bots run when you chat with them.
+Gmail/Drive/Calendar connectors (config + setup instructions only).
 MCP servers *are* in v1: add one in Library > MCP servers and Test really
 runs it (stdio JSON-RPC or HTTP `tools/list`) and lists its tools.
 Those gaps are the natural next steps — the bot/tool structure in `app.py`

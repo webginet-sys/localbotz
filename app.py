@@ -44,6 +44,7 @@ import re
 import shlex
 import subprocess
 import threading
+import datetime
 import time
 import uuid
 from html.parser import HTMLParser
@@ -3388,18 +3389,29 @@ def _run_task(task: dict):
     return stored
 
 def _persistent_worker():
-    """Background loop: every 30s, run the oldest pending task of each
-    persistent bot, one at a time. Never crashes the app."""
+    """Background loop: every 30s, run one thing — the oldest pending
+    task of a persistent bot, or the first routine whose time has
+    arrived. One per loop, then re-check. Never crashes the app.
+    A routine whose time passed while the app was closed runs once
+    here (catch-up), then goes back on its normal schedule."""
     while True:
         try:
             time.sleep(30)
+            ran = False
             bots = {b["id"]: b for b in load_bots() if b.get("persistent")}
-            if not bots:
-                continue
-            for task in load_tasks():
-                if task.get("status") == "pending" and task.get("bot_id") in bots:
-                    _run_task(task)
-                    break  # one task per loop, then re-check
+            if bots:
+                for task in load_tasks():
+                    if task.get("status") == "pending" and task.get("bot_id") in bots:
+                        _run_task(task)
+                        ran = True
+                        break  # one task per loop, then re-check
+            if not ran:
+                now = int(time.time())
+                for routine in load_routines():
+                    if (routine.get("enabled") and routine.get("next_run")
+                            and routine["next_run"] <= now):
+                        _run_routine(routine)
+                        break  # one routine per loop, then re-check
         except Exception:
             time.sleep(30)
 
@@ -3442,6 +3454,280 @@ def delete_task(bot_id: str, task_id: str):
     tasks = [x for x in load_tasks() if not (x["id"] == task_id and x["bot_id"] == bot_id)]
     save_tasks(tasks)
     return {"deleted": task_id}
+
+
+# ---------- Scheduled routines that actually run ----------
+# A routine is a bot + a task + a clock: daily at HH:MM, weekly on a
+# weekday at HH:MM, every N minutes, or once. The background worker
+# (same 30s loop as persistent tasks) runs any routine whose next_run
+# has arrived. If the app was closed when a routine was due, the next
+# start runs it ONCE as a catch-up, then puts it back on its normal
+# schedule — it never fires a backlog of missed runs. A routine only
+# runs while the app is running; it is not a system service.
+ROUTINES_FILE = DATA_DIR / "routines.json"
+ROUTINE_KINDS = ("daily", "weekly", "interval", "once")
+# A routine that is already running must not be started again.
+_RUNNING_ROUTINES = set()
+
+
+def load_routines():
+    routines = _load_json(ROUTINES_FILE, None)
+    return routines if isinstance(routines, list) else []
+
+
+def save_routines(routines):
+    _save_json(ROUTINES_FILE, routines)
+    return routines
+
+
+def _parse_hhmm(value):
+    """'09:30' -> (9, 30); anything else -> None."""
+    if not isinstance(value, str):
+        return None
+    parts = value.strip().split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        return None
+    h, m = int(parts[0]), int(parts[1])
+    if 0 <= h <= 23 and 0 <= m <= 59:
+        return h, m
+    return None
+
+
+def _next_run_after(routine, from_ts):
+    """Next epoch the routine should run, strictly after from_ts.
+    Local time, as the user reads it on their own computer."""
+    kind = routine.get("kind")
+    if kind == "interval":
+        minutes = routine.get("interval_minutes") or 60
+        return int(from_ts) + int(minutes) * 60
+    hm = _parse_hhmm(routine.get("time") or "")
+    if not hm:
+        return None
+    hour, minute = hm
+    base = datetime.datetime.fromtimestamp(from_ts)
+    # Next occurrence of HH:MM after from_ts (today if still ahead).
+    cand = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if cand <= base:
+        cand += datetime.timedelta(days=1)
+    if kind == "daily" or kind == "once":
+        return int(cand.timestamp())
+    if kind == "weekly":
+        weekday = routine.get("weekday")
+        if not isinstance(weekday, int) or not 0 <= weekday <= 6:
+            return None
+        # weekday: 0 = Monday .. 6 = Sunday (datetime.weekday()).
+        days_ahead = (weekday - cand.weekday()) % 7
+        cand += datetime.timedelta(days=days_ahead)
+        return int(cand.timestamp())
+    return None
+
+
+def _routine_schedule_text(routine):
+    kind = routine.get("kind")
+    if kind == "daily":
+        return f"Daily at {routine.get('time')}"
+    if kind == "weekly":
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        wd = routine.get("weekday")
+        day = days[wd] if isinstance(wd, int) and 0 <= wd <= 6 else "?"
+        return f"Weekly, {day} at {routine.get('time')}"
+    if kind == "interval":
+        return f"Every {routine.get('interval_minutes')} min"
+    if kind == "once":
+        return f"Once at {routine.get('time')}"
+    return kind or "?"
+
+
+def _run_routine(routine: dict, manual: bool = False):
+    """Run one routine now: run_agent with the bot, record the run,
+    then put the routine back on its schedule (or switch it off if
+    it was a one-off). Returns the updated routine, or None."""
+    routines = load_routines()
+    stored = next((x for x in routines if x["id"] == routine["id"]), None)
+    if not stored or stored.get("id") in _RUNNING_ROUTINES:
+        return stored
+    _RUNNING_ROUTINES.add(stored["id"])
+    try:
+        bot = get_bot(stored["bot_id"])
+        run = {"at": int(time.time()), "status": "failed", "summary": ""}
+        if not bot:
+            run["summary"] = "Bot was deleted — routine switched off."
+            stored["enabled"] = False
+            stored["next_run"] = None
+        else:
+            try:
+                reply, trace, extra = run_agent(bot, stored["task"])
+                run["status"] = "failed" if (extra or {}).get("error") else "done"
+                run["summary"] = (reply or "")[:500].replace("\n", " ").strip()
+            except Exception as e:
+                run["status"] = "failed"
+                run["summary"] = f"Routine failed: {e}"
+            # Remember what happened, like a Hermes task does.
+            try:
+                mem = load_memory(bot["id"])
+                mem.setdefault("facts", []).append(
+                    f"Routine '{stored['name']}' ran ({run['status']}): {run['summary'][:200]}")
+                save_memory(bot["id"], mem)
+            except Exception:
+                pass
+        stored.setdefault("runs", []).append(run)
+        stored["runs"] = stored["runs"][-20:]
+        stored["last_run"] = run["at"]
+        stored["last_status"] = run["status"]
+        stored["last_result"] = run["summary"]
+        if stored.get("kind") == "once":
+            # One-off: done, switch it off. A manual run counts too.
+            stored["enabled"] = False
+            stored["next_run"] = None
+        elif stored.get("enabled"):
+            stored["next_run"] = _next_run_after(stored, int(time.time()))
+        save_routines(routines)
+        return stored
+    finally:
+        _RUNNING_ROUTINES.discard(stored["id"])
+
+
+def _validate_routine_fields(body, routine=None):
+    """Validate + normalise the fields a routine is created/patched
+    with. Returns (fields, error) — error is a message or None."""
+    fields = {}
+    if routine is not None:
+        fields.update({k: routine.get(k) for k in
+                       ("name", "bot_id", "task", "kind", "time", "weekday",
+                        "interval_minutes")})
+    for key in ("name", "task"):
+        if key in body:
+            val = (body.get(key) or "").strip()
+            if not val:
+                return None, f"Give the routine a {key}."
+            fields[key] = val
+    if "bot_id" in body:
+        fields["bot_id"] = (body.get("bot_id") or "").strip()
+    if "kind" in body:
+        kind = (body.get("kind") or "").strip().lower()
+        if kind not in ROUTINE_KINDS:
+            return None, "Kind must be daily, weekly, interval or once."
+        fields["kind"] = kind
+    if "time" in body:
+        fields["time"] = (body.get("time") or "").strip()
+    if "weekday" in body and body.get("weekday") is not None:
+        try:
+            fields["weekday"] = int(body.get("weekday"))
+        except (TypeError, ValueError):
+            return None, "Weekday must be 0 (Monday) to 6 (Sunday)."
+    if "interval_minutes" in body and body.get("interval_minutes") is not None:
+        try:
+            fields["interval_minutes"] = int(body.get("interval_minutes"))
+        except (TypeError, ValueError):
+            return None, "Interval must be a number of minutes."
+    if routine is None:
+        for key in ("name", "bot_id", "task", "kind"):
+            if not fields.get(key):
+                return None, f"Give the routine a {key}."
+    kind = fields.get("kind")
+    if kind in ("daily", "weekly", "once"):
+        if not _parse_hhmm(fields.get("time") or ""):
+            return None, "Give a time like 09:00."
+    if kind == "weekly":
+        wd = fields.get("weekday")
+        if not isinstance(wd, int) or not 0 <= wd <= 6:
+            return None, "Pick a weekday (0 = Monday … 6 = Sunday)."
+    if kind == "interval":
+        mins = fields.get("interval_minutes")
+        if not isinstance(mins, int) or not 1 <= mins <= 10080:
+            return None, "Interval must be between 1 and 10080 minutes."
+    if fields.get("bot_id") and not get_bot(fields["bot_id"]):
+        return None, "That bot does not exist."
+    return fields, None
+
+
+class RoutineIn(BaseModel):
+    name: str = ""
+    bot_id: str = ""
+    task: str = ""
+    kind: str = ""
+    time: str = ""
+    weekday: int | None = None
+    interval_minutes: int | None = None
+
+
+@app.get("/api/routines")
+def list_routines():
+    routines = sorted(load_routines(), key=lambda r: (r.get("next_run") is None, r.get("next_run") or 0))
+    for r in routines:
+        r["schedule_text"] = _routine_schedule_text(r)
+    return routines
+
+
+@app.post("/api/routines", status_code=201)
+def create_routine(body: RoutineIn):
+    fields, error = _validate_routine_fields(body.model_dump())
+    if error:
+        raise HTTPException(400, error)
+    routine = {"id": uuid.uuid4().hex[:8], **fields, "enabled": True,
+               "runs": [], "last_run": None, "last_status": None,
+               "last_result": "", "created_at": int(time.time())}
+    routine["next_run"] = _next_run_after(routine, int(time.time()))
+    routines = load_routines()
+    routines.append(routine)
+    save_routines(routines)
+    routine["schedule_text"] = _routine_schedule_text(routine)
+    return routine
+
+
+@app.get("/api/routines/{routine_id}")
+def get_routine(routine_id: str):
+    routine = next((x for x in load_routines() if x["id"] == routine_id), None)
+    if not routine:
+        raise HTTPException(404, "Routine not found")
+    routine["schedule_text"] = _routine_schedule_text(routine)
+    return routine
+
+
+@app.patch("/api/routines/{routine_id}")
+def update_routine(routine_id: str, body: dict):
+    routines = load_routines()
+    routine = next((x for x in routines if x["id"] == routine_id), None)
+    if not routine:
+        raise HTTPException(404, "Routine not found")
+    fields, error = _validate_routine_fields(body, routine)
+    if error:
+        raise HTTPException(400, error)
+    schedule_changed = any(fields.get(k) != routine.get(k) for k in
+                           ("kind", "time", "weekday", "interval_minutes"))
+    routine.update(fields)
+    if "enabled" in body:
+        routine["enabled"] = bool(body.get("enabled"))
+    # A changed schedule, or an enabled routine with no next run, gets
+    # a fresh next run. A disabled routine keeps its next_run, so
+    # switching it back on catches up once, like a missed run.
+    if schedule_changed or (routine.get("enabled") and not routine.get("next_run")):
+        if routine.get("enabled"):
+            routine["next_run"] = _next_run_after(routine, int(time.time()))
+    save_routines(routines)
+    routine["schedule_text"] = _routine_schedule_text(routine)
+    return routine
+
+
+@app.delete("/api/routines/{routine_id}")
+def delete_routine(routine_id: str):
+    routines = [x for x in load_routines() if x["id"] != routine_id]
+    save_routines(routines)
+    return {"deleted": routine_id}
+
+
+@app.post("/api/routines/{routine_id}/run")
+def run_routine_now(routine_id: str):
+    routine = next((x for x in load_routines() if x["id"] == routine_id), None)
+    if not routine:
+        raise HTTPException(404, "Routine not found")
+    if routine.get("id") in _RUNNING_ROUTINES:
+        raise HTTPException(409, "Routine is already running")
+    result = _run_routine(routine, manual=True)
+    if not result:
+        raise HTTPException(404, "Routine not found")
+    result["schedule_text"] = _routine_schedule_text(result)
+    return result
 
 
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------
