@@ -1,0 +1,89 @@
+# Build the professional Windows installer (LocalBotz-Setup.exe) with
+# Inno Setup, on a Windows runner. Runs on every push to main that
+# touches the installer or the app, on demand, and on releases.
+#
+# Output: LocalBotz-Setup.exe (artifact "LocalBotz-Setup", and attached
+# to the GitHub release when this runs for a published release).
+#
+# Code signing: if the WEBGINET ENTERPRISE PRIVATE LIMITED code-signing
+# certificate is configured as repository secrets WINDOWS_CERT_PFX
+# (base64 of the .pfx file) and WINDOWS_CERT_PASSWORD, the installer is
+# signed with signtool before upload. Until then it is unsigned:
+# Windows SmartScreen shows "Windows protected your PC" with a
+# "Run anyway" link — still far better than Smart App Control
+# hard-blocking the .bat files, which have no run-anyway option.
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'installer/**'
+      - 'app.py'
+      - 'static/**'
+      - 'requirements*.txt'
+      - 'start.bat'
+      - 'install.bat'
+      - 'LICENSE'
+      - '.github/workflows/build-windows-installer.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Stage files for the installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          $exclude = @('.git', '.github', '.venv', 'data', 'staging', 'installer-output')
+          Get-ChildItem -Force | Where-Object { $_.Name -notin $exclude } | Copy-Item -Destination staging -Recurse -Force
+          Get-ChildItem staging -Recurse -Directory -Filter __pycache__ -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem staging -Recurse -File -Filter *.pyc -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+          if (Test-Path staging\.env) { Remove-Item staging\.env -Force }
+          Write-Host "Staged files:"; (Get-ChildItem staging -Recurse -File).Count
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found at $iscc" }
+          & $iscc installer\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+          Get-Item installer-output\LocalBotz-Setup.exe | Select-Object Name, Length
+
+      - name: Sign installer (when the company certificate is configured)
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERT_PFX) { Write-Host "No code-signing certificate configured — uploading unsigned."; exit 0 }
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { Write-Host "signtool not found — uploading unsigned."; exit 0 }
+          $pfx = Join-Path $env:TEMP "localbotz-cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          & $signtool sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 installer-output\LocalBotz-Setup.exe
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+          Remove-Item $pfx -Force
+          Write-Host "Signed: LocalBotz-Setup.exe"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalBotz-Setup
+          path: installer-output/LocalBotz-Setup.exe
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer-output/LocalBotz-Setup.exe
