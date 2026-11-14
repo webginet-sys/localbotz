@@ -7,14 +7,15 @@
 <meta name="description" content="Download LocalBotz for Windows or Mac. No terminal, no jargon — just download, double-click, and chat with your own personal AI agent.">
 <style>
   :root {
-    --pink: #ec2a8a;
-    --purple: #7c3aed;
-    --violet: #9333ea;
-    --ink: #1f1b2e;
-    --muted: #5b5566;
-    --line: #e9e4f2;
-    --soft: #faf7ff;
+    --pink: #0d9488;
+    --purple: #0f766e;
+    --violet: #73bbbb;
+    --ink: #1f2a30;
+    --muted: #5b6b72;
+    --line: #dfe9e7;
+    --soft: #f6fbfa;
     --green: #15803d;
+    --navy: #0f2a3d;
   }
   * { box-sizing: border-box; }
   body {
@@ -39,7 +40,7 @@
   .hero {
     text-align: center;
     padding: 56px 20px 32px;
-    background: linear-gradient(180deg, #fdf2f8 0%, #f5f3ff 100%);
+    background: linear-gradient(180deg, #eafaf7 0%, #ffffff 100%);
   }
   .hero img.logo { max-width: 320px; width: 80%; height: auto; }
   .hero h1 { font-size: 34px; line-height: 1.2; margin: 24px 0 8px; }
@@ -91,7 +92,7 @@
   ol li { margin: 12px 0; }
   ol li strong { display: block; }
   code {
-    background: #f3f0fa; border: 1px solid var(--line); border-radius: 6px;
+    background: #f6fbfa; border: 1px solid var(--line); border-radius: 6px;
     padding: 1px 6px; font-size: 0.92em;
   }
   .note {
@@ -119,18 +120,38 @@
     padding: 28px 0 40px; text-align: center; color: var(--muted); font-size: 15px;
   }
   footer a { margin: 0 10px; }
+
+  /* Shared site chrome (scripts/build_site.py) */
+  header.top .wrap { flex-wrap: wrap; }
+  header.top nav { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; }
+  header.top nav a { margin-left: 0; }
+  .nav-group { position: relative; display: inline-block; }
+  .nav-drop { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 0; min-width: 230px; box-shadow: 0 8px 24px rgba(15,42,61,.12); z-index: 10; }
+  .nav-drop a { display: block; padding: 8px 16px; margin-left: 0; }
+  .nav-group:hover .nav-drop, .nav-group:focus-within .nav-drop { display: block; }
+  footer { text-align: left; }
+  .foot-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+  @media (max-width: 900px) { .foot-cols { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .foot-cols { grid-template-columns: 1fr; } }
+  .foot-col h4 { margin: 0 0 10px; color: var(--navy); font-size: 15px; }
+  .foot-col a { display: block; margin: 6px 0; text-decoration: none; }
+  .foot-bottom { text-align: center; margin-top: 28px; }
+  .foot-bottom p { margin: 6px 0; }
+  @media (max-width: 700px) {
+    header.top nav { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .nav-group { display: block; }
+    .nav-drop { position: static; display: block; box-shadow: none; border: none; padding: 0 0 0 14px; min-width: 0; }
+  }
 </style>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <img src="assets/logo.png" alt="LocalBotz logo">
+    <img src="../assets/logo.png" alt="LocalBotz logo">
     <span class="name">LocalBotz</span>
-    <nav>
-      <a href="https://github.com/webginet-sys/localbotz">GitHub</a>
-      <a href="README.md">Guide</a>
-      <a href="#download">Download</a>
+<nav>
+      <span class="nav-group"><a href="../products.html">Products</a><span class="nav-drop"><a href="../chat.html">LocalBotz Chat</a><a href="../business.html">LocalBotz for Business</a></span></span><span class="nav-group"><a href="../research.html">Research</a><span class="nav-drop"><a href="../research-areas.html">Research Areas</a><a href="../publications.html">Publications</a></span></span><a href="../open-source.html">Open-Source AI</a><span class="nav-group"><a href="../about.html">Company</a><span class="nav-drop"><a href="../about.html">About Us</a><a href="../culture.html">Culture</a><a href="../press.html">Press</a><a href="../customers.html">Customers</a><a href="../jobs.html">Jobs</a></span></span><a href="../pricing.html">Pricing</a><a href="../download.html">Download</a><a href="https://github.com/webginet-sys/localbotz">GitHub</a>
     </nav>
   </div>
 </header>
@@ -138,7 +159,7 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <img class="logo" src="assets/logo-animated.svg" onerror="this.onerror=null;this.src='assets/logo.png';" alt="LocalBotz — localbotz in pink to purple with a robot face">
+      <img class="logo" src="../assets/logo-animated.svg" onerror="this.onerror=null;this.src='assets/logo.png';" alt="LocalBotz — localbotz in teal with a robot face in the o">
       <h1>Your own personal AI agent,<br><span class="gradient-text">on your own computer.</span></h1>
       <p class="tagline">LocalBotz is a friendly helper that lives on your computer. It can answer questions, do research, organise your day, and use your browser — with your own AI model, not someone else's cloud.</p>
       <p class="sub">Free. Private by design. No account needed to get started.</p>
@@ -212,7 +233,7 @@
       <li><strong>Right-click <code>install.bat</code> → Properties.</strong> At the bottom, tick <strong>Unblock</strong> → <strong>Apply</strong> → <strong>OK</strong>. Then double-click <code>install.bat</code> again.</li>
       <li><strong>If there is no Unblock box:</strong> click the address bar at the top of the folder, type <code>powershell</code>, press Enter, then paste <code>Get-ChildItem -Recurse | Unblock-File</code> and press Enter. Then double-click <code>install.bat</code> again.</li>
     </ol>
-    <p class="lead">A proper signed installer (<code>LocalBotz-Setup.exe</code>) is coming, so Windows will trust it from day one — this unblock step is only needed until then.</p>
+    <p class="lead">A proper installer (<code>LocalBotz-Setup.exe</code>) is built automatically on GitHub — see the <a href="https://github.com/webginet-sys/localbotz/actions/workflows/build-windows-installer.yml">latest installer build</a>. It is unsigned until the company certificate is in place, so the unblock step above is still needed for now.</p>
 
     <h2 class="section">Where your data lives — C: drive or D: drive</h2>
     <p class="lead">The installer asks you once: keep LocalBotz's data (your bots, memory, offices, workrooms and documents) in the LocalBotz folder (C: drive), or on the <strong>D: drive</strong> (<code>D:\LocalBotzData</code>) to keep the C: drive light. You can change it later in Settings → General → Data folder.</p>
@@ -249,16 +270,48 @@
 
 <footer>
   <div class="wrap">
-    <p>
-      <a href="README.md">Full guide (README)</a> ·
-      <a href="DOWNLOAD.md">Download instructions</a> ·
-      <a href="https://github.com/webginet-sys/localbotz">GitHub: webginet-sys/localbotz</a> ·
-      <a href="https://github.com/webginet-sys/localbotz/issues">Support / report a problem</a>
-    </p>
-    <p>LocalBotz — free, open, and yours. Your own personal AI agent, on your own computer.</p>
-    <p>MIT licensed and built in the open. <a href="https://github.com/webginet-sys/localbotz">Read the code</a>, run it from source, or <a href="https://github.com/webginet-sys/localbotz/pulls">send a pull request</a>.</p>
+    <div class="foot-cols">
+      <div class="foot-col"><h4>Products</h4>
+        <a href="../chat.html">LocalBotz Chat</a>
+        <a href="../business.html">LocalBotz for Business</a>
+        <a href="../office.html">Office — your AI team</a>
+        <a href="../workroom.html">Workroom — documents with proof</a>
+        <a href="../deals.html">Deals &amp; workflows</a>
+        <a href="../voice.html">Talk &amp; Live Voice</a>
+        <a href="../whatsapp.html">WhatsApp sales agent</a>
+        <a href="../leads.html">Leads &amp; Marketing</a>
+      </div>
+      <div class="foot-col"><h4>Research</h4>
+        <a href="../research-areas.html">Research Areas</a>
+        <a href="../publications.html">Publications</a>
+        <a href="../open-source.html">Open-Source AI</a>
+      </div>
+      <div class="foot-col"><h4>Company</h4>
+        <a href="../about.html">About Us</a>
+        <a href="../culture.html">Culture</a>
+        <a href="../press.html">Press</a>
+        <a href="../customers.html">Customers</a>
+        <a href="../jobs.html">Jobs</a>
+        <a href="../pricing.html">Pricing</a>
+        <a href="../download.html">Download</a>
+      </div>
+      <div class="foot-col"><h4>Guides</h4>
+        <a href="../help.html">Help &amp; guides</a>
+        <a href="../README.md">Full guide (README)</a>
+        <a href="../DOWNLOAD.md">Download instructions</a>
+        <a href="../docs/how-it-runs.md">How LocalBotz runs</a>
+        <a href="../docs/office.md">Office guide</a>
+        <a href="../docs/workroom.md">Workroom guide</a>
+        <a href="../docs/pricing.md">Pricing guide</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p>LocalBotz — free, open, and yours. Your own personal AI agent, on your own computer.</p>
+      <p>LocalBotz is a product of WEBGINET ENTERPRISE PRIVATE LIMITED. MIT licensed and built in the open. <a href="https://github.com/webginet-sys/localbotz">Read the code</a>, run it from source, or <a href="https://github.com/webginet-sys/localbotz/pulls">send a pull request</a>.</p>
+    </div>
   </div>
 </footer>
+
 
 </body>
 </html>

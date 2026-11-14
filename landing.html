@@ -79,6 +79,28 @@
   .fine { font-size: 14px; color: var(--muted); margin-top: 14px; text-align: center; }
   footer { margin-top: 60px; border-top: 1px solid var(--line); padding: 28px 0 40px; text-align: center; color: var(--muted); font-size: 15px; }
   footer a { margin: 0 10px; }
+
+  /* Shared site chrome (scripts/build_site.py) */
+  header.top .wrap { flex-wrap: wrap; }
+  header.top nav { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; }
+  header.top nav a { margin-left: 0; }
+  .nav-group { position: relative; display: inline-block; }
+  .nav-drop { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 0; min-width: 230px; box-shadow: 0 8px 24px rgba(15,42,61,.12); z-index: 10; }
+  .nav-drop a { display: block; padding: 8px 16px; margin-left: 0; }
+  .nav-group:hover .nav-drop, .nav-group:focus-within .nav-drop { display: block; }
+  footer { text-align: left; }
+  .foot-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; }
+  @media (max-width: 900px) { .foot-cols { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .foot-cols { grid-template-columns: 1fr; } }
+  .foot-col h4 { margin: 0 0 10px; color: var(--navy); font-size: 15px; }
+  .foot-col a { display: block; margin: 6px 0; text-decoration: none; }
+  .foot-bottom { text-align: center; margin-top: 28px; }
+  .foot-bottom p { margin: 6px 0; }
+  @media (max-width: 700px) {
+    header.top nav { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .nav-group { display: block; }
+    .nav-drop { position: static; display: block; box-shadow: none; border: none; padding: 0 0 0 14px; min-width: 0; }
+  }
 </style>
 </head>
 <body>
@@ -87,10 +109,8 @@
   <div class="wrap">
     <img src="assets/logo.png" alt="LocalBotz logo">
     <span class="name">LocalBotz</span>
-    <nav>
-      <a href="https://github.com/webginet-sys/localbotz">GitHub</a>
-      <a href="README.md">Guide</a>
-      <a href="#download">Download</a>
+<nav>
+      <span class="nav-group"><a href="products.html">Products</a><span class="nav-drop"><a href="chat.html">LocalBotz Chat</a><a href="business.html">LocalBotz for Business</a></span></span><span class="nav-group"><a href="research.html">Research</a><span class="nav-drop"><a href="research-areas.html">Research Areas</a><a href="publications.html">Publications</a></span></span><a href="open-source.html">Open-Source AI</a><span class="nav-group"><a href="about.html">Company</a><span class="nav-drop"><a href="about.html">About Us</a><a href="culture.html">Culture</a><a href="press.html">Press</a><a href="customers.html">Customers</a><a href="jobs.html">Jobs</a></span></span><a href="pricing.html">Pricing</a><a href="download.html">Download</a><a href="https://github.com/webginet-sys/localbotz">GitHub</a>
     </nav>
   </div>
 </header>
@@ -163,10 +183,23 @@
       <div class="feature"><span class="tick">✓</span><p><strong>State-of-the-art models.</strong> Your local Qwen3.5, plus Claude, GPT, Gemini, DeepSeek, Grok, Kimi and GLM — whichever are available.</p></div>
       <div class="feature"><span class="tick">✓</span><p><strong>Automate pretty much any task.</strong> Build apps and websites, research, write, review code, run routines — in one conversation.</p></div>
       <div class="feature"><span class="tick">✓</span><p><strong>Connect to the apps you use.</strong> 25 popular connectors — Gmail, Slack, Notion, GitHub, Stripe, Zoom and more.</p></div>
-      <div class="feature"><span class="tick">✓</span><p><strong>Build custom bots and agents.</strong> 15 templates, your own instructions and memory, persistent agents that work while you're away.</p></div>
+      <div class="feature"><span class="tick">✓</span><p><strong>Build custom bots and agents.</strong> 47 templates, your own instructions and memory, persistent agents that work while you're away.</p></div>
       <div class="feature"><span class="tick">✓</span><p><strong>Your own AI office team.</strong> A boss and a team with shared memory, working together on your computer.</p></div>
       <div class="feature"><span class="tick">✓</span><p><strong>Permissions you control.</strong> Ask, auto, or full — you decide what an agent may do, and nothing runs without your say.</p></div>
     </div>
+
+
+    <h2 class="section">Products — everything LocalBotz does</h2>
+    <p class="lead">One app on your computer, built for office, sales and marketing work. Start with a chat, or start with a team.</p>
+    <div class="cards">
+      <div class="card"><div class="icon">💬</div><div class="tag">Products</div><h3><a href="chat.html">LocalBotz Chat</a></h3><p>Chat with bots on your own computer — your local model, plus Claude, GPT, Gemini and DeepSeek.</p></div>
+      <div class="card"><div class="icon">🏢</div><div class="tag">Products</div><h3><a href="business.html">LocalBotz for Business</a></h3><p>Office AI teams, a rented computer in the cloud, and premium models on tap.</p></div>
+      <div class="card"><div class="icon">📁</div><div class="tag">Products</div><h3><a href="workroom.html">Workroom</a></h3><p>Documents with proof — every answer shows its source.</p></div>
+      <div class="card"><div class="icon">💼</div><div class="tag">Products</div><h3><a href="deals.html">Deals &amp; workflows</a></h3><p>One pipeline per department, workflows that act when a deal moves.</p></div>
+      <div class="card"><div class="icon">🎙️</div><div class="tag">Products</div><h3><a href="voice.html">Talk &amp; Live Voice</a></h3><p>Talk to your computer in plain words — no prompting, no tutorials.</p></div>
+      <div class="card"><div class="icon">💬</div><div class="tag">Products</div><h3><a href="whatsapp.html">WhatsApp sales agent</a></h3><p>Customers write in, LocalBotz drafts — nothing sent until you approve it.</p></div>
+    </div>
+    <p style="text-align:center;"><a class="btn small" href="products.html">See all products</a></p>
 
     <h2 class="section">How LocalBotz runs</h2>
     <p class="lead">Use the subscriptions you already pay for to run agents in your personal office. Works with Claude, ChatGPT, Grok, Gemini and more. Give your agents your computer — or rent one from us.</p>
@@ -202,7 +235,7 @@
     </div>
 
     <h2 class="section" id="pricing">Pricing — rent one from us</h2>
-    <p class="lead">Your computer is free, and your subscriptions cost whatever your provider charges. Renting our computer is pay-as-you-go, per 1M tokens. Local models are always free.</p>
+    <p class="lead">Your computer is free, and your subscriptions cost whatever your provider charges. Renting our computer is pay-as-you-go, per 1M tokens. Local models are always free. <a href="pricing.html">See the full price list →</a></p>
     <div class="cards">
       <div class="card" style="text-align:left;">
         <div class="tag">Free</div>
@@ -258,16 +291,48 @@
 
 <footer>
   <div class="wrap">
-    <p>
-      <a href="README.md">Full guide (README)</a> ·
-      <a href="download.html">Download instructions</a> ·
-      <a href="https://github.com/webginet-sys/localbotz">GitHub: webginet-sys/localbotz</a> ·
-      <a href="https://github.com/webginet-sys/localbotz/issues">Support / report a problem</a>
-    </p>
-    <p>LocalBotz — free, open, and yours. Your own personal AI agent, on your own computer.</p>
-    <p>MIT licensed and built in the open. <a href="https://github.com/webginet-sys/localbotz">Read the code</a>, run it from source, or <a href="https://github.com/webginet-sys/localbotz/pulls">send a pull request</a>.</p>
+    <div class="foot-cols">
+      <div class="foot-col"><h4>Products</h4>
+        <a href="chat.html">LocalBotz Chat</a>
+        <a href="business.html">LocalBotz for Business</a>
+        <a href="office.html">Office — your AI team</a>
+        <a href="workroom.html">Workroom — documents with proof</a>
+        <a href="deals.html">Deals &amp; workflows</a>
+        <a href="voice.html">Talk &amp; Live Voice</a>
+        <a href="whatsapp.html">WhatsApp sales agent</a>
+        <a href="leads.html">Leads &amp; Marketing</a>
+      </div>
+      <div class="foot-col"><h4>Research</h4>
+        <a href="research-areas.html">Research Areas</a>
+        <a href="publications.html">Publications</a>
+        <a href="open-source.html">Open-Source AI</a>
+      </div>
+      <div class="foot-col"><h4>Company</h4>
+        <a href="about.html">About Us</a>
+        <a href="culture.html">Culture</a>
+        <a href="press.html">Press</a>
+        <a href="customers.html">Customers</a>
+        <a href="jobs.html">Jobs</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="download.html">Download</a>
+      </div>
+      <div class="foot-col"><h4>Guides</h4>
+        <a href="help.html">Help &amp; guides</a>
+        <a href="README.md">Full guide (README)</a>
+        <a href="DOWNLOAD.md">Download instructions</a>
+        <a href="docs/how-it-runs.md">How LocalBotz runs</a>
+        <a href="docs/office.md">Office guide</a>
+        <a href="docs/workroom.md">Workroom guide</a>
+        <a href="docs/pricing.md">Pricing guide</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p>LocalBotz — free, open, and yours. Your own personal AI agent, on your own computer.</p>
+      <p>LocalBotz is a product of WEBGINET ENTERPRISE PRIVATE LIMITED. MIT licensed and built in the open. <a href="https://github.com/webginet-sys/localbotz">Read the code</a>, run it from source, or <a href="https://github.com/webginet-sys/localbotz/pulls">send a pull request</a>.</p>
+    </div>
   </div>
 </footer>
+
 
 </body>
 </html>
