@@ -370,11 +370,15 @@ The tool loop works the same for every provider. Claude uses its native Messages
 | GLM (Zhipu AI) | `ZHIPU_API_KEY` | `glm-4.5` | Reference-only, from the ChatLLM model list — confirm the ID in Zhipu's docs. |
 | VPS Premium | `VPS_API_TOKEN` (your token, not a provider key) | Claude Sonnet, GPT, Gemini — whatever the VPS offers | See below. No provider keys in the client. |
 
-Model list reference: [ChatLLM (Abacus.AI)](https://chatllm.abacus.ai/) — see
-`models.json` and `docs/chatllm-model-reference.md`. ChatLLM's marketing
-names (GPT 6 Astra, Fable 5.2, Gemini 4 Carbon, Grok-4.7, …) are **not**
-provider API IDs, so LocalBotz maps them to the closest real API IDs above
-and only lists a model as usable when its provider is actually available.
+Model list reference: [ChatLLM (Abacus.AI)](https://chatllm.abacus.ai/) and
+[abacus.ai](https://abacus.ai/) — see `models.json` and
+`docs/chatllm-model-reference.md`. Their marketing names (GPT 6 Astra,
+Fable 5.2, Gemini 4 Carbon, Grok-4.7, Kimi K3.1 Pro, GPT-6.1 Terra, …) are
+**not** provider API IDs, so LocalBotz maps them to the closest real API IDs
+above and only lists a model as usable when its provider is actually
+available. Image models (Nano Banana Pro, GPT Image 2.6) and video models
+(Seedance 2.5, Kling 4.0, Veo 3.1) from abacus.ai are reference-only —
+LocalBotz does not generate images or videos yet.
 **No Git is needed to run LocalBotz** — download the ZIP, extract it,
 double-click `start.bat` (Windows) or `start.command` (Mac).
 
