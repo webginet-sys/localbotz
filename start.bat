@@ -177,6 +177,41 @@ if errorlevel 1 lms load qwen/qwen3.5-9b --yes >nul 2>&1
 lms server start >nul 2>&1
 echo [LocalBotz] LM Studio server should now be on http://localhost:1234
 
+REM ---------- Where should the data live? Asked once, on first install. ----------
+REM The app's memory — bots, memory, offices, workrooms, documents — can
+REM live in the app folder (C: drive) or on the D: drive, so the C: drive
+REM stays light. Asked once only: skipped when LOCALBOTZ_DATA_DIR is
+REM already set, or when the data folder already has content.
+findstr /B /C:"LOCALBOTZ_DATA_DIR=" .env >nul 2>&1
+if not errorlevel 1 goto :venv
+if exist "data\settings.json" goto :venv
+if exist "data\bots.json" goto :venv
+echo.
+echo [LocalBotz] Where should LocalBotz keep its data — your bots, memory,
+echo [LocalBotz] offices, workrooms and documents? The app itself stays
+echo [LocalBotz] here; only the data moves. Pick D: to keep C: light.
+echo [LocalBotz]   [1] C: drive - in the LocalBotz folder
+echo [LocalBotz]   [2] D: drive - D:\LocalBotzData
+echo [LocalBotz]   [3] Another folder - type the path
+choice /C 123 /N /M "[LocalBotz] Choose 1, 2 or 3: "
+if errorlevel 3 goto :ask_data_custom
+if errorlevel 2 goto :ask_data_d
+goto :venv
+:ask_data_d
+if not exist "D:\" (
+  echo [LocalBotz] There is no D: drive on this computer - using the C: drive folder.
+  goto :venv
+)
+echo LOCALBOTZ_DATA_DIR=D:\LocalBotzData>> .env
+echo [LocalBotz] Data will be kept in D:\LocalBotzData
+goto :venv
+:ask_data_custom
+set /p CUSTOMDATA=[LocalBotz] Type the full folder path (for example E:\MyData\LocalBotz): 
+if "%CUSTOMDATA%"=="" goto :venv
+echo LOCALBOTZ_DATA_DIR=%CUSTOMDATA%>> .env
+echo [LocalBotz] Data will be kept in %CUSTOMDATA%
+goto :venv
+
 :venv
 if not exist ".venv\Scripts\python.exe" (
   echo [LocalBotz] Creating virtual environment (.venv)...

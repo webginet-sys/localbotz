@@ -24,6 +24,7 @@ downloaded an app from GitHub before, start here:
 - **🪟 [Download for Windows](https://github.com/webginet-sys/localbotz)** — Windows 10 / 11. On GitHub, click **Code → Download ZIP**, extract it, then double-click `start.bat`.
 - **🍎 [Download for Mac](https://github.com/webginet-sys/localbotz)** — Apple Silicon (M1 / M2 / M3 / M4) and Intel. On GitHub, click **Code → Download ZIP**, open the ZIP, then double-click `start.command`.
 - Then open your browser to `http://localhost:8000`. **Just install LocalBotz — that's it.** Double-click `install.bat` (Windows) or `start.command` (Mac) and it downloads and sets up Python, LM Studio and the Qwen3.5 model for you in that one step. No Git, no separate Python download, no separate LM Studio download.
+- **Windows installer (recommended):** a proper `LocalBotz-Setup.exe` is built automatically from this repo (`installer/windows-installer.iss`, GitHub Actions) — get it from [Releases](https://github.com/webginet-sys/localbotz/releases) when available. It walks you through install like any professional app, asks where your data should live (C: or D: drive), and adds Start Menu and Desktop shortcuts. Until it is code-signed, Windows SmartScreen shows "Windows protected your PC" — click "More info" → "Run anyway".
 
 GitHub repo: https://github.com/webginet-sys/localbotz
 
@@ -916,4 +917,4 @@ Those gaps are the natural next steps — the bot/tool structure in `app.py`
 
 ---
 
-MIT licensed and built in the open. [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).
+LocalBotz is a product of WEBGINET ENTERPRISE PRIVATE LIMITED. MIT licensed (© WEBGINET ENTERPRISE PRIVATE LIMITED) and built in the open. [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).

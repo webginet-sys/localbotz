@@ -33,6 +33,21 @@ That's it. Python, LM Studio and the Qwen3.5 model (the AI brain that runs on yo
 
 To stop LocalBotz, just close the black window. To start it again, double-click `start.bat` again — the second time is fast, everything is already installed.
 
+### If Windows says "Smart App Control blocked a file"
+
+When you double-click `install.bat`, Windows may pop up **"Smart App Control blocked a file that may be unsafe"**. That does **not** mean LocalBotz is a virus — Windows blocks any file downloaded from the internet that it does not know yet, and it does not know our app yet. Fix it in 10 seconds:
+
+1. In the folder, **right-click `install.bat` → Properties**. At the bottom, tick **Unblock** → **Apply** → **OK**. Then double-click `install.bat` again.
+2. If there is no Unblock box: click the address bar at the top of the folder, type `powershell`, press Enter, then paste this line and press Enter:
+   `Get-ChildItem -Recurse | Unblock-File`
+   Then double-click `install.bat` again.
+
+A signed installer (a proper `LocalBotz-Setup.exe` from WEBGINET ENTERPRISE PRIVATE LIMITED) is coming, so Windows will trust it from day one — this unblock step is only needed until then.
+
+### Where your data lives — C: drive or D: drive
+
+The installer asks you once: keep LocalBotz's data (your bots, memory, offices, workrooms and documents) in the LocalBotz folder (C: drive), or on the **D: drive** (`D:\LocalBotzData`) to keep the C: drive light. You can change it later in Settings → General → Data folder. See `docs/data-folder.md`.
+
 ## On Mac — 4 steps
 
 Works on Apple Silicon (M1 / M2 / M3 / M4) and Intel Macs — the same download works for both, you do not need to choose.

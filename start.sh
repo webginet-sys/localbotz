@@ -86,6 +86,19 @@ fi
 
 echo "[LocalBotz] $(python3 --version)"
 
+# Where should the data live? Asked once, on first install. On Mac/Linux
+# there are no C:/D: drives — type a folder path, or press Enter to keep
+# the data in the app folder. (On Windows, start.bat asks C: or D:.)
+if ! grep -q "^LOCALBOTZ_DATA_DIR=" .env 2>/dev/null && [ ! -f data/settings.json ] && [ ! -f data/bots.json ]; then
+  printf '[LocalBotz] Where should LocalBotz keep its data (bots, memory, offices, documents)?\n'
+  printf '[LocalBotz] Press Enter for the app folder, or type a full folder path: '
+  read -r DATA_ANSWER || true
+  if [ -n "$DATA_ANSWER" ]; then
+    echo "LOCALBOTZ_DATA_DIR=$DATA_ANSWER" >> .env
+    echo "[LocalBotz] Data will be kept in $DATA_ANSWER"
+  fi
+fi
+
 if [ ! -x ".venv/bin/python" ]; then
   echo "[LocalBotz] Creating virtual environment (.venv)..."
   python3 -m venv .venv

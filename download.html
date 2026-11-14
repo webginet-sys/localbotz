@@ -206,6 +206,17 @@
     </div>
     <p class="lead" style="margin-top:16px;">To stop LocalBotz, just close the small window (Windows: the black window; Mac: the Terminal window). To start it again, double-click <code>start.bat</code> (Windows) or <code>start.command</code> (Mac) again.</p>
 
+    <h2 class="section">If Windows blocks the file (Smart App Control)</h2>
+    <p class="lead">When you double-click <code>install.bat</code>, Windows may pop up <strong>“Smart App Control blocked a file that may be unsafe.”</strong> That does <strong>not</strong> mean LocalBotz is a virus — Windows blocks any file downloaded from the internet that it does not know yet, and it does not know our app yet.</p>
+    <ol>
+      <li><strong>Right-click <code>install.bat</code> → Properties.</strong> At the bottom, tick <strong>Unblock</strong> → <strong>Apply</strong> → <strong>OK</strong>. Then double-click <code>install.bat</code> again.</li>
+      <li><strong>If there is no Unblock box:</strong> click the address bar at the top of the folder, type <code>powershell</code>, press Enter, then paste <code>Get-ChildItem -Recurse | Unblock-File</code> and press Enter. Then double-click <code>install.bat</code> again.</li>
+    </ol>
+    <p class="lead">A proper signed installer (<code>LocalBotz-Setup.exe</code>) is coming, so Windows will trust it from day one — this unblock step is only needed until then.</p>
+
+    <h2 class="section">Where your data lives — C: drive or D: drive</h2>
+    <p class="lead">The installer asks you once: keep LocalBotz's data (your bots, memory, offices, workrooms and documents) in the LocalBotz folder (C: drive), or on the <strong>D: drive</strong> (<code>D:\LocalBotzData</code>) to keep the C: drive light. You can change it later in Settings → General → Data folder.</p>
+
     <h2 class="section">Questions people ask</h2>
     <div class="faq">
       <details>

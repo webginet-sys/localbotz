@@ -179,6 +179,11 @@
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="computer" checked> <b>🖥️ On my computer</b> — free, on your downloaded local model (LM Studio / Qwen3.5). Nothing leaves the computer.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="subscriptions"> <b>🔑 With my subscriptions</b> — Claude, ChatGPT, Grok, Gemini and more, using keys you already pay for.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="rent"> <b>☁️ Rent one from us</b> — premium models from our server, metered to your wallet. No keys of your own.</label>
+        <h3 style="margin-top:14px">Where should LocalBotz keep its data?</h3>
+        <p class="note">Your bots, memory, offices, workrooms and documents. The app itself stays where it is — only the data moves. Pick D: to keep the C: drive light.</p>
+        <label style="display:block;margin:8px 0"><input type="radio" name="wiz-data" value="default" checked> <b>📁 In the LocalBotz folder</b> — <span id="wiz-data-default"></span></label>
+        <label style="display:block;margin:8px 0" id="wiz-data-d-row"><input type="radio" name="wiz-data" value="d"> <b>💾 On the D: drive</b> — D:\LocalBotzData</label>
+        <label style="display:block;margin:8px 0"><input type="radio" name="wiz-data" value="custom"> <b>✏️ Another folder</b> — <input id="wiz-data-custom" type="text" placeholder="e.g. E:\MyData\LocalBotz" style="width:260px"></label>
         <button id="wiz-next-1">Next →</button> <button class="ghost" id="wiz-skip">Skip setup</button>
       </div>
       <div id="wiz-2" class="hidden">
@@ -1178,6 +1183,8 @@ async function languagesHtml(){
 async function generalHtml(){
   settings=await api('/api/settings');
   const prof=await api('/api/business-profile').catch(()=>({}));
+  const df=await api('/api/settings/data-folder').catch(()=>({}));
+  const dfDbtn=(df.drives||[]).includes('D:')?'<button id="df-use-d" class="ghost">Use D: drive — D:\\LocalBotzData</button> ':'';
   await loadLanguages();
   const langOpts=langOptions(settings.default_language||'auto');
   const provOpts=providers.map(p=>`<option value="${p.id}" ${p.id===settings.default_provider?'selected':''}>${esc(p.label)}</option>`).join('');
@@ -1192,6 +1199,14 @@ async function generalHtml(){
   <p class="note">Runs LocalBotz in the background when you sign in, so routines, jobs and workflows keep working while the computer is on. ${settings.autostart_path?`Startup entry: <code>${esc(settings.autostart_path)}</code>`:''}</p>
   <p>Data location: <code>${esc(settings.data_location||'')}</code><br>Workspace: <code>${esc(settings.workspace_absolute||'')}</code><br>App version: <b>${esc(settings.app_version||'')}</b></p>
   <button id="set-save">Save settings</button> <button id="set-reset" class="ghost">Reset settings</button>
+  <h3 style="margin-top:28px">Data folder — where your memory lives</h3>
+  <p class="note">Everything LocalBotz remembers — bots, memory, offices, workrooms, documents, leads and deals — lives in one folder. Move it to the D: drive to keep the C: drive light. The app itself stays where it is.</p>
+  <p>Now: <code>${esc(df.path||'')}</code>${df.size_bytes!=null?` — ${(df.size_bytes/1048576).toFixed(1)} MB`:''}</p>
+  <label>New folder</label><input id="df-path" type="text" value="${esc(df.path||'')}" placeholder="e.g. D:\\LocalBotzData">
+  <div style="margin:8px 0">${dfDbtn}<button id="df-use-c" class="ghost">Use the LocalBotz folder</button></div>
+  <label style="display:inline"><input type="checkbox" id="df-move" checked> Move my data to the new folder (a copy — the old folder stays as a backup)</label>
+  <div style="margin:8px 0"><button id="df-save">Save data folder</button></div>
+  <p class="note" id="df-msg">After saving, restart LocalBotz (close this window, double-click start.bat) to use the new folder.</p>
   <h3 style="margin-top:28px">Business profile — your company, once</h3>
   <p class="note">Write this once and every bot, office job, deal draft and proposal uses it — your company name, what you do, and how you speak to clients. Leave it empty and nothing is added; LocalBotz never invents company facts.</p>
   <label>Company name</label><input id="bp-company" type="text" value="${esc(prof.company_name||'')}" placeholder="e.g. Al Rayyan Trading &amp; Contracting">
@@ -1280,6 +1295,9 @@ function bindPage(name){
   if(q('skill-enable')) q('skill-enable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:true})}); msg('Skill enabled for bot.');};
   if(q('skill-disable')) q('skill-disable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:false})}); msg('Skill disabled for bot.');};
   if(q('set-save')) q('set-save').onclick=async()=>{try{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value,default_language:q('set-language').value,autostart:q('set-autostart').checked})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');}catch(e){msg(e.message);}};
+  if(q('df-use-d')) q('df-use-d').onclick=()=>{q('df-path').value='D:\\LocalBotzData';};
+  if(q('df-use-c')) q('df-use-c').onclick=async()=>{const df=await api('/api/settings/data-folder'); q('df-path').value=df.default_path;};
+  if(q('df-save')) q('df-save').onclick=async()=>{try{const r=await api('/api/settings/data-folder',{method:'POST',body:JSON.stringify({path:q('df-path').value.trim(), move:q('df-move').checked})}); $('df-msg').textContent='Saved: '+r.path+'. '+(r.note||''); msg('Data folder saved — restart LocalBotz to use it.');}catch(e){$('df-msg').textContent=e.message;}};
   if(q('run-local')) q('run-local').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'computer',default_provider:'lmstudio',default_model:'qwen3.5'})}); await loadProviders(); msg('Running on your computer — local model (LM Studio / Qwen3.5).');};
   if(q('run-subs')) q('run-subs').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'subscriptions'})}); showView('set-connectors');};
   if(q('run-rent')) q('run-rent').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'rent'})}); showView('set-connectors');};
@@ -1422,6 +1440,7 @@ let wizRunMode='computer';
 async function showWizard(){
   const tpls=await api('/api/templates');
   $('wiz-bot-tpl').innerHTML=tpls.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  try{const df=await api('/api/settings/data-folder'); $('wiz-data-default').textContent=df.default_path; if(!(df.drives||[]).includes('D:')) $('wiz-data-d-row').classList.add('hidden');}catch(e){}
   $('wiz-1').classList.remove('hidden'); $('wiz-2').classList.add('hidden'); $('wiz-3').classList.add('hidden');
   showView('wizard');
 }
@@ -1432,6 +1451,9 @@ async function wizFinish(){
   const officeName=$('wiz-office-name').value.trim()||'My Office';
   try{
     await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:runMode, autostart:$('wiz-autostart').checked})});
+    const dataChoice=document.querySelector('input[name="wiz-data"]:checked').value;
+    if(dataChoice==='d') await api('/api/settings/data-folder',{method:'POST',body:JSON.stringify({path:'D:\\LocalBotzData'})});
+    else if(dataChoice==='custom' && $('wiz-data-custom').value.trim()) await api('/api/settings/data-folder',{method:'POST',body:JSON.stringify({path:$('wiz-data-custom').value.trim()})});
     const b=await api('/api/bots',{method:'POST',body:JSON.stringify({name:botName, template:tpl, provider:'lmstudio', model:'qwen3.5'})});
     await api('/api/offices',{method:'POST',body:JSON.stringify({name:officeName, description:'Set up by the first-run wizard', boss_name:'Office Manager'})});
     const dt=$('wiz-deal-title').value.trim(), dc=$('wiz-deal-client').value.trim();

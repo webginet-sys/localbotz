@@ -58,7 +58,32 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+
+
+def _resolve_data_dir():
+    """Where LocalBotz keeps its data (bots, memory, offices, documents...).
+
+    The user chooses at install time — start.bat asks — or later in
+    Settings -> General: the app folder (C: drive) or D: drive
+    (D:\\LocalBotzData), or any folder they type. The choice is stored
+    in LOCALBOTZ_DATA_DIR in .env (gitignored), so it survives restarts.
+    Defaults to the app folder. Read from .env directly here because
+    this runs before _load_dotenv().
+    """
+    raw = os.getenv("LOCALBOTZ_DATA_DIR") or ""
+    if not raw:
+        try:
+            for line in (BASE_DIR / ".env").read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if line.startswith("LOCALBOTZ_DATA_DIR="):
+                    raw = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        except OSError:
+            raw = ""
+    return Path(raw).expanduser() if raw.strip() else BASE_DIR / "data"
+
+
+DATA_DIR = _resolve_data_dir()
 CHATS_DIR = DATA_DIR / "chats"
 MEMORY_DIR = DATA_DIR / "memory"
 SHOTS_DIR = DATA_DIR / "screenshots"
@@ -7296,6 +7321,76 @@ def post_post_now(post_id: str):
 
 
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------
+def _data_dir_size(path=DATA_DIR):
+    total = 0
+    try:
+        for p in Path(path).rglob("*"):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def _list_drives():
+    """Drive letters that exist on this computer (Windows only)."""
+    if platform.system() != "Windows":
+        return []
+    return [f"{c}:" for c in "CDEFGHIJKLMNOPQRSTUVWXYZ" if Path(f"{c}:\\").exists()]
+
+
+def _validate_data_dir(raw):
+    """Check a user-typed data folder. Returns (Path, error-or-None)."""
+    if not raw or not str(raw).strip():
+        return None, "Give a folder."
+    p = Path(str(raw).strip()).expanduser()
+    if not p.is_absolute():
+        return None, "Give a full folder path, for example D:\\LocalBotzData."
+    if p.drive and not Path(p.drive + "\\").exists():
+        return None, f"Drive {p.drive} was not found on this computer."
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        probe = p / ".localbotz-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        return None, f"Cannot use that folder: {e}."
+    return p, None
+
+
+class DataFolderIn(BaseModel):
+    path: str = ""
+    move: bool = False
+
+
+@app.get("/api/settings/data-folder")
+def get_data_folder():
+    return {"path": str(DATA_DIR), "default_path": str(BASE_DIR / "data"),
+            "size_bytes": _data_dir_size(), "drives": _list_drives(),
+            "is_default": DATA_DIR == BASE_DIR / "data"}
+
+
+@app.post("/api/settings/data-folder")
+def set_data_folder(body: DataFolderIn):
+    p, err = _validate_data_dir(body.path)
+    if err:
+        raise HTTPException(400, err)
+    moved = False
+    if body.move and p != DATA_DIR and DATA_DIR.exists():
+        try:
+            shutil.copytree(DATA_DIR, p, dirs_exist_ok=True)
+            moved = True
+        except OSError as e:
+            raise HTTPException(400, f"Could not copy your data: {e}.")
+    _set_env_key("LOCALBOTZ_DATA_DIR", str(p))
+    return {"path": str(p), "moved": moved, "needs_restart": True,
+            "note": "Restart LocalBotz to use the new folder (close this window, double-click start.bat again)."
+                    + (" Your data was copied there." if moved else " Your old data stays in the old folder.")}
+
+
 @app.get("/api/settings")
 def get_settings():
     st = load_settings()
