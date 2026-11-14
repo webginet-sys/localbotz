@@ -326,6 +326,18 @@ The **Library** section in the sidebar has 5 pages, sharing the same data files 
 - **Skills** — built-in skills (Research, File help, Browser help, Coding help, Email drafting, Morning Brief) plus custom skills you add (name + instructions + optional source folder/file). Enable/disable per bot, delete custom ones. Stored in `data/skills.json`. Enabled skills are added to the bot's system prompt.
 - **Tools** — the full built-in tool list (`browser_open`, `browser_read`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_search`, `web_search`, `list_files`, `read_file`, `write_file`, `run_command`) with descriptions, global enable/disable, per-bot toggles, and which bots use each. Toggles are enforced in the agent loop.
 
+## Office — your AI team, on your own computer
+
+Sidebar → **Office**. Modelled on Munder Difflin
+(HarnessMD/munder-difflin): an office of agents running locally.
+Create your office, hire an AI team with roles (Researcher, Writer,
+Developer, Analyst, Assistant), and give the team a job. One boss
+agent (the Office Manager) plans the work and assigns it — you only
+brief the boss. The team shares one office memory (`memory.md`) that
+survives sessions, passes work to each other on a blackboard, and
+writes every finished job into the memory. Runs on the local model
+by default. See `docs/office.md`.
+
 ## Settings
 
 The **Settings** section in the sidebar has 7 pages, in this order:

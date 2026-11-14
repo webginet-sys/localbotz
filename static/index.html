@@ -79,6 +79,7 @@
     <div class="navsec">Bots</div>
     <ul class="botlist" id="botlist"></ul>
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
+    <button class="navbtn" data-view="office">🏢 Office — your AI team</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -158,8 +159,8 @@ function showView(name){
   $('view-chat').classList.toggle('hidden', name!=='chat');
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
-  $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-') && name!=='admin');
-  if(name.startsWith('lib-')||name.startsWith('set-')||name==='admin') renderPage(name);
+  $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-') && name!=='admin' && name!=='office');
+  if(name.startsWith('lib-')||name.startsWith('set-')||name==='admin'||name==='office') renderPage(name);
 }
 async function loadStatus(){
   try{const s=await api('/api/status'+(current?('?provider='+encodeURIComponent(current.provider||'lmstudio')):''));
@@ -441,6 +442,7 @@ async function renderPage(name){
   const el=$('view-page'); el.innerHTML='<h2>Loading…</h2>';
   try{
     if(name==='admin') el.innerHTML=await adminHtml();
+    else if(name==='office') el.innerHTML=await officeHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -453,6 +455,50 @@ async function renderPage(name){
     else if(name==='set-devices') el.innerHTML=await devicesHtml();
     bindPage(name);
   }catch(e){ el.innerHTML='<h2>Error</h2><p>'+esc(e.message)+'</p>'; }
+}
+let currentOffice=null;
+async function officeHtml(){
+  if(!currentOffice){
+    const offices=await api('/api/offices');
+    const rows=offices.map(o=>`<tr><td><b>${esc(o.name)}</b></td><td>${o.members} team member(s)</td><td>${o.jobs} job(s)</td><td><button class="small" data-office-open="${o.id}">Open office</button> <button class="small" data-office-del="${o.id}">Delete</button></td></tr>`).join('');
+    return `<h2>🏢 Office — your AI team, on your own computer</h2>
+    <p>Create your office locally, hire an AI team with roles, and let them work together with a shared memory that survives sessions. One boss agent (the Office Manager) plans the work and assigns it — you only brief the boss. Modelled on the Munder Difflin idea: an office of agents, running locally.</p>
+    <h3>Create an office</h3>
+    <label>Office name</label><input id="off-name" type="text" placeholder="e.g. Acme Paper Co.">
+    <label>What does this office do?</label><input id="off-desc" type="text" placeholder="e.g. A family business — invoicing, orders, and customer replies.">
+    <label>Boss name</label><input id="off-boss" type="text" placeholder="Boss" value="Boss">
+    <div style="margin:8px 0"><button id="off-create">Create office</button></div>
+    <h3>Your offices</h3>
+    ${offices.length?`<table><tr><th>Office</th><th>Team</th><th>Jobs</th><th></th></tr>${rows}</table>`:'<p class="note">No office yet. Create one above — it lives on your computer, nothing leaves it except premium model calls you choose.</p>'}
+    <div id="page-msg"></div>`;
+  }
+  const o=await api('/api/offices/'+currentOffice);
+  const roleLabel={boss:'Office Manager (boss)',researcher:'Researcher',writer:'Writer',developer:'Developer',analyst:'Analyst',assistant:'Assistant'};
+  const memRows=o.members.map(m=>`<tr><td>${esc(m.avatar||'🤖')} <b>${esc(m.name)}</b></td><td>${esc(roleLabel[m.role]||m.role)}</td><td>${m.role==='boss'?'(boss — cannot be removed)':`<button class="small" data-member-del="${m.id}">Remove</button>`}</td></tr>`).join('');
+  const jobRows=(o.jobs||[]).slice().reverse().map(j=>`<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}</details>`).join('');
+  const board=(o.blackboard||[]).slice().reverse().map(b=>`<tr><td>${new Date(b.ts*1000).toLocaleTimeString()}</td><td>${esc(b.from)} → ${esc(b.to)}</td><td>${esc(b.text)}</td></tr>`).join('');
+  return `<h2>🏢 ${esc(o.name)}</h2><p class="note">${esc(o.description||'')}</p>
+  <p><button class="ghost small" id="off-back">← All offices</button> <button class="ghost small" data-office-del="${o.id}">Delete this office</button></p>
+  <h3>AI team — who works here</h3>
+  <table><tr><th>Member</th><th>Role</th><th></th></tr>${memRows}</table>
+  <h3>Hire a team member</h3>
+  <label>Name</label><input id="off-mem-name" type="text" placeholder="e.g. Dana">
+  <label>Role</label><select id="off-mem-role"><option value="researcher">🔍 Researcher — finds facts, hands over a brief</option><option value="writer">✍️ Writer — turns briefs into finished writing</option><option value="developer">💻 Developer — writes and fixes code</option><option value="analyst">📊 Analyst — checks numbers, reviews work, last step</option><option value="assistant">🤖 Assistant — follow-ups, notes, keeps memory tidy</option></select>
+  <div style="margin:8px 0"><button id="off-hire">Hire</button></div>
+  <h3>Run a job with the team</h3>
+  <p class="note">The boss assigns the work in order — Researcher first, then Writer/Developer, Analyst last. Each member sees the brief, the shared office memory, and what the previous member did.</p>
+  <label>Job title</label><input id="off-job-title" type="text" placeholder="e.g. Research competitors and write a one-page brief">
+  <label>Brief for the team</label><textarea id="off-job-brief" rows="3" placeholder="What should the team do?"></textarea>
+  <div style="margin:8px 0"><button id="off-run-job">Run job with the team</button></div>
+  <h3>Jobs</h3>${jobRows||'<p class="note">No jobs yet.</p>'}
+  <h3>Shared office memory</h3>
+  <p class="note">Memory the whole team shares — it survives sessions. Job summaries are added here automatically.</p>
+  <pre style="white-space:pre-wrap;background:#faf7ff;border:1px solid #e9e4f2;border-radius:12px;padding:14px;max-height:220px;overflow:auto">${esc(o.memory||'(empty)')}</pre>
+  <label>Add to office memory</label><input id="off-mem-text" type="text" placeholder="e.g. Our biggest customer is Al Rayyan Trading.">
+  <div style="margin:8px 0"><button id="off-mem-add">Add memory</button></div>
+  <h3>Blackboard — messages between the team</h3>
+  ${board?`<table><tr><th>Time</th><th>From → To</th><th>Message</th></tr>${board}</table>`:'<p class="note">Nothing on the blackboard yet.</p>'}
+  <div id="page-msg"></div>`;
 }
 async function connectorsHtml(isSettings){
   const d=await api('/api/connectors');
@@ -623,6 +669,15 @@ function bindPage(name){
       if(out) out.innerHTML=`<p class="note">❌ Registration failed: ${esc(e.message||e)}</p>`;
     }
   };
+  // Office
+  document.querySelectorAll('[data-office-open]').forEach(el=>el.onclick=async()=>{currentOffice=el.dataset.officeOpen; renderPage(name);});
+  document.querySelectorAll('[data-office-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this office? Its shared memory and blackboard go too. Its team bots stay in Bots.')) return; await api('/api/offices/'+el.dataset.officeDel,{method:'DELETE'}); if(currentOffice===el.dataset.officeDel) currentOffice=null; renderPage(name);});
+  document.querySelectorAll('[data-member-del]').forEach(el=>el.onclick=async()=>{await api(`/api/offices/${currentOffice}/members/${el.dataset.memberDel}`,{method:'DELETE'}); renderPage(name);});
+  if(q('off-back')) q('off-back').onclick=()=>{currentOffice=null; renderPage(name);};
+  if(q('off-create')) q('off-create').onclick=async()=>{try{const o=await api('/api/offices',{method:'POST',body:JSON.stringify({name:q('off-name').value,description:q('off-desc').value,boss_name:q('off-boss').value||'Boss'})}); currentOffice=o.id; renderPage(name);}catch(e){msg(e.message);}};
+  if(q('off-hire')) q('off-hire').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/members`,{method:'POST',body:JSON.stringify({name:q('off-mem-name').value,role:q('off-mem-role').value})}); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('off-mem-add')) q('off-mem-add').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/memory`,{method:'POST',body:JSON.stringify({text:q('off-mem-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value})}); msg('Job done — see the results below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
 }
 loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };

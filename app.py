@@ -2047,6 +2047,241 @@ def get_one_bot(bot_id: str):
         raise HTTPException(404, "Bot not found")
     return bot
 
+# ---------- Office: run a team of agents locally -----------------------
+# Modelled on Munder Difflin (HarnessMD/munder-difflin, MIT): an office
+# of agents on your own machine. A user creates their office locally,
+# hires an AI team with roles, and the team works together with a shared
+# memory that survives sessions. LocalBotz version, local-first:
+# - One office = one folder under data/offices/<id>/ with memory.md
+#   (shared office memory, markdown) and blackboard.json (the mailbox:
+#   messages passed between team members).
+# - One boss agent (the "Michael": the only agent the user briefs) who
+#   plans the job and assigns steps to the team.
+# - Team members are ordinary LocalBotz bots with a role (Researcher,
+#   Writer, Developer, Analyst, Assistant) — hired from a template or
+#   blank, each with its own instructions, memory and chats.
+# - A team job runs locally (LM Studio default): the boss's plan is the
+#   hire order — Researcher first, then Writer/Developer, then Analyst
+#   last — each member runs with the brief + shared office memory +
+#   the previous members' outputs, and hands its result to the next
+#   member on the blackboard. The job summary is written into the
+#   office memory, so the team remembers it next time.
+OFFICES_FILE = DATA_DIR / "offices.json"
+OFFICES_DIR = DATA_DIR / "offices"
+
+OFFICE_ROLES = {
+    "boss": {"label": "Office Manager (boss)", "avatar": "👔",
+             "instructions": "You are {name}, the Office Manager — the boss of this office and the one agent the user talks to. You plan work, assign it to your team, check their results, and report back in plain text. You never do the team's specialist work yourself when a team member can do it."},
+    "researcher": {"label": "Researcher", "avatar": "🔍",
+                   "instructions": "You are {name}, the Researcher on this office's AI team. You search the web and the workspace, gather facts with sources, and hand over a clear research brief. You do not write the final piece or the code — you hand your findings to the next team member."},
+    "writer": {"label": "Writer", "avatar": "✍️",
+              "instructions": "You are {name}, the Writer on this office's AI team. You turn research and briefs into clear, finished writing in plain language. You do not do new research — you work from what the Researcher handed over."},
+    "developer": {"label": "Developer", "avatar": "💻",
+                 "instructions": "You are {name}, the Developer on this office's AI team. You write and fix code in the workspace, run safe checks, and hand over working code with a short summary of what changed."},
+    "analyst": {"label": "Analyst", "avatar": "📊",
+               "instructions": "You are {name}, the Analyst on this office's AI team. You check numbers, review the team's work for errors and gaps, and give a clear verdict with what to fix. You are the last step before the work goes back to the boss."},
+    "assistant": {"label": "Assistant", "avatar": "🤖",
+                 "instructions": "You are {name}, the Assistant on this office's AI team. You handle follow-ups, organise notes, draft replies, and keep the office memory tidy."},
+}
+# The order a team job runs in: research first, build/write second,
+# review last. Roles not listed here run in hire order after these.
+ROLE_ORDER = ["researcher", "developer", "writer", "assistant", "analyst"]
+
+def load_offices():
+    return _load_json(OFFICES_FILE, [])
+
+def save_offices(offices):
+    _save_json(OFFICES_FILE, offices)
+
+def get_office(office_id: str):
+    return next((o for o in load_offices() if o["id"] == office_id), None)
+
+def _office_dir(office_id: str) -> Path:
+    d = OFFICES_DIR / office_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def load_office_memory(office_id: str) -> str:
+    p = _office_dir(office_id) / "memory.md"
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+def append_office_memory(office_id: str, text: str):
+    p = _office_dir(office_id) / "memory.md"
+    with p.open("a", encoding="utf-8") as f:
+        f.write("\n" + text.strip() + "\n")
+
+def load_blackboard(office_id: str):
+    return _load_json(_office_dir(office_id) / "blackboard.json", [])
+
+def append_blackboard(office_id: str, sender: str, recipient: str, text: str):
+    board = load_blackboard(office_id)
+    board.append({"ts": int(time.time()), "from": sender, "to": recipient,
+                  "text": text})
+    _save_json(_office_dir(office_id) / "blackboard.json", board[-200:])
+    return board
+
+@app.get("/api/offices")
+def list_offices():
+    return [{"id": o["id"], "name": o["name"], "description": o.get("description", ""),
+             "members": len(o.get("members", [])), "jobs": len(o.get("jobs", [])),
+             "created_at": o.get("created_at")} for o in load_offices()]
+
+@app.post("/api/offices")
+def create_office(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Give the office a name, e.g. Acme Paper Co.")
+    offices = load_offices()
+    office_id = uuid.uuid4().hex[:8]
+    boss_name = (body.get("boss_name") or "Boss").strip()
+    boss_bot = create_bot(BotCreate(
+        name=boss_name, avatar="👔",
+        instructions=OFFICE_ROLES["boss"]["instructions"].format(name=boss_name),
+        job=f"Office Manager (boss) of the {name} office. Plan work, assign it to the team, check results, report back.",
+        provider=(body.get("provider") or DEFAULT_PROVIDER),
+        model=(body.get("model") or "")))
+    office = {"id": office_id, "name": name,
+              "description": (body.get("description") or "").strip(),
+              "boss_bot_id": boss_bot["id"],
+              "members": [{"id": uuid.uuid4().hex[:8], "name": boss_name,
+                           "role": "boss", "bot_id": boss_bot["id"],
+                           "avatar": "👔", "hired_at": int(time.time())}],
+              "jobs": [], "created_at": int(time.time())}
+    offices.append(office); save_offices(offices)
+    d = _office_dir(office_id)
+    (d / "memory.md").write_text(
+        f"# {name} — office memory\n\nShared memory for this office's AI team. "
+        "Everything the team learns goes here, so it survives sessions.\n\n## Facts\n",
+        encoding="utf-8")
+    _save_json(d / "blackboard.json", [])
+    return office
+
+@app.get("/api/offices/{office_id}")
+def get_office_detail(office_id: str):
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    detail = dict(office)
+    detail["memory"] = load_office_memory(office_id)
+    detail["blackboard"] = load_blackboard(office_id)[-50:]
+    return detail
+
+@app.delete("/api/offices/{office_id}")
+def delete_office(office_id: str):
+    offices = load_offices()
+    office = next((o for o in offices if o["id"] == office_id), None)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    offices = [o for o in offices if o["id"] != office_id]
+    save_offices(offices)
+    shutil.rmtree(_office_dir(office_id), ignore_errors=True)
+    return {"deleted": office_id,
+            "note": "The office is gone. Its team bots stay in Bots — delete them there if you don't need them."}
+
+@app.post("/api/offices/{office_id}/members")
+def hire_member(office_id: str, body: dict):
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    role = (body.get("role") or "assistant").lower()
+    if role not in OFFICE_ROLES or role == "boss":
+        raise HTTPException(400, "Role must be researcher, writer, developer, analyst or assistant. The office has one boss already.")
+    name = (body.get("name") or "").strip() or OFFICE_ROLES[role]["label"]
+    bot = create_bot(BotCreate(
+        name=name, avatar=OFFICE_ROLES[role]["avatar"],
+        instructions=OFFICE_ROLES[role]["instructions"].format(name=name),
+        job=f"{OFFICE_ROLES[role]['label']} on the {office['name']} office AI team.",
+        template=(body.get("template") or ""),
+        provider=(body.get("provider") or DEFAULT_PROVIDER),
+        model=(body.get("model") or "")))
+    member = {"id": uuid.uuid4().hex[:8], "name": name, "role": role,
+              "bot_id": bot["id"], "avatar": OFFICE_ROLES[role]["avatar"],
+              "hired_at": int(time.time())}
+    offices = load_offices()
+    for o in offices:
+        if o["id"] == office_id:
+            o.setdefault("members", []).append(member)
+    save_offices(offices)
+    append_blackboard(office_id, "Boss", name, f"{name} joined the office as {OFFICE_ROLES[role]['label']}.")
+    return member
+
+@app.delete("/api/offices/{office_id}/members/{member_id}")
+def fire_member(office_id: str, member_id: str):
+    offices = load_offices()
+    for o in offices:
+        if o["id"] == office_id:
+            before = len(o.get("members", []))
+            o["members"] = [m for m in o.get("members", []) if m["id"] != member_id]
+            if len(o["members"]) == before:
+                raise HTTPException(404, "Team member not found")
+            save_offices(offices)
+            return {"removed": member_id}
+    raise HTTPException(404, "Office not found")
+
+@app.post("/api/offices/{office_id}/memory")
+def add_office_memory(office_id: str, body: dict):
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Write something to remember.")
+    append_office_memory(office_id, f"- {text}")
+    return {"memory": load_office_memory(office_id)}
+
+@app.post("/api/offices/{office_id}/jobs")
+def run_office_job(office_id: str, body: dict):
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    title = (body.get("title") or "").strip()
+    brief = (body.get("brief") or "").strip()
+    if not title or not brief:
+        raise HTTPException(400, "Give the job a title and a brief for the team.")
+    members = [m for m in office.get("members", []) if m["role"] != "boss"]
+    members.sort(key=lambda m: ROLE_ORDER.index(m["role"]) if m["role"] in ROLE_ORDER else 99)
+    boss = next((m for m in office.get("members", []) if m["role"] == "boss"), None)
+    memory = load_office_memory(office_id)
+    steps = []
+    previous = ""
+    workers = members or ([boss] if boss else [])
+    for member in workers:
+        bot = get_bot(member["bot_id"])
+        if not bot:
+            continue
+        prompt = (f"Office: {office['name']}\nJob: {title}\nBrief: {brief}\n\n"
+                  f"Shared office memory:\n{memory}\n\n"
+                  f"Work done so far by the team:\n{previous or '(nothing yet — you are first)'}\n\n"
+                  f"Your role: {OFFICE_ROLES[member['role']]['label']}. Do your part now and report back in plain text, so the next team member can use it.")
+        append_blackboard(office_id, "Boss", member["name"],
+                          f"Your part of '{title}': {brief[:300]}")
+        reply, trace, _extra = run_agent(bot, prompt)
+        steps.append({"member": member["name"], "role": member["role"],
+                      "output": reply, "tools": [t.get("tool") for t in trace]})
+        previous += f"\n\n--- {member['name']} ({OFFICE_ROLES[member['role']]['label']}):\n{reply}"
+        append_blackboard(office_id, member["name"], "Boss",
+                          f"Done with my part of '{title}'.")
+    job = {"id": uuid.uuid4().hex[:8], "title": title, "brief": brief,
+           "status": "done", "steps": steps, "created_at": int(time.time())}
+    offices = load_offices()
+    for o in offices:
+        if o["id"] == office_id:
+            o.setdefault("jobs", []).append(job)
+            o["jobs"] = o["jobs"][-20:]
+    save_offices(offices)
+    append_office_memory(
+        office_id,
+        f"- Job '{title}' ({time.strftime('%Y-%m-%d')}): {brief[:200]} "
+        f"Done by: {', '.join(s['member'] for s in steps) or 'nobody (no team yet)'}.")
+    return job
+
+@app.get("/api/offices/{office_id}/jobs")
+def list_office_jobs(office_id: str):
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    return office.get("jobs", [])
+
 @app.delete("/api/bots/{bot_id}")
 def delete_bot(bot_id: str):
     bots = [b for b in load_bots() if b["id"] != bot_id]
