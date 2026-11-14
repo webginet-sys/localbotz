@@ -50,14 +50,49 @@ of them from the Deals page.
 
 ## Workflows
 
-A workflow rule is: **when a deal moves to [stage], then [action]**.
+A workflow rule is: **when a deal moves to [stage], then a chain
+of steps, in order**. (n8n's idea, LocalBotz-sized: an ordered
+step list, not a canvas.)
 
-| Action | What it does |
+| Step | What it does |
 |---|---|
 | Create a task for a bot | Adds a task to the bot's task list (Hermes tasks). It runs on its own if the bot is persistent, or from the bot's Run button. |
 | Run an office job with the team | Starts a team job in the office — with the Auditor and the approval gate, like any office job. The finished job waits for your approval. |
 | Write a draft on the deal | Writes a draft on the deal's timeline. You send it yourself. |
 | Add a note to the timeline | Writes a note (e.g. "Lost: client chose the cheaper bid"). |
+| Wait… | Pauses the chain for N minutes (1 minute to 30 days). The chain resumes on its own — the background worker picks it up — and the deal is re-read fresh at that point. |
+| IF… | Checks a condition, and stops the chain here if it is not met. Conditions: deal value over/under a number, deal is still in a stage, deal is no longer in a stage. |
+
+Example chain — Quoted → chase after 3 days (this one ships
+ready-made for General):
+
+1. **Wait 3 days** (4320 minutes)
+2. **IF deal is still in stage Quoted** — if someone moved the deal
+   on, the chain stops here and nothing is chased.
+3. **Write a draft** — "Hi {client}, following up on the {deal}
+   quotation ({value} {currency})…"
+4. **Add a note** — "Chase draft written — still Quoted after 3 days."
+
+Another: **value over 100,000** → run an office job with the team;
+a second rule with **value under 100,000** → write a draft. The
+two rules together are the branch.
+
+### Chains running now
+
+A chain that hits a wait step is recorded in `data/chain_runs.json`
+and shown on the Deals page: which workflow, which deal, when it
+resumes, and a Cancel button. A finished chain's steps are on the
+deal's timeline, and its last step's result is on the deal event
+too. Chains only run while the app is open; a chain whose wait
+ended while the app was closed resumes once on the next start
+(catch-up, like routines). One chain resumes per 30-second worker
+tick.
+
+### Old rules still work
+
+Rules made before chains existed had one action + text. They are
+read as a one-step chain, so nothing breaks and nothing needs to
+be re-made.
 
 Write the action text with `{deal}`, `{client}`, `{value}`,
 `{currency}` and `{stage}` — they are filled in from the deal that
@@ -97,9 +132,14 @@ timeline.
 | `DELETE /api/deals/{id}` | Delete the deal |
 | `DELETE /api/deals/{id}/drafts/{draft_id}` | Delete a draft |
 | `GET /api/deal-workflows` | List workflow rules |
-| `POST /api/deal-workflows` | Create — `{name, department?, stage, action, bot_id?, office_id?, text}` |
-| `PATCH /api/deal-workflows/{id}` | Pause/resume (`{enabled}`), rename, change text |
+| `POST /api/deal-workflows` | Create — `{name, department?, stage, steps}` (steps: `[{type, text?, bot_id?, office_id?, minutes?, condition?, value?}]`; or the old single-action form `{action, text, bot_id?, office_id?}`) |
+| `PATCH /api/deal-workflows/{id}` | Pause/resume (`{enabled}`), rename, change text, replace steps (`{steps}`) |
 | `DELETE /api/deal-workflows/{id}` | Delete the rule |
+| `GET /api/chain-runs` | List chain runs (waiting first by recency) |
+| `POST /api/chain-runs/{id}/cancel` | Cancel a waiting chain |
+
+Deals live in `data/deals.json`, rules in `data/deal_workflows.json`,
+chain runs in `data/chain_runs.json`.
 
 Deals live in `data/deals.json`, rules in `data/deal_workflows.json`.
 Pipelines live in `app.py` (`DEPARTMENT_PIPELINES`).

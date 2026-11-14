@@ -512,18 +512,57 @@ async function routinesHtml(){
 let currentDeal=null;
 let dealDeptFilter='all';
 let dealPipelines={};
+let wfSteps=[{type:'note',text:''}];
+let wfBots=[], wfOffices=[];
+const WF_STEP_LABELS={create_task:'Create a task for a bot',office_job:'Run an office job with the team',draft:'Write a draft on the deal',note:'Add a note to the timeline',wait:'Wait…',if:'IF…'};
 function pipeStageLabel(dept,stage){const p=dealPipelines[dept]; if(!p) return stage; const s=p.stages.find(x=>x[0]===stage); return s?s[1]:stage;}
+function wfStepRow(i){
+  const s=wfSteps[i];
+  const typeOpts=Object.entries(WF_STEP_LABELS).map(([t,l])=>`<option value="${t}" ${s.type===t?'selected':''}>${l}</option>`).join('');
+  let fields='';
+  if(s.type==='create_task') fields=`<select data-wf-f="bot_id">${wfBots.map(b=>`<option value="${b.id}" ${s.bot_id===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select> <input type="text" data-wf-f="text" value="${esc(s.text||'')}" placeholder="What should the bot do? Use {deal} {client} {value} {currency} {stage}">`;
+  else if(s.type==='office_job') fields=`<select data-wf-f="office_id">${wfOffices.map(o=>`<option value="${o.id}" ${s.office_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('')||'<option value="">(no office yet)</option>'}</select> <input type="text" data-wf-f="text" value="${esc(s.text||'')}" placeholder="Brief for the team. Use {deal} {client} {value} {currency} {stage}">`;
+  else if(s.type==='draft'||s.type==='note') fields=`<input type="text" data-wf-f="text" value="${esc(s.text||'')}" placeholder="Write it here. Use {deal} {client} {value} {currency} {stage}">`;
+  else if(s.type==='wait') fields=`<input type="number" data-wf-f="minutes" value="${s.minutes||60}" min="1" max="43200" style="width:90px"> minutes <span class="note">(1 minute to 30 days — 4320 = 3 days)</span>`;
+  else if(s.type==='if') fields=`<select data-wf-f="condition">${['value_over','value_under','stage_is','stage_is_not'].map(c=>`<option value="${c}" ${s.condition===c?'selected':''}>${{value_over:'Deal value over',value_under:'Deal value under',stage_is:'Deal is still in stage',stage_is_not:'Deal is no longer in stage'}[c]}</option>`).join('')}</select> <input type="text" data-wf-f="value" value="${esc(String(s.value??''))}" placeholder="e.g. 100000, or quoted">`;
+  return `<div data-wf-row="${i}" style="border:1px solid #ddd;border-radius:6px;padding:8px;margin:6px 0"><b>Step ${i+1}</b> <select data-wf-f="type">${typeOpts}</select> ${fields} <button class="small" data-wf-up="${i}" ${i===0?'disabled':''}>↑</button> <button class="small" data-wf-down="${i}" ${i===wfSteps.length-1?'disabled':''}>↓</button> <button class="small" data-wf-del="${i}">✕</button></div>`;
+}
+function wfStepsRender(){const el=q('wf-steps'); if(el) el.innerHTML=wfSteps.map((s,i)=>wfStepRow(i)).join('');}
+function wfStepsSync(){
+  document.querySelectorAll('[data-wf-row]').forEach(row=>{
+    const i=+row.dataset.wfRow; const s=wfSteps[i]; if(!s) return;
+    row.querySelectorAll('[data-wf-f]').forEach(inp=>{
+      const f=inp.dataset.wfF;
+      if(f==='minutes') s.minutes=parseInt(inp.value)||0;
+      else s[f]=inp.value;
+    });
+  });
+}
+function wfStepsClean(){
+  wfStepsSync();
+  return wfSteps.map(s=>{
+    if(s.type==='wait') return {type:'wait',minutes:s.minutes||60};
+    if(s.type==='if') return {type:'if',condition:s.condition||'stage_is',value:(s.condition==='value_over'||s.condition==='value_under')?Number(s.value||0):String(s.value||'')};
+    return {type:s.type,text:(s.text||'').trim(),bot_id:s.bot_id||undefined,office_id:s.office_id||undefined};
+  });
+}
 async function dealsHtml(){
   const deals=await api('/api/deals');
   const rules=await api('/api/deal-workflows');
   const bots=await api('/api/bots');
   const offices=await api('/api/offices');
   dealPipelines=await api('/api/deals/pipelines');
+  wfBots=bots; wfOffices=offices;
   const deptOpts=Object.entries(dealPipelines).map(([id,p])=>`<option value="${id}">${esc(p.label)}</option>`).join('');
   if(!currentDeal){
     const shown=dealDeptFilter==='all'?deals:deals.filter(d=>(d.department||'general')===dealDeptFilter);
     const rows=shown.map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.client)}</td><td>${esc(d.department_label||'')}</td><td>${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'—'}</td><td>${esc(d.stage_label||d.stage)}</td><td><button class="small" data-deal-open="${d.id}">Open</button> <button class="small" data-deal-del="${d.id}">Delete</button></td></tr>`).join('');
-    const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${r.department?esc(dealPipelines[r.department]?.label||r.department):'Any department'}</td><td>When a deal moves to <b>${esc(pipeStageLabel(r.department||'general',r.stage))}</b></td><td>${esc(r.action)}${r.bot_id?` → ${esc((bots.find(b=>b.id===r.bot_id)||{}).name||'bot')}`:''}${r.office_id?` → ${esc((offices.find(o=>o.id===r.office_id)||{}).name||'office')}`:''}<br><span class="note">${esc(r.text.slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
+    const stepSummary=r=>(r.steps||[{type:r.action,text:r.text,bot_id:r.bot_id,office_id:r.office_id}]).map(s=>s.type==='wait'?`⏳ wait ${s.minutes||60}m`:s.type==='if'?`🔀 if ${esc(s.condition||'')}`:s.type).join(' → ');
+    const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${r.department?esc(dealPipelines[r.department]?.label||r.department):'Any department'}</td><td>When a deal moves to <b>${esc(pipeStageLabel(r.department||'general',r.stage))}</b></td><td>${esc(stepSummary(r))}<br><span class="note">${esc(((r.steps||[])[0]?.text||r.text||'').slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
+    const runs=await api('/api/chain-runs');
+    const waiting=runs.filter(r=>r.status==='waiting');
+    const recent=runs.filter(r=>r.status!=='waiting').slice(0,10);
+    const runRows=runs.slice(0,10).map(r=>`<tr><td>${esc(r.rule_name||'')}</td><td>${esc(r.deal_title||'')}</td><td>${esc(r.status)}</td><td>${r.status==='waiting'&&r.resume_at?`resumes ${new Date(r.resume_at*1000).toLocaleString()}`:r.finished_at?new Date(r.finished_at*1000).toLocaleString():'—'}</td><td>${r.status==='waiting'?`<button class="small" data-run-cancel="${r.id}">Cancel</button>`:''}</td></tr>`).join('');
     const stageOpts=Object.entries(dealPipelines).map(([id,p])=>`<optgroup label="${esc(p.label)}">${p.stages.map(([s,l])=>`<option value="${s}">${esc(l)}</option>`).join('')}</optgroup>`).join('');
     return `<h2>💼 Deals — clients & workflows</h2>
     <p class="note">A small local CRM for sales work. Every department has its own pipeline — Construction goes Tender → BOQ → Submitted → Awarded, IT Services goes Discovery → Proposal → Signed, and so on. A deal is a client, a value and a stage in its department's pipeline. When a deal moves stage, your workflows run — a task for a bot, a job for the office team, a draft, or a note. Nothing is sent out by a workflow on its own: drafts stay drafts, and office jobs wait for your approval. Every department already has two starter workflows: a handover draft when a deal is won, and a note when one is lost.</p>
@@ -539,16 +578,18 @@ async function dealsHtml(){
     <label>Show department</label><select id="dl-filter"><option value="all">All departments</option>${deptOpts}</select>
     ${shown.length?`<table><tr><th>Deal</th><th>Client</th><th>Department</th><th>Value</th><th>Stage</th><th></th></tr>${rows}</table>`:'<p class="note">No deals in this department yet. Create one above.</p>'}
     <h3>Workflows — when a deal moves stage, the team acts</h3>
-    <p class="note">Write the text with {deal}, {client}, {value}, {currency} and {stage} — they are filled in from the deal that moved. Pick a department to limit the workflow to it, or leave it on Any department.</p>
-    <label>Name</label><input id="wf-name" type="text" placeholder="e.g. Awarded — start the contract pack">
+    <p class="note">A workflow is a chain of steps, in order. Write the text with {deal}, {client}, {value}, {currency} and {stage} — they are filled in from the deal that moved. Pick a department to limit the workflow to it, or leave it on Any department.</p>
+    <label>Name</label><input id="wf-name" type="text" placeholder="e.g. Quoted — chase after 3 days">
     <label>Department</label><select id="wf-dept"><option value="">Any department</option>${deptOpts}</select>
     <label>When a deal moves to</label><select id="wf-stage">${stageOpts}</select>
-    <label>Then</label><select id="wf-action"><option value="create_task">Create a task for a bot</option><option value="office_job">Run an office job with the team</option><option value="draft">Write a draft on the deal</option><option value="note">Add a note to the timeline</option></select>
-    <div id="wf-bot-row"><label>Bot</label><select id="wf-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select></div>
-    <div id="wf-office-row" style="display:none"><label>Office</label><select id="wf-office">${offices.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')||'<option value="">(no office yet)</option>'}</select></div>
-    <label>What should happen</label><textarea id="wf-text" rows="3" placeholder="e.g. Follow up with {client} about the {deal} quotation ({value} {currency}) — ask if they have questions and offer a site visit."></textarea>
+    <h3>Steps — in order</h3>
+    <p class="note">A wait step pauses the chain and it resumes on its own. An IF step stops the chain here if the condition is not met — for example, "deal is still in stage Quoted" means the chase only happens if nobody moved the deal on.</p>
+    <div id="wf-steps"></div>
+    <div style="margin:8px 0"><button id="wf-step-add">+ Add step</button></div>
     <div style="margin:8px 0"><button id="wf-create">Create workflow</button></div>
-    ${rules.length?`<table><tr><th>Workflow</th><th>Department</th><th>Trigger</th><th>Action</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
+    ${rules.length?`<table><tr><th>Workflow</th><th>Department</th><th>Trigger</th><th>Steps</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
+    <h3>Chains running now</h3>
+    ${runs.length?`<table><tr><th>Workflow</th><th>Deal</th><th>Status</th><th>When</th><th></th></tr>${runRows}</table><p class="note">${waiting.length} waiting — they resume on their own when the wait ends. A finished chain's steps are on the deal's timeline.</p>`:'<p class="note">No chains yet. A chain appears here when a workflow hits a wait step.</p>'}
     <div id="page-msg"></div>`;
   }
   const d=await api('/api/deals/'+currentDeal);
@@ -915,9 +956,19 @@ function bindPage(name){
   document.querySelectorAll('[data-stage]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({stage:el.dataset.stage})}); const fired=(d.workflows_fired||[]).map(w=>`${w.rule}: ${w.result}`).join(' | '); msg(fired?`Moved to ${d.stage_label}. Workflows ran — ${fired}`:`Moved to ${d.stage_label}.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('dl-note-add')) q('dl-note-add').onclick=async()=>{try{await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({note:q('dl-note').value})}); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-draft-del]').forEach(el=>el.onclick=async()=>{await api(`/api/deals/${currentDeal}/drafts/${el.dataset.draftDel}`,{method:'DELETE'}); renderPage(name);});
-  if(q('wf-action')) q('wf-action').onchange=()=>{const a=q('wf-action').value; q('wf-bot-row').style.display=(a==='create_task')?'block':'none'; q('wf-office-row').style.display=(a==='office_job')?'block':'none';};
+  if(q('wf-steps')){wfStepsRender();
+    q('wf-steps').onchange=(e)=>{wfStepsSync(); if(e.target.dataset.wfF==='type') wfStepsRender();};
+    q('wf-steps').onclick=(e)=>{
+      const up=e.target.dataset.wfUp, down=e.target.dataset.wfDown, del=e.target.dataset.wfDel;
+      if(up!==undefined){wfStepsSync(); const i=+up; [wfSteps[i-1],wfSteps[i]]=[wfSteps[i],wfSteps[i-1]]; wfStepsRender();}
+      else if(down!==undefined){wfStepsSync(); const i=+down; [wfSteps[i+1],wfSteps[i]]=[wfSteps[i],wfSteps[i+1]]; wfStepsRender();}
+      else if(del!==undefined){wfStepsSync(); wfSteps.splice(+del,1); if(!wfSteps.length) wfSteps.push({type:'note',text:''}); wfStepsRender();}
+    };
+  }
+  if(q('wf-step-add')) q('wf-step-add').onclick=()=>{wfStepsSync(); wfSteps.push({type:'note',text:''}); wfStepsRender();};
   if(q('wf-dept')) q('wf-dept').onchange=()=>{const dept=q('wf-dept').value; const sel=q('wf-stage'); const pipes=dept?{[dept]:dealPipelines[dept]}:dealPipelines; sel.innerHTML=Object.entries(pipes).map(([id,p])=>`<optgroup label="${esc(p.label)}">${p.stages.map(([s,l])=>`<option value="${s}">${esc(l)}</option>`).join('')}</optgroup>`).join('');};
-  if(q('wf-create')) q('wf-create').onclick=async()=>{try{await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,department:q('wf-dept').value,stage:q('wf-stage').value,action:q('wf-action').value,bot_id:q('wf-bot').value,office_id:q('wf-office').value,text:q('wf-text').value})}); msg('Workflow created — it will run when a deal moves to that stage.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('wf-create')) q('wf-create').onclick=async()=>{try{const steps=wfStepsClean(); await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,department:q('wf-dept').value,stage:q('wf-stage').value,steps})}); wfSteps=[{type:'note',text:''}]; msg(`Workflow created with ${steps.length} step${steps.length>1?'s':''} — it will run when a deal moves to that stage.`); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-run-cancel]').forEach(el=>el.onclick=async()=>{await api(`/api/chain-runs/${el.dataset.runCancel}/cancel`,{method:'POST'}); renderPage(name);});
   document.querySelectorAll('[data-wf-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/deal-workflows/${el.dataset.wfToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-wf-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workflow?')) return; await api(`/api/deal-workflows/${el.dataset.wfDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom

@@ -3403,10 +3403,12 @@ def _run_task(task: dict):
 
 def _persistent_worker():
     """Background loop: every 30s, run one thing — the oldest pending
-    task of a persistent bot, or the first routine whose time has
-    arrived. One per loop, then re-check. Never crashes the app.
-    A routine whose time passed while the app was closed runs once
-    here (catch-up), then goes back on its normal schedule."""
+    task of a persistent bot, the first routine whose time has
+    arrived, or the first workflow chain whose wait has ended. One
+    per loop, then re-check. Never crashes the app. A routine whose
+    time passed while the app was closed runs once here (catch-up),
+    then goes back on its normal schedule. A chain whose wait ended
+    while the app was closed resumes once here too."""
     while True:
         try:
             time.sleep(30)
@@ -3424,7 +3426,15 @@ def _persistent_worker():
                     if (routine.get("enabled") and routine.get("next_run")
                             and routine["next_run"] <= now):
                         _run_routine(routine)
+                        ran = True
                         break  # one routine per loop, then re-check
+            if not ran:
+                now = int(time.time())
+                for run in load_chain_runs():
+                    if (run.get("status") == "waiting" and run.get("resume_at")
+                            and run["resume_at"] <= now):
+                        _resume_chain_run(run)
+                        break  # one chain per loop, then re-check
         except Exception:
             time.sleep(30)
 
@@ -3921,6 +3931,18 @@ def _seed_deal_workflows():
                       "bot_id": None, "office_id": None,
                       "text": "Lost {deal} ({value} {currency}) — record the reason.",
                       "enabled": True, "created_at": now})
+    # One ready-made chain, so the idea is visible from day one:
+    # Quoted → wait 3 days → if still Quoted, write a chase draft.
+    rules.append({"id": uuid.uuid4().hex[:8],
+                  "name": "General — Quoted: chase after 3 days",
+                  "department": "general", "stage": "quoted",
+                  "action": "chain", "bot_id": None, "office_id": None,
+                  "text": "",
+                  "steps": [{"type": "wait", "minutes": 4320},
+                            {"type": "if", "condition": "stage_is", "value": "quoted"},
+                            {"type": "draft", "text": "Hi {client}, following up on the {deal} quotation ({value} {currency}) — have you had a chance to look at it? Happy to walk through it or adjust anything."},
+                            {"type": "note", "text": "Chase draft written for {deal} — still Quoted after 3 days."}],
+                  "enabled": True, "created_at": now})
     save_deal_workflows(rules)
     return rules
 
@@ -3929,7 +3951,8 @@ def load_deal_workflows():
     if not DEAL_WORKFLOWS_FILE.exists():
         return _seed_deal_workflows()
     rules = _load_json(DEAL_WORKFLOWS_FILE, None)
-    return rules if isinstance(rules, list) else []
+    rules = rules if isinstance(rules, list) else []
+    return [_normalize_workflow_rule(r) for r in rules]
 
 
 def save_deal_workflows(rules):
@@ -3954,11 +3977,223 @@ def _render_deal_text(template, deal):
         .replace("{stage}", _stage_label(_deal_department(deal), deal.get("stage", "")))
 
 
+CHAIN_RUNS_FILE = DATA_DIR / "chain_runs.json"
+WORKFLOW_STEP_TYPES = ("create_task", "office_job", "draft", "note", "wait", "if")
+WORKFLOW_IF_CONDITIONS = ("value_over", "value_under", "stage_is", "stage_is_not")
+
+
+def load_chain_runs():
+    runs = _load_json(CHAIN_RUNS_FILE, None)
+    return runs if isinstance(runs, list) else []
+
+
+def save_chain_runs(runs):
+    _save_json(CHAIN_RUNS_FILE, runs)
+    return runs
+
+
+def _normalize_workflow_rule(rule):
+    """Old rules have one action + text; new rules have a steps list.
+    Old ones are read as a one-step chain, so nothing breaks."""
+    if rule.get("steps"):
+        return rule
+    rule["steps"] = [{"type": rule.get("action") or "note",
+                      "text": rule.get("text") or "",
+                      "bot_id": rule.get("bot_id"),
+                      "office_id": rule.get("office_id")}]
+    return rule
+
+
+def _wait_label(minutes):
+    if minutes >= 1440 and minutes % 1440 == 0:
+        days = minutes // 1440
+        return f"{days} day{'s' if days != 1 else ''}"
+    if minutes >= 60 and minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    return f"{minutes} minute{'s' if minutes != 1 else ''}"
+
+
+def _validate_workflow_steps(steps):
+    if not isinstance(steps, list) or not steps:
+        raise HTTPException(400, "A workflow needs at least one step.")
+    if len(steps) > 10:
+        raise HTTPException(400, "A workflow can have at most 10 steps.")
+    for step in steps:
+        if not isinstance(step, dict):
+            raise HTTPException(400, "Each step must be an object.")
+        stype = step.get("type")
+        if stype not in WORKFLOW_STEP_TYPES:
+            raise HTTPException(400, f"Unknown step type '{stype}'.")
+        if stype in ("create_task", "office_job", "draft", "note"):
+            if not (step.get("text") or "").strip():
+                raise HTTPException(400, f"A {stype} step needs text.")
+            if stype == "create_task" and (not step.get("bot_id") or not get_bot(step.get("bot_id"))):
+                raise HTTPException(400, "Pick a bot for the task step.")
+            if stype == "office_job" and (not step.get("office_id") or not get_office(step.get("office_id"))):
+                raise HTTPException(400, "Pick an office for the job step.")
+        elif stype == "wait":
+            try:
+                minutes = int(step.get("minutes"))
+            except (TypeError, ValueError):
+                raise HTTPException(400, "A wait step needs minutes (a number).")
+            if minutes < 1 or minutes > 43200:
+                raise HTTPException(400, "Wait must be between 1 minute and 30 days.")
+        elif stype == "if":
+            cond = step.get("condition")
+            if cond not in WORKFLOW_IF_CONDITIONS:
+                raise HTTPException(400, "An IF step needs a condition (value over/under, or stage is/is not).")
+            if cond in ("value_over", "value_under"):
+                try:
+                    float(step.get("value"))
+                except (TypeError, ValueError):
+                    raise HTTPException(400, "An IF value condition needs a number.")
+            elif not any((step.get("value") or "") in dict(p["stages"]) for p in DEPARTMENT_PIPELINES.values()):
+                raise HTTPException(400, "An IF stage condition needs a stage from a department's pipeline.")
+    return steps
+
+
+def _eval_workflow_condition(step, deal):
+    cond = step.get("condition")
+    value = step.get("value")
+    if cond == "value_over":
+        return (deal.get("value") or 0) > float(value)
+    if cond == "value_under":
+        return (deal.get("value") or 0) < float(value)
+    if cond == "stage_is":
+        return deal.get("stage") == value
+    if cond == "stage_is_not":
+        return deal.get("stage") != value
+    return False
+
+
+def _run_workflow_step(rule, step, deal):
+    """One action step. Returns a one-line result. May raise."""
+    stype = step.get("type")
+    text = _render_deal_text(step.get("text") or "", deal)
+    if stype == "create_task":
+        tasks = load_tasks()
+        task = {"id": uuid.uuid4().hex[:8], "bot_id": step["bot_id"],
+                "goal": text, "status": "pending",
+                "steps": [], "result": "", "created_at": int(time.time()),
+                "finished_at": None}
+        tasks.append(task)
+        save_tasks(tasks)
+        return f"Task created for the bot ({task['id']}). It runs on its own if the bot is persistent, or from the bot's tasks."
+    if stype == "office_job":
+        job = run_office_job(step["office_id"],
+                             {"title": f"Deal: {deal.get('title')}",
+                              "brief": text})
+        return (f"Office job started ({job['id']}) — {job.get('status')}"
+                + (" — waiting for your approval." if job.get("status") == "awaiting_approval" else "."))
+    if stype == "draft":
+        deal.setdefault("drafts", []).append(
+            {"id": uuid.uuid4().hex[:8], "text": text,
+             "status": "draft", "created_at": int(time.time())})
+        return "Draft written on the deal — send it yourself when ready."
+    if stype == "note":
+        return text
+    raise ValueError(f"Unknown step type '{stype}'")
+
+
+def _run_workflow_chain(rule, deal, start_index=0, run=None):
+    """Run a rule's steps in order from start_index. A wait step
+    pauses the chain (a run record is kept and the background worker
+    resumes it); an IF step whose condition fails stops the chain
+    there; a step that fails stops the chain with that step marked
+    failed. Returns {"status": "done"|"waiting"|"stopped"|"failed",
+    "results": [{step, result}], "next_index": int,
+    "resume_at": epoch or None, "run": run or None}."""
+    steps = rule.get("steps") or []
+    results = []
+    i = start_index
+    while i < len(steps):
+        step = steps[i]
+        stype = step.get("type")
+        if stype == "wait":
+            minutes = int(step.get("minutes", 60))
+            resume_at = int(time.time()) + minutes * 60
+            results.append({"step": "wait",
+                            "result": f"Waiting {_wait_label(minutes)} — resumes automatically."})
+            if run is None:
+                run = {"id": uuid.uuid4().hex[:8], "rule_id": rule["id"],
+                       "rule_name": rule.get("name"), "deal_id": deal["id"],
+                       "deal_title": deal.get("title"),
+                       "step_index": i + 1, "status": "waiting",
+                       "resume_at": resume_at,
+                       "created_at": int(time.time()), "finished_at": None,
+                       "history": list(results)}
+                runs = load_chain_runs()
+                runs.append(run)
+                save_chain_runs(runs)
+            else:
+                run["step_index"] = i + 1
+                run["status"] = "waiting"
+                run["resume_at"] = resume_at
+                run["history"] = run.get("history", []) + results
+            return {"status": "waiting", "results": results, "next_index": i + 1,
+                    "resume_at": resume_at, "run": run}
+        if stype == "if":
+            if not _eval_workflow_condition(step, deal):
+                results.append({"step": "if", "result": "Condition not met — chain stopped here."})
+                return {"status": "stopped", "results": results, "next_index": i,
+                        "resume_at": None, "run": run}
+            results.append({"step": "if", "result": "Condition met — chain continues."})
+            i += 1
+            continue
+        try:
+            results.append({"step": stype, "result": _run_workflow_step(rule, step, deal)})
+        except Exception as e:
+            results.append({"step": stype, "result": f"Step failed: {e}"})
+            return {"status": "failed", "results": results, "next_index": i,
+                    "resume_at": None, "run": run}
+        i += 1
+    return {"status": "done", "results": results, "next_index": len(steps),
+            "resume_at": None, "run": run}
+
+
+def _resume_chain_run(run):
+    """Continue a waiting chain from where it paused. The deal is
+    re-read fresh, so an IF step sees the deal as it is now — a
+    chase only happens if the deal is still in that stage."""
+    runs = load_chain_runs()
+    stored = next((x for x in runs if x["id"] == run["id"]), None)
+    if not stored or stored.get("status") != "waiting":
+        return
+    rules = {r["id"]: r for r in load_deal_workflows()}
+    rule = rules.get(run.get("rule_id"))
+    deals = load_deals()
+    deal = next((x for x in deals if x["id"] == run.get("deal_id")), None)
+    if not rule or not deal:
+        stored["status"] = "failed"
+        stored["finished_at"] = int(time.time())
+        stored.setdefault("history", []).append(
+            {"step": "resume", "result": "The deal or the workflow no longer exists — chain stopped."})
+        save_chain_runs(runs)
+        return
+    out = _run_workflow_chain(rule, deal, stored.get("step_index", 0), stored)
+    stored["history"] = stored.get("history", []) + out["results"]
+    stored["status"] = out["status"]
+    stored["step_index"] = out["next_index"]
+    if out["status"] == "waiting":
+        stored["resume_at"] = out["resume_at"]
+    else:
+        stored["finished_at"] = int(time.time())
+        stored["resume_at"] = None
+    deal.setdefault("events", []).append(
+        {"at": int(time.time()), "kind": "workflow",
+         "text": f"Workflow '{rule.get('name')}' resumed ({out['status']}): "
+                 + " | ".join(r["result"] for r in out["results"])})
+    save_deals(deals)
+    save_chain_runs(runs)
+
+
 def _fire_deal_workflows(deal, old_stage, new_stage):
     """Run every enabled rule that fires on a move TO new_stage in
-    this deal's department. Returns [{rule, action, result}]. One
-    rule failing never stops the others, and never stops the stage
-    change itself."""
+    this deal's department. Each rule is now a chain of steps.
+    Returns [{rule, action, result, status, steps, resume_at,
+    run_id}]. One rule failing never stops the others, and never
+    stops the stage change itself."""
     fired = []
     for rule in load_deal_workflows():
         if not rule.get("enabled") or rule.get("stage") != new_stage:
@@ -3966,40 +4201,21 @@ def _fire_deal_workflows(deal, old_stage, new_stage):
         rule_dept = rule.get("department")
         if rule_dept and rule_dept != _deal_department(deal):
             continue
-        action = rule.get("action")
-        text = _render_deal_text(rule.get("text") or "", deal)
-        result = ""
         try:
-            if action == "create_task":
-                tasks = load_tasks()
-                task = {"id": uuid.uuid4().hex[:8], "bot_id": rule["bot_id"],
-                        "goal": text, "status": "pending",
-                        "steps": [], "result": "", "created_at": int(time.time()),
-                        "finished_at": None}
-                tasks.append(task)
-                save_tasks(tasks)
-                result = f"Task created for the bot ({task['id']}). Run it from the bot's tasks, or it runs on its own if the bot is persistent."
-            elif action == "office_job":
-                job = run_office_job(rule["office_id"],
-                                     {"title": f"Deal: {deal.get('title')}",
-                                      "brief": text})
-                result = (f"Office job started ({job['id']}) — {job.get('status')}"
-                          + (" — waiting for your approval." if job.get("status") == "awaiting_approval" else "."))
-            elif action == "draft":
-                deal.setdefault("drafts", []).append(
-                    {"id": uuid.uuid4().hex[:8], "text": text,
-                     "status": "draft", "created_at": int(time.time())})
-                result = "Draft written on the deal — send it yourself when ready."
-            elif action == "note":
-                result = text
-            else:
-                result = f"Unknown action '{action}' — skipped."
+            out = _run_workflow_chain(rule, deal)
         except Exception as e:
-            result = f"Workflow failed: {e}"
+            out = {"status": "failed",
+                   "results": [{"step": "chain", "result": f"Chain failed: {e}"}],
+                   "next_index": 0, "resume_at": None, "run": None}
+        summary = " | ".join(r["result"] for r in out["results"])
         deal.setdefault("events", []).append(
             {"at": int(time.time()), "kind": "workflow",
-             "text": f"Workflow '{rule.get('name')}' ran ({action}): {result}"})
-        fired.append({"rule": rule.get("name"), "action": action, "result": result})
+             "text": f"Workflow '{rule.get('name')}' ran ({out['status']}): {summary}"})
+        fired.append({"rule": rule.get("name"), "action": "chain",
+                      "result": summary, "status": out["status"],
+                      "steps": out["results"],
+                      "resume_at": out.get("resume_at"),
+                      "run_id": (out.get("run") or {}).get("id")})
     return fired
 
 
@@ -4140,12 +4356,29 @@ def list_deal_workflows():
     return load_deal_workflows()
 
 
+@app.get("/api/chain-runs")
+def list_chain_runs():
+    return sorted(load_chain_runs(), key=lambda r: r.get("created_at", 0), reverse=True)
+
+
+@app.post("/api/chain-runs/{run_id}/cancel")
+def cancel_chain_run(run_id: str):
+    runs = load_chain_runs()
+    run = next((x for x in runs if x["id"] == run_id), None)
+    if not run:
+        raise HTTPException(404, "Chain run not found")
+    if run.get("status") != "waiting":
+        raise HTTPException(400, "Only a waiting chain can be cancelled.")
+    run["status"] = "cancelled"
+    run["finished_at"] = int(time.time())
+    save_chain_runs(runs)
+    return run
+
+
 @app.post("/api/deal-workflows", status_code=201)
 def create_deal_workflow(body: dict):
     name = (body.get("name") or "").strip()
     stage = (body.get("stage") or "").strip().lower()
-    action = (body.get("action") or "").strip()
-    text = (body.get("text") or "").strip()
     department = (body.get("department") or "").strip().lower() or None
     if not name:
         raise HTTPException(400, "Give the workflow a name.")
@@ -4156,22 +4389,35 @@ def create_deal_workflow(body: dict):
             raise HTTPException(400, f"'{stage}' is not a stage in the {_pipeline(department)['label']} pipeline.")
     elif not any(stage in dict(p["stages"]) for p in DEPARTMENT_PIPELINES.values()):
         raise HTTPException(400, "Unknown stage — pick one from a department's pipeline.")
-    if action not in WORKFLOW_ACTIONS:
-        raise HTTPException(400, "Action must be create_task, office_job, draft or note.")
-    if not text:
-        raise HTTPException(400, "Write what the workflow should do (the task, brief, draft or note).")
-    bot_id = (body.get("bot_id") or "").strip() or None
-    office_id = (body.get("office_id") or "").strip() or None
-    if action == "create_task":
-        if not bot_id or not get_bot(bot_id):
-            raise HTTPException(400, "Pick a bot for the task.")
-    if action == "office_job":
-        if not office_id or not get_office(office_id):
-            raise HTTPException(400, "Pick an office for the job.")
+    steps = body.get("steps")
+    if steps is not None:
+        steps = _validate_workflow_steps(steps)
+        action = "chain" if len(steps) > 1 else steps[0]["type"]
+        text = steps[0].get("text", "") if len(steps) == 1 else ""
+        bot_id = steps[0].get("bot_id") if len(steps) == 1 else None
+        office_id = steps[0].get("office_id") if len(steps) == 1 else None
+    else:
+        # Legacy single-action form: one step.
+        action = (body.get("action") or "").strip()
+        text = (body.get("text") or "").strip()
+        if action not in WORKFLOW_ACTIONS:
+            raise HTTPException(400, "Action must be create_task, office_job, draft or note.")
+        if not text:
+            raise HTTPException(400, "Write what the workflow should do (the task, brief, draft or note).")
+        bot_id = (body.get("bot_id") or "").strip() or None
+        office_id = (body.get("office_id") or "").strip() or None
+        if action == "create_task":
+            if not bot_id or not get_bot(bot_id):
+                raise HTTPException(400, "Pick a bot for the task.")
+        if action == "office_job":
+            if not office_id or not get_office(office_id):
+                raise HTTPException(400, "Pick an office for the job.")
+        steps = [{"type": action, "text": text, "bot_id": bot_id, "office_id": office_id}]
     rule = {"id": uuid.uuid4().hex[:8], "name": name, "stage": stage,
             "department": department,
             "action": action, "bot_id": bot_id, "office_id": office_id,
-            "text": text, "enabled": True, "created_at": int(time.time())}
+            "text": text, "steps": steps,
+            "enabled": True, "created_at": int(time.time())}
     rules = load_deal_workflows()
     rules.append(rule)
     save_deal_workflows(rules)
@@ -4190,6 +4436,11 @@ def update_deal_workflow(rule_id: str, body: dict):
         rule["name"] = (body.get("name") or "").strip()
     if "text" in body and (body.get("text") or "").strip():
         rule["text"] = (body.get("text") or "").strip()
+    if "steps" in body:
+        steps = _validate_workflow_steps(body.get("steps"))
+        rule["steps"] = steps
+        rule["action"] = "chain" if len(steps) > 1 else steps[0]["type"]
+        rule["text"] = steps[0].get("text", "") if len(steps) == 1 else ""
     save_deal_workflows(rules)
     return rule
 

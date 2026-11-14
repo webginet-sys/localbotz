@@ -431,14 +431,19 @@ department has its own stages (Construction: Tender → BOQ →
 Submitted → Awarded; IT Services: Discovery → Proposal → Signed;
 and so on for all 10 sectors + General), with one timeline per deal
 (stage moves, notes, drafts, workflow runs). A **workflow** fires
-when a deal moves stage: create a task for a bot, run an office job
-with the team (Auditor + approval gate applies), write a draft, or
-add a note — limited to one department, or any. Write the action
-with `{deal}`, `{client}`, `{value}`, `{currency}`, `{stage}` and
-they are filled in from the deal. Every department ships with two
-starter workflows (a handover draft when a deal is won, a note when
-one is lost). Nothing is sent out by a workflow on its own — drafts
-stay drafts until you send them. See `docs/deal-workflows.md`.
+when a deal moves stage, and runs a **chain of steps, in order**:
+create a task for a bot, run an office job with the team (Auditor +
+approval gate applies), write a draft, add a note, **wait** (the
+chain pauses and resumes on its own), or **IF** (stop the chain
+here if the deal's value or stage doesn't match — e.g. wait 3 days,
+then chase only if the deal is still Quoted). Chains are limited to
+one department, or any. Write the steps with `{deal}`, `{client}`,
+`{value}`, `{currency}`, `{stage}` and they are filled in from the
+deal. Every department ships with two starter workflows (a handover
+draft when a deal is won, a note when one is lost), plus a ready-made
+chase chain for General. Nothing is sent out by a workflow on its
+own — drafts stay drafts until you send them. See
+`docs/deal-workflows.md`.
 
 ## Document workroom — documents with proof
 
