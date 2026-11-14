@@ -2352,6 +2352,85 @@ SECTOR_ROLES = [
   ("cro-specialist", "Conversion Rate Optimization (CRO) Specialist", "Improves the store so more visitors buy: tests, measures and changes what works."),
   ("customer-support-representative", "Customer Support Representative", "Answers customers politely and fast: orders, returns and complaints, solved or escalated clearly."),
  ]),
+ # NaukriGulf jobs-by-category (naukrigulf.com/jobs-by-category, 102
+ # categories, read 2026-11-14): every category an AI office agent can
+ # actually do — office, sales and marketing work. Left out on purpose:
+ # purely physical / frontline jobs (Chef, Guard, Housekeeping, Nurse,
+ # Doctor, Equipment Operator, Marine, Installation, Repair), jobs
+ # already covered by the core or sector roles above (Sales, Finance,
+ # Legal, Teacher, Project Manager, Logistics Coordinator, QA/QC,
+ # Network Engineer, UI/UX Designer), and levels, not functions
+ # (Fresh Graduate, Management Trainee, Top Management). Near-duplicates
+ # are merged into one role (Front Desk into Front Office, Import +
+ # Export into one role, Ticketing into Travel Agent).
+ ("Finance & Accounts", "Accounts, Audit & Tax", "💲", [
+  ("accountant", "Accountant", "Keeps the books tidy: invoices, expenses, reconciliations and monthly reports, and flags anything that does not add up."),
+  ("internal-auditor", "Internal Auditor", "Checks the company's own records and processes: what is missing, what breaks the rules, and what to fix first."),
+  ("tax-consultant", "Tax Consultant", "Prepares tax workings and filings from the company's numbers, checks deadlines, and explains what is owed in plain language."),
+ ]),
+ ("Finance & Accounts", "Banking & Insurance", "🏦", [
+  ("banking-officer", "Banking Officer", "Prepares loan and account paperwork, follows up with the bank, and keeps the company's banking records in order."),
+  ("broker", "Broker", "Prepares quotes and client documents, compares cover and prices, and follows up so nothing is left waiting."),
+  ("insurance-advisor", "Insurance Advisor", "Explains policies in plain language, prepares claims paperwork, and chases renewals before they lapse."),
+ ]),
+ ("Admin & Office Support", "Office & Data", "🗂️", [
+  ("office-administrator", "Office Administrator", "Runs the office day to day: letters, records, schedules and suppliers, so the office keeps working."),
+  ("back-office-executive", "Back Office Executive", "Handles the paperwork behind the business: forms, records, data checks and follow-ups, accurately and on time."),
+  ("data-entry-clerk", "Data Entry Clerk", "Enters data cleanly and checks it twice: lists, records and reports the team can trust."),
+  ("executive-secretary", "Executive Secretary", "Supports the manager: diary, meetings, letters and travel plans, kept in order and on time."),
+  ("front-office-executive", "Front Office Executive", "Runs the front desk: visitors, calls and messages answered politely, logged, and passed to the right person."),
+ ]),
+ ("Sales & Marketing", "Marketing & Media", "📣", [
+  ("advertising-executive", "Advertising Executive", "Plans and writes adverts: the message, the audience and the budget, and reports what worked."),
+  ("marketing-manager", "Marketing Manager", "Runs the marketing plan: campaigns, channels and budget, and reports what brought customers in."),
+  ("media-planner", "Media Planner", "Plans where adverts run: channels, timing and budget, so the money reaches the right audience."),
+  ("pr-executive", "PR Executive", "Writes press notes and handles media enquiries, and keeps the company's public story straight."),
+  ("content-writer", "Content Writer", "Writes the content that brings customers in: web pages, posts and articles, clear and on brand."),
+  ("telecalling-executive", "Telecalling Executive", "Prepares call lists, scripts and follow-up notes for the sales team, and logs every outcome."),
+ ]),
+ ("Sales & Marketing", "Customer & Retail", "🛍️", [
+  ("customer-service-executive", "Customer Service Executive", "Answers customers politely and fast: orders, complaints and questions, solved or escalated with a clear note."),
+  ("retail-executive", "Retail Executive", "Runs the shop's office side: promotions, stock reports and supplier follow-ups, so the shelves and the numbers match."),
+ ]),
+ ("People & Operations", "HR & Operations", "👥", [
+  ("hr-executive", "HR Executive", "Runs HR paperwork: leave, attendance, onboarding and staff records, kept fair and up to date."),
+  ("operations-manager", "Operations Manager", "Runs day-to-day operations: plans, people and suppliers, and reports what is on track and what is stuck."),
+ ]),
+ ("People & Operations", "Business & Planning", "📈", [
+  ("business-consultant", "Business Consultant", "Studies the business and says what to fix: costs, sales and processes, with a clear plan and the numbers behind it."),
+  ("corporate-planning-executive", "Corporate Planning Executive", "Prepares plans and strategy documents: targets, budgets and the steps to reach them."),
+ ]),
+ ("Healthcare & Education", "Care & Learning", "🏥", [
+  ("healthcare-administrator", "Healthcare Administrator", "Runs the clinic's office side: appointments, patient records and billing follow-ups, kept accurate and private."),
+  ("education-coordinator", "Education Coordinator", "Runs the school or training centre's office side: admissions, timetables and parent messages, kept in order."),
+  ("translator", "Translator", "Translates documents and messages accurately, keeping the meaning, the tone and the numbers right."),
+  ("editor", "Editor", "Edits the team's writing: fixes errors, tightens the language, and makes sure it reads clearly."),
+  ("journalist", "Journalist", "Researches a story and writes it up: facts checked, sources named, and the story told straight."),
+ ]),
+ ("Engineering & Industry", "Design & Production", "🏭", [
+  ("architect", "Architect", "Prepares design briefs, specifications and coordination notes for a building project, and checks drawings against the brief."),
+  ("industrial-engineer", "Industrial Engineer", "Studies how the work flows and finds the waste: better layouts, better schedules, and the numbers to prove it."),
+  ("production-planner", "Production Planner", "Plans production: what to make, when, and what materials are needed, so orders ship on time."),
+ ]),
+ ("IT & Design", "Hardware & Creative", "🖥️", [
+  ("it-hardware-engineer", "IT Hardware Engineer", "Specifies hardware, compares suppliers and prices, and keeps asset and warranty records in order."),
+  ("graphic-designer", "Graphic Designer", "Prepares design briefs, checks artwork against the brand, and keeps the asset list and supplier notes in order."),
+ ]),
+ ("Trade & Logistics", "Import, Export & Shipping", "🚢", [
+  ("import-export-executive", "Import & Export Executive", "Prepares import and export paperwork: invoices, packing lists and customs documents, checked and on time."),
+  ("shipping-coordinator", "Shipping Coordinator", "Books shipments, tracks them, and keeps the delivery documents and proof of delivery in order."),
+  ("general-trading-executive", "General Trading Executive", "Runs the trading desk: supplier and customer quotes, orders and follow-ups, so deals close on time."),
+ ]),
+ ("Property & Hospitality", "Property", "🏠", [
+  ("real-estate-agent", "Real Estate Agent", "Handles listings and buyers: property details, viewings and follow-ups, with honest descriptions and prices."),
+  ("interior-designer", "Interior Designer", "Prepares interior design briefs, material lists and supplier notes for a fit-out, and checks them against the budget."),
+ ]),
+ ("Property & Hospitality", "Hospitality & Travel", "✈️", [
+  ("hotel-manager", "Hotel Manager", "Runs the hotel's office side: bookings, guest messages, rosters and reports, so the hotel runs smoothly."),
+  ("restaurant-manager", "Restaurant Manager", "Runs the restaurant's office side: rosters, supplier orders and cost checks, so service runs smoothly."),
+  ("event-manager", "Event Manager", "Plans events: venue, vendors, schedule and budget, and keeps every booking and payment on track."),
+  ("travel-agent", "Travel Agent", "Plans trips and books travel: itineraries, tickets and hotels, with the costs and documents checked."),
+ ]),
 ]
 
 # Build the sector roles into OFFICE_ROLES: each one gets the same shape

@@ -19,13 +19,20 @@ already has.
 - **One boss agent.** Every office gets an Office Manager (the
   "Michael") — the only agent you brief. It plans the work, assigns
   it to the team, checks results, and reports back.
-- **Hire an AI team.** 101 roles in total. The core team: Researcher,
+- **Hire an AI team.** 143 roles in total. The core team: Researcher,
   Writer, Developer, Analyst, Assistant, Sales, Finance, Legal,
-  Recruiter, Teacher. Plus 90 sector roles — every job title a
+  Recruiter, Teacher. Plus 132 sector roles — every job title a
   construction, MEP, electrical engineering, IT services or e-commerce
   company hires, from senior management (Construction Manager, MEP
   Manager, Cloud Architect) down to technicians and trades (HVAC
-  Technician, Plumber, Ductman, Mason, Steel Fixer). Hiring creates a
+  Technician, Plumber, Ductman, Mason, Steel Fixer), and 42 more from
+  NaukriGulf's jobs-by-category — the office, sales and marketing
+  functions an AI agent can actually do (Accountant, HR Executive,
+  Marketing Manager, Real Estate Agent, Travel Agent, and the rest).
+  Physical and frontline jobs the AI cannot do (Chef, Guard, Nurse,
+  Equipment Operator) were left out on purpose, as were categories
+  already covered and levels, not functions (Fresh Graduate, Top
+  Management). Hiring creates a
   normal LocalBotz bot with role instructions, its own memory and chats
   — so a team member is also a bot you can talk to on its own. The hire
   list comes from `GET /api/office/roles`, grouped by sector.

@@ -376,10 +376,12 @@ Sidebar → **Office**. Modelled on Munder Difflin
 (HarnessMD/munder-difflin): an office of agents running locally.
 Create your office, hire an AI team with roles (Researcher, Writer,
 Developer, Analyst, Assistant, Sales, Finance, Legal, Recruiter,
-Teacher — plus 90 sector roles: every job title a construction, MEP,
+Teacher — plus 132 sector roles: every job title a construction, MEP,
 electrical engineering, IT services or e-commerce company hires, from
 Construction Manager and Cloud Architect down to HVAC Technician,
-Plumber and Steel Fixer), and give the team a job. One boss
+Plumber and Steel Fixer, plus 42 more from NaukriGulf's
+jobs-by-category (the office, sales and marketing functions an AI
+agent can actually do), and give the team a job. One boss
 agent (the Office Manager) plans the work and assigns it — you only
 brief the boss. The team shares one office memory (`memory.md`) that
 survives sessions, passes work to each other on a blackboard, and
