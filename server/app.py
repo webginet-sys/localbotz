@@ -24,8 +24,8 @@ Premium models: configured in .env as PREMIUM_MODELS (comma-separated).
 Default: Claude Sonnet (claude-sonnet-4-5), GPT (gpt-4o, gpt-4o-mini),
 Gemini (gemini-2.5-flash, gemini-2.5-pro). Add newer model ids there —
 e.g. PREMIUM_MODELS=claude-sonnet-4-5,gpt-4o,gpt-4o-mini,gpt-5,gemini-2.5-flash,gemini-2.5-pro
-— and restart. See models.json / docs/chatllm-model-reference.md for the
-ChatLLM model list used as a reference: Grok, Kimi and GLM can be added
+— and restart. See models.json / docs/model-reference.md for the
+reference model list: Grok, Kimi and GLM can be added
 the same way (grok-4, kimi-k2, glm-4.5) once their provider keys are set
 on the VPS. Routing is by model id prefix:
     claude-* -> Anthropic   gpt-* -> OpenAI   gemini-* -> Google
@@ -330,7 +330,7 @@ async def register(request: Request):
 
 
 # ---------- user sign-in portal -----------------------------------------
-# Like the Abacus flow: a user signs in (email + the token issued at
+# The sign-in portal: a user signs in (email + the token issued at
 # registration), sees their plan on /account ("Your free plan works in
 # LocalBotz" + Upgrade + Open LocalBotz + Sign out), and "Open LocalBotz"
 # takes them to /whatsapp — enter your WhatsApp number, start a chat with
@@ -744,7 +744,7 @@ def admin_enable_user(workspace_id: str, request: Request):
 # ---------- installs, usage, admin panel ----------
 # The admin panel (GET /admin, file server/admin.html) is where the VPS
 # owner manages where the software is used and what it logs — like the
-# admin side of abacus.ai. It shows: registered users/workspaces, every
+# the owner's admin panel. It shows: registered users/workspaces, every
 # install that has phoned home (heartbeat), and the usage log.
 # What is logged: per chat request — time, workspace, model, provider,
 # input/output tokens, client IP. Message content is NEVER logged.

@@ -20,8 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
-
-Note: Local Bot was inspired by AbacusAI Bot (https://github.com/abacusai/abacusai-bot,
-MIT, Electron + TypeScript). This is an independent, smaller re-implementation
-in Python written from scratch — not a fork or copy of that repository.

@@ -1,46 +1,13 @@
-# Model list — reference: ChatLLM and abacus.ai (Abacus.AI)
+# Model list — reference names
 
-Sources: https://chatllm.abacus.ai/ — ChatLLM Teams page, read 2026-11-14.
-https://abacus.ai/ — Abacus.AI homepage, read 2026-11-14.
-Both used as a **reference for the model list only**. LocalBotz is a separate,
-local-first app — it does not use ChatLLM, and it does not copy ChatLLM's
-code or branding.
+LocalBotz keeps a reference catalogue of model names in `models.json`
+(compiled from public model lists, November 2026). Some of those names
+are **marketing names**, not provider API model IDs. LocalBotz only sends
+a model ID to a provider when that provider's own API accepts it.
 
-## What ChatLLM lists
+## Reference names, and what LocalBotz actually calls
 
-> "Every top AI model. One assistant." — 100+ top AI models.
-
-- **GPT** — GPT 6.1 Sol, GPT 6 Astra + Luna
-- **Claude** — Fable 5.2, Sonnet 5.5 + Opus 5.5
-- **Gemini** — Gemini 4 Carbon + Flash 3.8
-- **DeepSeek + Kimi + GLM**
-- **Grok** — Grok-4.7
-- **Muse** — Muse Wonder + Spark 1.3
-
-## What abacus.ai adds (read 2026-11-14)
-
-The Abacus.AI homepage lists the same families, plus these new names:
-
-- **GPT** — GPT-6.1 Terra (new)
-- **Gemini** — Gemini Omni Flash 1.2 (new)
-- **Kimi** — Kimi K3.1 Pro (new version name)
-- **Muse** — Muse Wonder 1.0 (new version name)
-- **Image generation** — Nano Banana Pro (Google), GPT Image 2.6 (OpenAI)
-- **Video generation** — Seedance 2.5 (ByteDance), Kling 4.0 (Kuaishou), Veo 3.1 (Google)
-
-The image and video models are **not chat models** — LocalBotz does not
-generate images or videos yet, so they are reference-only in `models.json`,
-listed for comparison and never sent to an API.
-
-## How LocalBotz uses this list
-
-The full mapping lives in `models.json` at the repo root.
-
-**Important:** most of those names are marketing names on the ChatLLM
-page, not provider API model IDs. LocalBotz only sends a model ID to a
-provider when that provider's own API accepts it.
-
-| ChatLLM name | LocalBotz provider | API model actually used | Status |
+| Reference name | LocalBotz provider | API model actually used | Status |
 |---|---|---|---|
 | GPT 6.1 Sol / GPT 6 Astra / GPT 6 Luna | OpenAI | `gpt-4o`, `gpt-4o-mini` | Verified — GPT 6 IDs not published yet |
 | Fable 5.2 / Sonnet 5.5 / Opus 5.5 | Claude | `claude-sonnet-4-5`, `claude-opus-4-1` | Verified — 5.x IDs not published yet |
@@ -57,6 +24,10 @@ provider when that provider's own API accepts it.
 | Seedance 2.5 / Kling 4.0 / Veo 3.1 | — | — | Reference-only — video models, LocalBotz does not generate videos yet |
 | Local models | LM Studio / Ollama | whatever is live, default `qwen3.5` | Verified |
 
+The image and video models are **not chat models** — LocalBotz does not
+generate images or videos yet, so they are reference-only in `models.json`,
+listed for comparison and never sent to an API.
+
 ## Rules that stay in place
 
 - **Availability-driven, not a fixed list.** The Available-models picker
@@ -64,7 +35,7 @@ provider when that provider's own API accepts it.
   (LM Studio / Ollama live probe, VPS gateway live probe, or a direct
   provider with a key set). A reference-only model with no key is shown
   as unavailable with the reason, never as if it works.
-- **No fake models.** A ChatLLM marketing name is never sent to a
+- **No fake models.** A marketing name is never sent to a
   provider API as if it were a real model ID. When a provider publishes
   the matching ID, update `models.json` and `KNOWN_DEFAULT_MODELS` in
   `app.py` to that exact ID.

@@ -7,14 +7,14 @@
         "gpt-5-codex",
         "codex-mini-latest"
       ],
-      "chatllm_names": [
+      "reference_names": [
         "GPT 6.1 Sol",
         "GPT 6 Astra",
         "GPT 6 Luna",
         "GPT-6.1 Terra"
       ],
       "family": "OpenAI / GPT",
-      "note": "Abacus.ai also lists GPT-6.1 Terra. None of the GPT 6 names have a matching public OpenAI API ID yet \u2014 use gpt-4o / gpt-4o-mini until OpenAI publishes them.",
+      "note": "GPT-6.1 Terra is a marketing name. None of the GPT 6 names have a matching public OpenAI API ID yet — use gpt-4o / gpt-4o-mini until OpenAI publishes them.",
       "provider": "openai",
       "status": "verified"
     },
@@ -23,13 +23,13 @@
         "claude-sonnet-4-5",
         "claude-opus-4-1"
       ],
-      "chatllm_names": [
+      "reference_names": [
         "Fable 5.2",
         "Sonnet 5.5",
         "Opus 5.5"
       ],
       "family": "Claude",
-      "note": "ChatLLM's Fable 5.2 / Sonnet 5.5 / Opus 5.5 have no matching public Anthropic API ID yet \u2014 use claude-sonnet-4-5 / claude-opus-4-1 until Anthropic publishes them.",
+      "note": "Fable 5.2 / Sonnet 5.5 / Opus 5.5 are marketing names with no matching public Anthropic API ID yet — use claude-sonnet-4-5 / claude-opus-4-1 until Anthropic publishes them.",
       "provider": "anthropic",
       "status": "verified"
     },
@@ -38,13 +38,13 @@
         "gemini-2.5-flash",
         "gemini-2.5-pro"
       ],
-      "chatllm_names": [
+      "reference_names": [
         "Gemini 4 Carbon",
         "Gemini Flash 3.8",
         "Gemini Omni Flash 1.2"
       ],
       "family": "Google Gemini",
-      "note": "Abacus.ai also lists Gemini Omni Flash 1.2. None of the Gemini 4 names have a matching public Google API ID yet \u2014 use gemini-2.5-flash / gemini-2.5-pro until Google publishes them.",
+      "note": "Gemini Omni Flash 1.2 is a marketing name. None of the Gemini 4 names have a matching public Google API ID yet — use gemini-2.5-flash / gemini-2.5-pro until Google publishes them.",
       "provider": "gemini",
       "status": "verified"
     },
@@ -53,11 +53,11 @@
         "deepseek-chat",
         "deepseek-reasoner"
       ],
-      "chatllm_names": [
+      "reference_names": [
         "DeepSeek"
       ],
       "family": "DeepSeek",
-      "note": "DeepSeek is listed on ChatLLM alongside Kimi and GLM.",
+      "note": "DeepSeek is listed in the reference catalogue alongside Kimi and GLM.",
       "provider": "deepseek",
       "status": "verified"
     },
@@ -66,13 +66,13 @@
         "kimi-k2"
       ],
       "base_url": "https://api.moonshot.ai/v1",
-      "chatllm_names": [
+      "reference_names": [
         "Kimi",
         "Kimi K3.1 Pro"
       ],
       "family": "Kimi (Moonshot AI)",
       "key_env": "MOONSHOT_API_KEY",
-      "note": "New provider in LocalBotz, from the ChatLLM list; abacus.ai lists it as Kimi K3.1 Pro. Shown only when MOONSHOT_API_KEY is set. K3.1 Pro has no matching published Moonshot API ID yet \u2014 kimi-k2 is the closest published ID; confirm in Moonshot's docs before use.",
+      "note": "New provider in LocalBotz. Kimi K3.1 Pro is a marketing name. Shown only when MOONSHOT_API_KEY is set. K3.1 Pro has no matching published Moonshot API ID yet — kimi-k2 is the closest published ID; confirm in Moonshot's docs before use.",
       "provider": "kimi",
       "status": "reference-only"
     },
@@ -81,12 +81,12 @@
         "glm-4.5"
       ],
       "base_url": "https://open.bigmodel.cn/api/paas/v4",
-      "chatllm_names": [
+      "reference_names": [
         "GLM"
       ],
       "family": "GLM (Zhipu AI)",
       "key_env": "ZHIPU_API_KEY",
-      "note": "New provider in LocalBotz, from the ChatLLM list. Shown only when ZHIPU_API_KEY is set. Confirm the exact model ID in Zhipu's docs before use.",
+      "note": "New provider in LocalBotz, from the reference model list. Shown only when ZHIPU_API_KEY is set. Confirm the exact model ID in Zhipu's docs before use.",
       "provider": "glm",
       "status": "reference-only"
     },
@@ -95,24 +95,24 @@
         "grok-4"
       ],
       "base_url": "https://api.x.ai/v1",
-      "chatllm_names": [
+      "reference_names": [
         "Grok-4.7"
       ],
       "family": "Grok (xAI)",
       "key_env": "XAI_API_KEY",
-      "note": "New provider in LocalBotz, from the ChatLLM list. Shown only when XAI_API_KEY is set. ChatLLM's Grok-4.7 has no matching public xAI API ID yet \u2014 grok-4 is the closest published ID; confirm in xAI's docs before use.",
+      "note": "New provider in LocalBotz, from the reference model list. Shown only when XAI_API_KEY is set. Grok-4.7 is a marketing name with no matching public xAI API ID yet — grok-4 is the closest published ID; confirm in xAI's docs before use.",
       "provider": "grok",
       "status": "reference-only"
     },
     {
       "api_models": [],
-      "chatllm_names": [
+      "reference_names": [
         "Muse Wonder",
         "Muse Spark 1.3",
         "Muse Wonder 1.0"
       ],
       "family": "Muse (Meta)",
-      "note": "Listed on ChatLLM and on abacus.ai as Muse Wonder 1.0, but Muse has no public API model ID to call from LocalBotz, so there is no provider for it yet. Do not add it to the picker until Meta publishes an API for it.",
+      "note": "Muse Wonder 1.0 is a marketing name, but Muse has no public API model ID to call from LocalBotz, so there is no provider for it yet. Do not add it to the picker until Meta publishes an API for it.",
       "provider": null,
       "status": "reference-only"
     },
@@ -120,9 +120,9 @@
       "api_models": [
         "qwen3.5"
       ],
-      "chatllm_names": [],
+      "reference_names": [],
       "family": "Local models",
-      "note": "LocalBotz default. The picker lists whatever LM Studio / Ollama actually has live, not a fixed list \u2014 Qwen3.5 is only the fallback.",
+      "note": "LocalBotz default. The picker lists whatever LM Studio / Ollama actually has live, not a fixed list — Qwen3.5 is only the fallback.",
       "provider": "lmstudio",
       "status": "verified"
     },
@@ -130,26 +130,26 @@
       "family": "Image generation",
       "provider": null,
       "api_models": [],
-      "chatllm_names": [
+      "reference_names": [
         "Nano Banana Pro",
         "GPT Image 2.6"
       ],
       "status": "reference-only",
-      "note": "From abacus.ai: Nano Banana Pro (Google) and GPT Image 2.6 (OpenAI) are image models, not chat models. LocalBotz does not generate images yet, so these are reference-only \u2014 listed for comparison, never sent to an API."
+      "note": "Nano Banana Pro (Google) and GPT Image 2.6 (OpenAI) are image models, not chat models. LocalBotz does not generate images yet, so these are reference-only — listed for comparison, never sent to an API."
     },
     {
       "family": "Video generation",
       "provider": null,
       "api_models": [],
-      "chatllm_names": [
+      "reference_names": [
         "Seedance 2.5",
         "Kling 4.0",
         "Veo 3.1"
       ],
       "status": "reference-only",
-      "note": "From abacus.ai: Seedance 2.5 (ByteDance), Kling 4.0 (Kuaishou) and Veo 3.1 (Google) are video models, not chat models. LocalBotz does not generate videos yet, so these are reference-only \u2014 listed for comparison, never sent to an API."
+      "note": "Seedance 2.5 (ByteDance), Kling 4.0 (Kuaishou) and Veo 3.1 (Google) are video models, not chat models. LocalBotz does not generate videos yet, so these are reference-only — listed for comparison, never sent to an API."
     }
   ],
-  "note": "Abacus lists marketing names (e.g. 'GPT 6 Astra', 'Fable 5.2', 'Gemini 4 Carbon', 'Kimi K3.1 Pro'). Those are NOT provider API model IDs. LocalBotz only sends a model to a provider when the provider's own API accepts that ID. Entries marked 'reference-only' are shown in the catalogue for comparison and are NOT sent to any API until their real API ID is confirmed. Entries marked 'verified' use the API IDs LocalBotz already supports. Image and video models are reference-only too \u2014 LocalBotz does not generate images or videos yet. The Available-models picker in the app stays availability-driven: a model only appears as usable when its provider is reachable / its key is set, or the live probe returns it.",
-  "source": "https://chatllm.abacus.ai/ \u2014 ChatLLM Teams page, read 2026-11-14. https://abacus.ai/ \u2014 Abacus.AI homepage, read 2026-11-14. Both used as a reference for the model list only."
+  "note": "Some public model lists use marketing names (e.g. 'GPT 6 Astra', 'Fable 5.2', 'Gemini 4 Carbon', 'Kimi K3.1 Pro'). Those are NOT provider API model IDs. LocalBotz only sends a model to a provider when the provider's own API accepts that ID. Entries marked 'reference-only' are shown in the catalogue for comparison and are NOT sent to any API until their real API ID is confirmed. Entries marked 'verified' use the API IDs LocalBotz already supports. Image and video models are reference-only too — LocalBotz does not generate images or videos yet. The Available-models picker in the app stays availability-driven: a model only appears as usable when its provider is reachable / its key is set, or the live probe returns it.",
+  "source": "Reference model catalogue, compiled from public model lists, November 2026. Used as a reference for the model list only."
 }

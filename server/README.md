@@ -229,10 +229,10 @@ name, email, workspace id and status. One account per email (`409`
 if it already exists), invalid email gets `400`, and
 `REGISTRATION_DAILY_LIMIT` (default 100/day) caps sign-ups.
 
-## User sign-in portal (like the Abacus flow)
+## User sign-in portal
 
-After registering, a user signs in and sees their plan — the same flow
-as Abacus: sign-in page, plan page, then WhatsApp.
+After registering, a user signs in and sees their plan:
+sign-in page, plan page, then WhatsApp.
 
 1. **Sign in:** `GET /login` — email + the token from registration.
    `POST /login` verifies the token hash, sets an `lb_session` cookie

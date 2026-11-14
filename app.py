@@ -1,5 +1,5 @@
 """
-LocalBotz — a simpler, fully local clone of AbacusAI Bot.
+LocalBotz — a personal AI assistant that runs on your own computer.
 
 Stack: Python 3.11+, FastAPI, plain HTML/JS UI, no Electron, no cloud.
 Cross-platform: Windows, macOS and Linux — pathlib throughout, no OS-only
@@ -162,8 +162,8 @@ PROVIDERS = {
     "cerebras":  {"label": "Cerebras", "kind": "openai",
                   "base_url": "https://api.cerebras.ai/v1", "default_model": "llama-3.3-70b",
                   "key_env": "CEREBRAS_API_KEY", "env_base": "CEREBRAS_BASE_URL"},
-    # New providers from the ChatLLM model list (chatllm.abacus.ai, 2026-11-14,
-    # see models.json / docs/chatllm-model-reference.md). Reference-only:
+    # New providers from the reference model list (see models.json /
+    # docs/model-reference.md). Reference-only:
     # shown only when their key is set; confirm the exact model ID in the
     # provider's own docs before use. No Git is needed to run any of this.
     "grok":      {"label": "Grok (xAI)", "kind": "openai",
@@ -1074,9 +1074,9 @@ KNOWN_DEFAULT_MODELS = {
     "groq": ["llama-3.3-70b-versatile"],
     "mistral": ["mistral-small-latest"],
     "cerebras": ["llama-3.3-70b"],
-    # From the ChatLLM model list (see models.json). Reference-only models:
+    # From the reference model list (see models.json). Reference-only models:
     # only listed as usable when their key is set; confirm IDs in the
-    # provider's own docs. ChatLLM's marketing names (Grok-4.7, etc.) are
+    # provider's own docs. Marketing names (Grok-4.7, etc.) are
     # NOT API IDs and are never sent to a provider.
     "grok": ["grok-4"],
     "kimi": ["kimi-k2"],

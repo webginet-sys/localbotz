@@ -1,7 +1,7 @@
 ![LocalBotz — animated logo](assets/logo-animated.gif)
 <!-- Static logo: assets/logo.png. Short video version: assets/logo-animated.mp4 -->
 
-# LocalBotz — a simpler, 
+# LocalBotz — a personal AI assistant that runs on your computer
 
 A personal-agent app you run on your own computer. No Electron, no cloud,
 no API keys. Bots have their own name, instructions/persona, model, chat
@@ -11,7 +11,7 @@ commands — driven by a downloaded local model in **LM Studio**.
 
 > **MIT licensed and built in the open.** [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).
 >
-> **Landing page:** [landing.html](landing.html) — also at `docs/index.html` for GitHub Pages. Same style as the Abacus AI Bot page: hero, try-it prompts, what you can build, open source, and download.
+> **Landing page:** [landing.html](landing.html) — also at `docs/index.html` for GitHub Pages. Hero, try-it prompts, what you can build, open source, and download.
 
 ## Download — for everyone
 
@@ -61,9 +61,8 @@ no hardcoded OS paths and no OS-only shell commands — the file commands in
 `run_command` (`ls`/`dir`, `cat`/`type`, `grep`, `find`, …) are implemented
 in Python, so they behave the same on all three.
 
-Inspired by [AbacusAI Bot](https://github.com/abacusai/abacusai-bot)
-(MIT, Electron + TypeScript). This is a deliberately smaller re-implementation
-in Python, not a fork of that repo.
+LocalBotz is written from scratch in Python — a deliberately small,
+local-first personal assistant. No Electron, no cloud account needed.
 
 ## What it does
 
@@ -433,19 +432,18 @@ The tool loop works the same for every provider. Claude uses its native Messages
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | |
 | Mistral | `MISTRAL_API_KEY` | `mistral-small-latest` | |
 | Cerebras | `CEREBRAS_API_KEY` | `llama-3.3-70b` | |
-| Grok (xAI) | `XAI_API_KEY` | `grok-4` | Reference-only, from the ChatLLM model list — confirm the ID in xAI's docs. |
-| Kimi (Moonshot AI) | `MOONSHOT_API_KEY` | `kimi-k2` | Reference-only, from the ChatLLM model list — confirm the ID in Moonshot's docs. |
-| GLM (Zhipu AI) | `ZHIPU_API_KEY` | `glm-4.5` | Reference-only, from the ChatLLM model list — confirm the ID in Zhipu's docs. |
+| Grok (xAI) | `XAI_API_KEY` | `grok-4` | Reference-only, from the reference model list — confirm the ID in xAI's docs. |
+| Kimi (Moonshot AI) | `MOONSHOT_API_KEY` | `kimi-k2` | Reference-only, from the reference model list — confirm the ID in Moonshot's docs. |
+| GLM (Zhipu AI) | `ZHIPU_API_KEY` | `glm-4.5` | Reference-only, from the reference model list — confirm the ID in Zhipu's docs. |
 | VPS Premium | `VPS_API_TOKEN` (your token, not a provider key) | Claude Sonnet, GPT, Gemini — whatever the VPS offers | See below. No provider keys in the client. |
 
-Model list reference: [ChatLLM (Abacus.AI)](https://chatllm.abacus.ai/) and
-[abacus.ai](https://abacus.ai/) — see `models.json` and
-`docs/chatllm-model-reference.md`. Their marketing names (GPT 6 Astra,
+Model list reference: see `models.json` and
+`docs/model-reference.md`. Their marketing names (GPT 6 Astra,
 Fable 5.2, Gemini 4 Carbon, Grok-4.7, Kimi K3.1 Pro, GPT-6.1 Terra, …) are
 **not** provider API IDs, so LocalBotz maps them to the closest real API IDs
 above and only lists a model as usable when its provider is actually
 available. Image models (Nano Banana Pro, GPT Image 2.6) and video models
-(Seedance 2.5, Kling 4.0, Veo 3.1) from abacus.ai are reference-only —
+(Seedance 2.5, Kling 4.0, Veo 3.1) are reference-only —
 LocalBotz does not generate images or videos yet.
 **No Git is needed to run LocalBotz** — download the ZIP, extract it,
 double-click `start.bat` (Windows) or `start.command` (Mac).
@@ -697,7 +695,7 @@ data/                  bots.json, chats/, memory/, screenshots/, templates.json,
 
 ## What this is NOT (yet)
 
-Compared with AbacusAI Bot: no live WhatsApp/Telegram/Discord messaging
+No live WhatsApp/Telegram/Discord messaging
 (config + approved senders only, status Not connected), no live
 Gmail/Drive/Calendar connectors (config + setup instructions only), and
 no scheduled routines — a bot's schedule (e.g. `daily 07:00`) is stored
