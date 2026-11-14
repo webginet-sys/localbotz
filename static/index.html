@@ -491,7 +491,11 @@ async function officeHtml(){
     <div id="page-msg"></div>`;
   }
   const o=await api('/api/offices/'+currentOffice);
-  const roleLabel={boss:'Office Manager (boss)',researcher:'Researcher',writer:'Writer',developer:'Developer',analyst:'Analyst',assistant:'Assistant'};
+  const officeRoles=await api('/api/office/roles');
+  const roleLabel={boss:'Office Manager (boss)'};
+  officeRoles.forEach(r=>roleLabel[r.id]=r.label);
+  const roleOpts=(()=>{const groups={}; officeRoles.forEach(r=>{const g=r.sector+' — '+r.group; (groups[g]=groups[g]||[]).push(r);});
+    return Object.entries(groups).map(([g,rs])=>`<optgroup label="${esc(g)}">${rs.map(r=>`<option value="${esc(r.id)}">${esc(r.avatar+' '+r.label+(r.job?' — '+r.job:''))}</option>`).join('')}</optgroup>`).join('');})();
   const memRows=o.members.map(m=>`<tr><td>${esc(m.avatar||'🤖')} <b>${esc(m.name)}</b></td><td>${esc(roleLabel[m.role]||m.role)}</td><td>${m.role==='boss'?'(boss — cannot be removed)':`<button class="small" data-member-del="${m.id}">Remove</button>`}</td></tr>`).join('');
   const jobRows=(o.jobs||[]).slice().reverse().map(j=>`<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}</details>`).join('');
   const board=(o.blackboard||[]).slice().reverse().map(b=>`<tr><td>${new Date(b.ts*1000).toLocaleTimeString()}</td><td>${esc(b.from)} → ${esc(b.to)}</td><td>${esc(b.text)}</td></tr>`).join('');
@@ -501,10 +505,10 @@ async function officeHtml(){
   <table><tr><th>Member</th><th>Role</th><th></th></tr>${memRows}</table>
   <h3>Hire a team member</h3>
   <label>Name</label><input id="off-mem-name" type="text" placeholder="e.g. Dana">
-  <label>Role</label><select id="off-mem-role"><option value="researcher">🔍 Researcher — finds facts, hands over a brief</option><option value="writer">✍️ Writer — turns briefs into finished writing</option><option value="developer">💻 Developer — writes and fixes code</option><option value="analyst">📊 Analyst — checks numbers, reviews work, last step</option><option value="assistant">🤖 Assistant — follow-ups, notes, keeps memory tidy</option></select>
+  <label>Role</label><select id="off-mem-role">${roleOpts}</select>
   <div style="margin:8px 0"><button id="off-hire">Hire</button></div>
   <h3>Run a job with the team</h3>
-  <p class="note">The boss assigns the work in order — Researcher first, then Writer/Developer, Analyst last. Each member sees the brief, the shared office memory, and what the previous member did.</p>
+  <p class="note">The boss assigns the work in order — core team first (Researcher, Developer, Writer…), then the sector roles you hired, Analyst last. Each member sees the brief, the shared office memory, and what the previous member did.</p>
   <label>Job title</label><input id="off-job-title" type="text" placeholder="e.g. Research competitors and write a one-page brief">
   <label>Brief for the team</label><textarea id="off-job-brief" rows="3" placeholder="What should the team do?"></textarea>
   <div style="margin:8px 0"><button id="off-run-job">Run job with the team</button></div>

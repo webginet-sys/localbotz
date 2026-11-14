@@ -19,10 +19,17 @@ already has.
 - **One boss agent.** Every office gets an Office Manager (the
   "Michael") — the only agent you brief. It plans the work, assigns
   it to the team, checks results, and reports back.
-- **Hire an AI team.** Roles: Researcher, Writer, Developer,
-  Analyst, Assistant. Hiring creates a normal LocalBotz bot with
-  role instructions, its own memory and chats — so a team member is
-  also a bot you can talk to on its own.
+- **Hire an AI team.** 101 roles in total. The core team: Researcher,
+  Writer, Developer, Analyst, Assistant, Sales, Finance, Legal,
+  Recruiter, Teacher. Plus 90 sector roles — every job title a
+  construction, MEP, electrical engineering, IT services or e-commerce
+  company hires, from senior management (Construction Manager, MEP
+  Manager, Cloud Architect) down to technicians and trades (HVAC
+  Technician, Plumber, Ductman, Mason, Steel Fixer). Hiring creates a
+  normal LocalBotz bot with role instructions, its own memory and chats
+  — so a team member is also a bot you can talk to on its own. The hire
+  list comes from `GET /api/office/roles`, grouped by sector.
+- **Shared office memory.** `data/offices/<id>/memory.md` — markdown
 - **Shared office memory.** `data/offices/<id>/memory.md` — markdown
   memory the whole team shares. It survives sessions, every member
   reads it before working, and every finished job writes a summary
@@ -31,8 +38,8 @@ already has.
   messages passed between the team: the boss assigns a part, the
   member reports back done. Visible on the Office page.
 - **Run a job with the team.** Give a title and a brief. The boss
-  assigns the work in order — Researcher first, then Developer /
-  Writer, Analyst last — each member runs with the brief + the
+  assigns the work in order — core team first, then the sector roles
+  you hired, Analyst last — each member runs with the brief + the
   shared office memory + what the previous member did, and hands
   its result to the next member. The final result is the last
   member's output plus every step, shown on the Office page.

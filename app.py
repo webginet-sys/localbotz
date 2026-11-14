@@ -2220,9 +2220,155 @@ OFFICE_ROLES = {
     "teacher": {"label": "Teacher", "avatar": "👨‍🏫",
                 "instructions": "You are {name}, the Teacher on this office's AI team. You turn what the team learned into a clear lesson: the big ideas in order, a short explanation for each, and a small exercise. You keep it short and check understanding with a question."},
 }
+
+# Sector roles for the Office, from the user's own list: every job title a
+# construction, MEP, electrical, IT services or e-commerce company hires —
+# senior management down to technicians and trades. Each entry is
+# (sector, group, avatar, [(role_id, title, one-line job)]).
+SECTOR_ROLES = [
+ ("Construction", "Project & Site Management", "👔", [
+  ("construction-manager", "Construction Manager", "Runs the whole site: schedule, people, budget and safety, and reports progress to the client."),
+  ("project-manager", "Project Manager", "Plans the project, tracks progress against the programme, and keeps the client and the team informed."),
+  ("site-engineer", "Site Engineer", "Runs the technical work on site: setting out, drawings, inspections, and solving problems as they come up."),
+  ("civil-engineer", "Civil Engineer", "Designs and checks the civil works — structures, earthworks and drainage — and answers site queries."),
+  ("structural-engineer", "Structural Engineer", "Designs and checks the structure, reviews steel and concrete, and signs off what is safe to build."),
+  ("project-coordinator", "Project Coordinator", "Keeps the project organised: schedules, meetings, documents and follow-ups, so nothing slips."),
+ ]),
+ ("Construction", "Planning & Commercial", "📋", [
+  ("quantity-surveyor", "Quantity Surveyor (QS)", "Measures the work, prepares BOQs and valuations, and keeps the cost of the project under control."),
+  ("estimation-engineer", "Estimation Engineer", "Prices the work from drawings and specs: quantities, rates and a clear, checkable estimate."),
+  ("tendering-engineer", "Tendering Engineer", "Prepares tender submissions: the price, the programme and the documents the client asked for."),
+  ("planning-engineer", "Planning Engineer", "Builds and updates the project programme, flags delays early, and shows what to do about them."),
+  ("procurement-officer", "Procurement Officer", "Buys materials and services at the right price and time, and keeps supplier records tidy."),
+  ("contract-administrator", "Contract Administrator", "Runs the contract: variations, claims, payments and notices, in writing and on time."),
+ ]),
+ ("Construction", "Quality, Safety & Drafting", "🛡️", [
+  ("qa-qc-engineer", "QA/QC Engineer", "Checks the work against the spec: inspections, test reports and snag lists, until it passes."),
+  ("hse-officer", "HSE Officer", "Keeps the site safe: risk assessments, toolbox talks, permits and incident reports."),
+  ("document-controller", "Document Controller", "Keeps every drawing, submittal and letter in the right place, with the right revision, and finds it fast."),
+  ("autocad-draftsman", "AutoCAD Draftsman", "Draws and updates plans, sections and details in AutoCAD from the engineer's mark-ups."),
+  ("bim-specialist", "BIM Specialist", "Builds and coordinates the BIM model, finds clashes before they reach site, and keeps the model current."),
+ ]),
+ ("Construction", "Field & Trade Roles", "👷", [
+  ("site-supervisor", "Site Supervisor", "Runs the site day to day: gangs, materials and safety, and reports progress to the site engineer."),
+  ("general-foreman", "General Foreman", "Leads the trades on site, reads the drawings, and makes sure the work is done right the first time."),
+  ("land-surveyor", "Land Surveyor", "Measures and sets out the site: levels, boundaries and as-built surveys, with accurate records."),
+  ("mason", "Mason", "Builds blockwork, brickwork and plaster to the drawings, and flags bad materials before they are used."),
+  ("carpenter", "Carpenter", "Builds formwork, doors and joinery to the drawings, and keeps the work neat and to size."),
+  ("steel-fixer", "Steel Fixer", "Fixes reinforcement steel to the drawings and bar bending schedule, and checks it before the pour."),
+ ]),
+ ("MEP", "Engineering & Design", "🔧", [
+  ("mep-manager", "MEP Manager", "Runs all the MEP works: design, installation and commissioning, and coordinates with the civil team."),
+  ("mep-project-engineer", "MEP Project Engineer", "Runs the MEP scope on a project: drawings, materials, installation and testing, on schedule."),
+  ("mep-coordinator", "MEP Coordinator", "Coordinates the MEP services with each other and with the structure, so nothing clashes on site."),
+  ("hvac-engineer", "HVAC Engineer", "Designs and checks heating, ventilation and air conditioning: loads, ductwork and equipment."),
+  ("plumbing-drainage-engineer", "Plumbing & Drainage Engineer", "Designs water supply, drainage and plumbing: pipe sizes, routes and fixtures that work."),
+  ("firefighting-engineer", "Firefighting / Fire Protection Engineer", "Designs fire protection: sprinklers, hydrants, alarms and pumps, to the code and the authority's rules."),
+ ]),
+ ("MEP", "Technical & Drafting", "📐", [
+  ("mep-draftsman", "MEP Draftsman", "Draws MEP layouts, sections and details in CAD from the engineer's design."),
+  ("bim-mep-modeler", "BIM MEP Modeler", "Builds the MEP BIM model, coordinates it with the other trades, and finds clashes early."),
+  ("mep-estimation-engineer", "MEP Estimation Engineer", "Prices the MEP works from drawings and specs: quantities, rates and a clear estimate."),
+  ("mep-qa-qc-inspector", "MEP QA/QC Inspector", "Inspects MEP installation against the spec: checklists, test records and snag lists until it passes."),
+ ]),
+ ("MEP", "Technicians & Supervisors", "🧰", [
+  ("mep-supervisor", "MEP Supervisor", "Runs the MEP installation on site: gangs, materials, safety and progress reports."),
+  ("mep-technician", "MEP Technician", "Installs, tests and maintains MEP systems to the drawings, and reports faults clearly."),
+  ("hvac-technician", "HVAC Technician", "Installs and services air conditioning and ventilation: ducts, units and controls that work."),
+  ("plumber", "Plumber", "Installs and repairs water and drainage pipework to the drawings, and tests it before handover."),
+  ("pipe-fitter", "Pipe Fitter", "Fits and joins pipework — chilled water, plumbing and fire — to the drawings and the spec."),
+  ("ductman", "Ductman", "Fabricates and installs ductwork to the drawings, sealed and insulated as specified."),
+ ]),
+ ("Electrical Engineering", "Design & Power Systems", "⚡", [
+  ("electrical-design-engineer", "Electrical Design Engineer", "Designs the electrical system: loads, cable sizing, panels and layouts, to the code."),
+  ("power-systems-engineer", "Power Systems Engineer", "Studies the power system: load flow, short circuit and protection, and says what is safe."),
+  ("hv-lv-engineer", "HV / LV Engineer", "Designs high and low voltage systems: substations, distribution and earthing, to the code."),
+  ("substation-engineer", "Substation Engineer", "Designs and checks substations: transformers, switchgear and protection, ready to build."),
+  ("protection-control-engineer", "Protection & Control Engineer", "Designs protection and control: relays, settings and schemes that keep the system safe."),
+ ]),
+ ("Electrical Engineering", "Testing & Commissioning", "🔌", [
+  ("testing-commissioning-engineer", "Testing & Commissioning (T&C) Engineer", "Tests and commissions the electrical installation, and records the results for handover."),
+  ("switchgear-commissioning-engineer", "Switchgear Commissioning Engineer", "Commissions switchgear: tests, settings and energisation, step by step and safely."),
+  ("maintenance-engineer", "Maintenance Engineer", "Plans and carries out electrical maintenance: inspections, repairs and records, before things fail."),
+ ]),
+ ("Electrical Engineering", "Specialized Systems & Technicians", "🔬", [
+  ("elv-engineer", "ELV Engineer", "Designs extra-low voltage systems: CCTV, access control, fire alarm and data, to the spec."),
+  ("instrumentation-controls-engineer", "Instrumentation & Controls Engineer", "Designs instruments and controls: sensors, loops and panels that measure and control the plant."),
+  ("earthing-lightning-engineer", "Earthing & Lightning Protection Engineer", "Designs earthing and lightning protection: calculations, layouts and test records."),
+  ("electrical-supervisor", "Electrical Supervisor", "Runs the electrical work on site: gangs, materials, safety and progress reports."),
+  ("industrial-electrician", "Industrial Electrician", "Installs, tests and repairs industrial electrical systems to the drawings, safely and neatly."),
+ ]),
+ ("IT Services", "Software Development", "💻", [
+  ("software-engineer", "Software Engineer", "Designs and builds software: clean code, tests and clear notes on what changed."),
+  ("full-stack-developer", "Full-Stack Developer", "Builds the whole web app: front end, back end and database, working end to end."),
+  ("front-end-developer", "Front-End Developer", "Builds the user interface: fast, clear and working on every screen size."),
+  ("back-end-developer", "Back-End Developer", "Builds the server side: APIs, databases and logic that the front end relies on."),
+  ("mobile-app-developer", "Mobile App Developer", "Builds the mobile app: screens, features and fixes, for iOS and Android."),
+ ]),
+ ("IT Services", "Infrastructure, Cloud & Security", "☁️", [
+  ("devops-engineer", "DevOps Engineer", "Automates builds, deploys and monitoring, so releases go out safely and often."),
+  ("cloud-architect", "Cloud Architect", "Designs the cloud setup: the right services, the right size, and the cost kept under control."),
+  ("system-administrator", "System Administrator", "Runs the servers and systems: users, backups, updates and uptime."),
+  ("network-engineer", "Network Engineer", "Designs and runs the network: switches, firewalls and links that stay up."),
+  ("cybersecurity-analyst", "Cybersecurity Analyst", "Watches for threats, checks for weaknesses, and writes down what to fix first."),
+ ]),
+ ("IT Services", "Data & Testing", "📊", [
+  ("data-engineer", "Data Engineer", "Builds the data pipelines: clean, reliable data, ready for reports and models."),
+  ("data-analyst", "Data Analyst", "Answers questions from the data: clear numbers, charts and what they mean."),
+  ("database-administrator", "Database Administrator (DBA)", "Runs the databases: backups, performance and access, so data is there when needed."),
+  ("qa-tester", "QA Automation / Manual Tester", "Tests the software like a user would: finds the bugs, writes them down clearly, and checks the fixes."),
+ ]),
+ ("IT Services", "Support & Delivery", "🎧", [
+  ("it-support-specialist", "IT Support Specialist", "Solves users' IT problems fast and politely, and records what was fixed."),
+  ("help-desk-technician", "Help Desk Technician", "Takes support tickets, fixes what can be fixed, and escalates the rest with a clear note."),
+  ("technical-project-manager", "Technical Project Manager", "Runs IT projects: scope, schedule and team, and keeps the client informed."),
+  ("scrum-master", "Scrum Master", "Runs the agile process: sprints, stand-ups and blockers removed, so the team ships."),
+  ("business-analyst", "Business Analyst", "Turns business needs into clear requirements the developers can build from."),
+  ("erp-consultant", "ERP Consultant", "Sets up and supports the ERP system: config, training and fixes that fit how the company works."),
+ ]),
+ ("E-Commerce", "Store & Merchandising", "🛒", [
+  ("ecommerce-manager", "E-Commerce Manager", "Runs the online store: sales, listings, offers and the numbers, and grows the business."),
+  ("merchandising-manager", "Merchandising Manager", "Plans what to sell and how to show it: ranges, pricing and promotions that move stock."),
+  ("category-manager", "Category Manager", "Owns a product category: range, prices and suppliers, and grows its sales."),
+  ("catalog-specialist", "Catalog Specialist", "Keeps the product catalog clean: correct titles, specs, images and prices, everywhere."),
+  ("product-listing-coordinator", "Product Listing Coordinator", "Writes and publishes product listings: clear titles, honest descriptions and the right attributes."),
+ ]),
+ ("E-Commerce", "Digital Marketing & Growth", "📣", [
+  ("digital-marketing-specialist", "Digital Marketing Specialist", "Runs the marketing: campaigns, social and content that bring customers in."),
+  ("performance-marketer", "Performance Marketer (PPC/Paid Ads)", "Runs paid ads: budgets, targeting and landing pages, and reports what each sale cost."),
+  ("seo-specialist", "SEO Specialist", "Gets the store found on search: keywords, pages and links that rank and bring buyers."),
+  ("content-strategist", "Content Strategist", "Plans the content: what to publish, for whom, and how it brings customers back."),
+  ("crm-email-marketing-manager", "CRM / Email Marketing Manager", "Runs customer emails and CRM: campaigns, segments and follow-ups that bring repeat orders."),
+ ]),
+ ("E-Commerce", "Operations & Supply Chain", "📦", [
+  ("supply-chain-manager", "Supply Chain Manager", "Runs the supply chain: suppliers, stock and delivery, so orders go out on time."),
+  ("inventory-planner", "Inventory Planner", "Plans stock levels: what to order, when, and how much, so nothing runs out or sits still."),
+  ("warehouse-operations-manager", "Warehouse Operations Manager", "Runs the warehouse: receiving, picking, packing and dispatch, safely and on time."),
+  ("order-fulfillment-specialist", "Order Fulfillment Specialist", "Gets orders out the door: pick, pack, ship and track, and fix problems fast."),
+  ("logistics-coordinator", "Logistics Coordinator", "Coordinates deliveries and couriers: bookings, tracking and proof of delivery."),
+ ]),
+ ("E-Commerce", "Customer Experience & Design", "🎨", [
+  ("ui-ux-designer", "UI/UX Designer", "Designs the store and the app: clear, easy and pleasant to buy from."),
+  ("cro-specialist", "Conversion Rate Optimization (CRO) Specialist", "Improves the store so more visitors buy: tests, measures and changes what works."),
+  ("customer-support-representative", "Customer Support Representative", "Answers customers politely and fast: orders, returns and complaints, solved or escalated clearly."),
+ ]),
+]
+
+# Build the sector roles into OFFICE_ROLES: each one gets the same shape
+# as a core role (label, avatar, sector, group, instructions).
+for _sector, _group, _avatar, _roles in SECTOR_ROLES:
+    for _rid, _title, _job in _roles:
+        OFFICE_ROLES[_rid] = {
+            "label": _title, "avatar": _avatar, "sector": _sector, "group": _group,
+            "instructions": ("You are {name}, the " + _title + " on this office's AI team. "
+                             + _job + " You work from the brief, the shared office memory and the "
+                             "previous team members' outputs, and report back in plain text so the "
+                             "next team member can use it.")}
+
 # The order a team job runs in: research first, build/write second,
 # review last. Roles not listed here run in hire order after these.
 ROLE_ORDER = ["researcher", "developer", "writer", "sales", "finance", "legal", "recruiter", "teacher", "assistant", "analyst"]
+ROLE_ORDER += [r[0] for _s, _g, _a, _roles in SECTOR_ROLES for r in _roles]
 
 def load_offices():
     return _load_json(OFFICES_FILE, [])
@@ -2256,6 +2402,20 @@ def append_blackboard(office_id: str, sender: str, recipient: str, text: str):
                   "text": text})
     _save_json(_office_dir(office_id) / "blackboard.json", board[-200:])
     return board
+
+@app.get("/api/office/roles")
+def office_roles():
+    # Every hireable role, grouped by sector — the Office UI builds its
+    # hire dropdown from this. Core roles have sector "General".
+    jobs = {rid: job for _s, _g, _a, roles in SECTOR_ROLES for rid, _t, job in roles}
+    out = []
+    for rid, r in OFFICE_ROLES.items():
+        if rid == "boss":
+            continue
+        out.append({"id": rid, "label": r["label"], "avatar": r["avatar"],
+                    "sector": r.get("sector", "General"), "group": r.get("group", "Core team"),
+                    "job": jobs.get(rid, "")})
+    return out
 
 @app.get("/api/offices")
 def list_offices():
@@ -2322,7 +2482,7 @@ def hire_member(office_id: str, body: dict):
         raise HTTPException(404, "Office not found")
     role = (body.get("role") or "assistant").lower()
     if role not in OFFICE_ROLES or role == "boss":
-        raise HTTPException(400, "Role must be researcher, writer, developer, analyst or assistant. The office has one boss already.")
+        raise HTTPException(400, "Role must be one of the office roles (see GET /api/office/roles). The office has one boss already.")
     name = (body.get("name") or "").strip() or OFFICE_ROLES[role]["label"]
     bot = create_bot(BotCreate(
         name=name, avatar=OFFICE_ROLES[role]["avatar"],
