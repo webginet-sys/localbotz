@@ -80,6 +80,7 @@
     <ul class="botlist" id="botlist"></ul>
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
     <button class="navbtn" data-view="office">🏢 Office — your AI team</button>
+    <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -461,6 +462,7 @@ async function renderPage(name){
   try{
     if(name==='admin') el.innerHTML=await adminHtml();
     else if(name==='office') el.innerHTML=await officeHtml();
+    else if(name==='workroom') el.innerHTML=await workroomHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -520,6 +522,55 @@ async function officeHtml(){
   <div style="margin:8px 0"><button id="off-mem-add">Add memory</button></div>
   <h3>Blackboard — messages between the team</h3>
   ${board?`<table><tr><th>Time</th><th>From → To</th><th>Message</th></tr>${board}</table>`:'<p class="note">Nothing on the blackboard yet.</p>'}
+  <div id="page-msg"></div>`;
+}
+let currentWorkroom=null;
+async function workroomHtml(){
+  if(!currentWorkroom){
+    const rooms=await api('/api/workrooms');
+    const rows=rooms.map(w=>`<tr><td><b>${esc(w.name)}</b><br><small>${esc(w.description||'')}</small></td><td>${w.docs} document(s)</td><td>${w.asks} question(s)</td><td><button class="small" data-workroom-open="${w.id}">Open workroom</button> <button class="small" data-workroom-del="${w.id}">Delete</button></td></tr>`).join('');
+    return `<h2>📁 Workroom — documents with proof</h2>
+    <p>One workroom is a vault of project documents — BOQs, tenders, contracts, SOWs, SLAs, invoices, correspondence. Search them, ask questions, and every answer comes back with its sources: the document and the exact passage. If the answer is not in the documents, it says so. Nothing leaves your computer except a model call you choose — and before anything goes to an online model, emails, IBANs and your private terms are redacted, with a record of what was hidden.</p>
+    <h3>Create a workroom</h3>
+    <label>Workroom name</label><input id="wr-name" type="text" placeholder="e.g. Marina Tower — Tender 14">
+    <label>What is this workroom for?</label><input id="wr-desc" type="text" placeholder="e.g. Tender 14 documents for the Marina Tower MEP package.">
+    <label>Private terms to always redact (comma separated, optional)</label><input id="wr-terms" type="text" placeholder="e.g. client name, project code, a price you never share">
+    <div style="margin:8px 0"><button id="wr-create">Create workroom</button></div>
+    <h3>Your workrooms</h3>
+    ${rooms.length?`<table><tr><th>Workroom</th><th>Documents</th><th>Questions</th><th></th></tr>${rows}</table>`:'<p class="note">No workroom yet. Create one above — it lives on your computer.</p>'}
+    <div id="page-msg"></div>`;
+  }
+  const w=await api('/api/workrooms/'+currentWorkroom);
+  const docRows=(w.docs||[]).map(d=>`<tr><td><b>${esc(d.filename)}</b>${d.note?`<br><small>${esc(d.note)}</small>`:''}</td><td>${(d.size_bytes/1024).toFixed(1)} KB</td><td>${d.chunks} passage(s)</td><td><button class="small" data-doc-del="${d.id}">Remove</button></td></tr>`).join('');
+  const askRows=(w.asks||[]).slice().reverse().map(a=>`<details open><summary><b>${esc(a.question)}</b> — ${esc(a.provider)}/${esc(a.model)} · ${new Date(a.ts*1000).toLocaleString()}</summary><p style="white-space:pre-wrap">${esc(a.answer)}</p>${(a.sources||[]).length?`<h4>Sources — where the answer came from</h4><ul>${a.sources.map((s,i)=>`<li><b>${esc(s.filename)}</b>, passage ${s.chunk+1}: ${esc((s.excerpt||'').slice(0,300))}</li>`).join('')}</ul>`:'<p class="note">No document matched this question.</p>'}${a.redacted&&a.redacted.applied?`<p class="note">🔒 Redacted before sending to ${esc(a.provider)}: ${Object.entries(a.redacted.counts||{}).map(([k,v])=>esc(k)+' × '+v).join(', ')||'nothing sensitive found'} — the real values were swapped back into the answer on your computer.</p>`:''}</details>`).join('');
+  const noteRows=(w.notes||[]).slice().reverse().map(n=>`<tr><td>${new Date(n.ts*1000).toLocaleString()}</td><td>${esc(n.text)}</td></tr>`).join('');
+  return `<h2>📁 ${esc(w.name)}</h2><p class="note">${esc(w.description||'')}</p>
+  <p><button class="ghost small" id="wr-back">← All workrooms</button> <button class="ghost small" data-workroom-del="${w.id}">Delete this workroom</button> <button class="ghost small" id="wr-export">⬇ Export handoff package</button></p>
+  <p class="note">Model for this workroom: <b>${esc(w.provider)} / ${esc(w.model||'default')}</b> — change it in the workroom settings below. Local models (LM Studio / Ollama) never leave your computer; online models get redacted passages only.</p>
+  <h3>Documents</h3>
+  ${docRows?`<table><tr><th>Document</th><th>Size</th><th>Passages</th><th></th></tr>${docRows}</table>`:'<p class="note">No documents yet. Add a .txt, .md, .csv, .json, .pdf or .docx file (up to 20 MB each).</p>'}
+  <label>Add a file</label><input id="wr-file" type="file">
+  <div style="margin:8px 0"><button id="wr-upload">Upload document</button></div>
+  <label>Or add a file already in the workspace folder</label><input id="wr-ws-path" type="text" placeholder="e.g. tender-14.pdf">
+  <div style="margin:8px 0"><button id="wr-add-ws">Add from workspace</button></div>
+  <h3>Search the documents</h3>
+  <label>Search</label><input id="wr-q" type="text" placeholder="e.g. payment terms, or the chiller capacity">
+  <div style="margin:8px 0"><button id="wr-search">Search</button></div>
+  <div id="wr-search-out"></div>
+  <h3>Ask about the documents</h3>
+  <p class="note">The answer is written only from the matching passages, with each claim tied to its source. Prices, measurements and dates are never invented.</p>
+  <label>Question</label><textarea id="wr-question" rows="3" placeholder="e.g. What are the payment terms in this tender, and what is the retention?"></textarea>
+  <div style="margin:8px 0"><button id="wr-ask">Ask the workroom</button></div>
+  <h3>Questions &amp; answers</h3>${askRows||'<p class="note">No questions yet.</p>'}
+  <h3>Reviewer notes</h3>
+  ${noteRows?`<table><tr><th>When</th><th>Note</th></tr>${noteRows}</table>`:'<p class="note">No notes yet — add one when a reviewer checks the work.</p>'}
+  <label>Add a note</label><input id="wr-note-text" type="text" placeholder="e.g. Checked the retention figures against the contract — they match.">
+  <div style="margin:8px 0"><button id="wr-note-add">Add note</button></div>
+  <h3>Workroom settings</h3>
+  <label>Provider</label><input id="wr-provider" type="text" value="${esc(w.provider)}">
+  <label>Model (blank = provider default)</label><input id="wr-model" type="text" value="${esc(w.model||'')}">
+  <label>Private terms to always redact (comma separated)</label><input id="wr-terms-edit" type="text" value="${esc((w.redact_terms||[]).join(', '))}">
+  <div style="margin:8px 0"><button id="wr-save">Save settings</button></div>
   <div id="page-msg"></div>`;
 }
 async function connectorsHtml(isSettings){
@@ -739,6 +790,19 @@ function bindPage(name){
   if(q('off-hire')) q('off-hire').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/members`,{method:'POST',body:JSON.stringify({name:q('off-mem-name').value,role:q('off-mem-role').value})}); renderPage(name);}catch(e){msg(e.message);}};
   if(q('off-mem-add')) q('off-mem-add').onclick=async()=>{try{await api(`/api/offices/${currentOffice}/memory`,{method:'POST',body:JSON.stringify({text:q('off-mem-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
   if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value})}); msg('Job done — see the results below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
+  // Workroom
+  document.querySelectorAll('[data-workroom-open]').forEach(el=>el.onclick=async()=>{currentWorkroom=el.dataset.workroomOpen; renderPage(name);});
+  document.querySelectorAll('[data-workroom-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workroom? Its documents, questions and notes go too.')) return; await api('/api/workrooms/'+el.dataset.workroomDel,{method:'DELETE'}); if(currentWorkroom===el.dataset.workroomDel) currentWorkroom=null; renderPage(name);});
+  document.querySelectorAll('[data-doc-del]').forEach(el=>el.onclick=async()=>{await api(`/api/workrooms/${currentWorkroom}/docs/${el.dataset.docDel}`,{method:'DELETE'}); renderPage(name);});
+  if(q('wr-back')) q('wr-back').onclick=()=>{currentWorkroom=null; renderPage(name);};
+  if(q('wr-export')) q('wr-export').onclick=()=>{window.open('/api/workrooms/'+currentWorkroom+'/export','_blank');};
+  if(q('wr-create')) q('wr-create').onclick=async()=>{try{const w=await api('/api/workrooms',{method:'POST',body:JSON.stringify({name:q('wr-name').value,description:q('wr-desc').value,redact_terms:q('wr-terms').value.split(',').map(s=>s.trim()).filter(Boolean)})}); currentWorkroom=w.id; renderPage(name);}catch(e){msg(e.message);}};
+  if(q('wr-upload')) q('wr-upload').onclick=async()=>{const f=q('wr-file').files[0]; if(!f){msg('Choose a file first.'); return;} const fd=new FormData(); fd.append('file',f); const r=await fetch('/api/workrooms/'+currentWorkroom+'/docs',{method:'POST',body:fd}); if(!r.ok){msg(await r.text()); return;} msg('Document added.'); renderPage(name);};
+  if(q('wr-add-ws')) q('wr-add-ws').onclick=async()=>{try{await api(`/api/workrooms/${currentWorkroom}/docs/from-workspace`,{method:'POST',body:JSON.stringify({path:q('wr-ws-path').value})}); msg('Document added from the workspace.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('wr-search')) q('wr-search').onclick=async()=>{try{const hits=await api(`/api/workrooms/${currentWorkroom}/search?q=`+encodeURIComponent(q('wr-q').value)); const out=$('wr-search-out'); out.innerHTML=hits.length?`<ul>${hits.map(h=>`<li><b>${esc(h.filename)}</b>, passage ${h.chunk+1}: ${esc((h.excerpt||'').slice(0,300))}</li>`).join('')}</ul>`:'<p class="note">Nothing matched in the documents.</p>';}catch(e){msg(e.message);}};
+  if(q('wr-ask')) q('wr-ask').onclick=async()=>{const b=q('wr-ask'); b.disabled=true; b.textContent='Asking…'; try{await api(`/api/workrooms/${currentWorkroom}/ask`,{method:'POST',body:JSON.stringify({question:q('wr-question').value})}); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Ask the workroom';}};
+  if(q('wr-note-add')) q('wr-note-add').onclick=async()=>{try{await api(`/api/workrooms/${currentWorkroom}/notes`,{method:'POST',body:JSON.stringify({text:q('wr-note-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('wr-save')) q('wr-save').onclick=async()=>{try{await api('/api/workrooms/'+currentWorkroom,{method:'PATCH',body:JSON.stringify({provider:q('wr-provider').value,model:q('wr-model').value,redact_terms:q('wr-terms-edit').value.split(',').map(s=>s.trim()).filter(Boolean)})}); msg('Workroom settings saved.'); renderPage(name);}catch(e){msg(e.message);}};
 }
 loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };

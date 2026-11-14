@@ -50,7 +50,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -2657,6 +2657,486 @@ def list_office_jobs(office_id: str):
     if not office:
         raise HTTPException(404, "Office not found")
     return office.get("jobs", [])
+
+
+# ---- Document workroom ----
+# LocalBotz-native, modelled on the TeamOffice idea of a private AI
+# workroom for document-heavy professional teams: one workroom is a
+# vault of project documents (BOQs, tenders, contracts, SOWs, SLAs,
+# drawings notes, invoices, correspondence) that you can search and
+# ask questions about — with receipts, not blind trust.
+#   * Vault: documents stay on your computer, under
+#     data/workrooms/<id>/docs/. Nothing is uploaded anywhere.
+#   * Search: keyword search over the documents, in chunks, so a big
+#     document set is searched as the work happens instead of being
+#     stuffed into one prompt.
+#   * Ask with receipts: the model only gets the matching passages,
+#     and every answer comes back with its sources — document name
+#     and the exact passage it came from. If it is not in the
+#     documents, the answer says so. Prices, measurements and dates
+#     are never invented.
+#   * Redaction: before anything is sent to an online (non-local)
+#     model, emails, IBANs, card-like numbers and the workroom's own
+#     private terms are replaced with placeholders like [EMAIL-1].
+#     The placeholders are swapped back into the answer locally, so
+#     you see the real text. The redaction log records only what kind
+#     of thing was hidden and how many — never the values themselves.
+#     Local models (LM Studio / Ollama) never leave the computer, so
+#     redaction is off for them unless you ask for it.
+#   * Handoff: a workroom exports as one JSON package — documents,
+#     questions and answers with their sources, redaction log and
+#     reviewer notes — so another reviewer can pick the work up.
+# Text is extracted for .txt/.md/.csv/.json/.log, .pdf (pypdf) and
+# .docx (python-docx); anything else is stored but not searchable,
+# and the workroom says so honestly on the document.
+
+WORKROOMS_FILE = DATA_DIR / "workrooms.json"
+WORKROOMS_DIR = DATA_DIR / "workrooms"
+WORKROOM_ALLOWED_SUFFIXES = {".txt", ".md", ".csv", ".json", ".log", ".tsv", ".pdf", ".docx"}
+WORKROOM_MAX_BYTES = 20 * 1024 * 1024
+_LOCAL_PROVIDERS = ("lmstudio", "ollama")
+_WORKROOM_STOPWORDS = {
+    "the", "and", "for", "with", "that", "this", "from", "into", "your",
+    "you", "are", "was", "were", "have", "has", "what", "when", "which",
+    "about", "there", "their", "will", "would", "should", "please",
+}
+_REDACTION_PATTERNS = [
+    ("email", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
+    ("iban", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
+    ("card_number", re.compile(r"\b(?:\d[ -]?){13,19}\b")),
+    ("phone", re.compile(r"\+\d[\d\s\-()]{7,}\d")),
+]
+
+
+def load_workrooms():
+    return _load_json(WORKROOMS_FILE, [])
+
+
+def save_workrooms(workrooms):
+    _save_json(WORKROOMS_FILE, workrooms)
+
+
+def get_workroom(workroom_id: str):
+    return next((w for w in load_workrooms() if w["id"] == workroom_id), None)
+
+
+def _workroom_dir(workroom_id: str) -> Path:
+    d = WORKROOMS_DIR / workroom_id
+    (d / "docs").mkdir(parents=True, exist_ok=True)
+    (d / "text").mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _workroom_asks_path(workroom_id: str) -> Path:
+    return _workroom_dir(workroom_id) / "asks.json"
+
+
+def load_workroom_asks(workroom_id: str):
+    return _load_json(_workroom_asks_path(workroom_id), [])
+
+
+def save_workroom_asks(workroom_id: str, asks):
+    _save_json(_workroom_asks_path(workroom_id), asks[-50:])
+
+
+def _safe_doc_filename(name: str) -> str:
+    name = Path(name).name.strip() or "document"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name)[:120]
+
+
+def _extract_text(path: Path, suffix: str):
+    """Return (text, note). note explains when text could not be read."""
+    try:
+        if suffix == ".pdf":
+            try:
+                from pypdf import PdfReader
+            except Exception:
+                return "", "PDF text was not extracted: pypdf is not installed. Run pip install pypdf, or add a .txt copy of this document."
+            reader = PdfReader(str(path))
+            parts = [(p.extract_text() or "") for p in reader.pages]
+            return "\n".join(parts), ""
+        if suffix == ".docx":
+            try:
+                from docx import Document
+            except Exception:
+                return "", "Word text was not extracted: python-docx is not installed. Run pip install python-docx, or add a .txt copy of this document."
+            doc = Document(str(path))
+            return "\n".join(p.text for p in doc.paragraphs), ""
+        return path.read_text(encoding="utf-8", errors="replace"), ""
+    except Exception as e:
+        return "", f"Could not read this file: {e}"
+
+
+def _chunk_text(text: str, size: int = 900, overlap: int = 150):
+    """Split text into overlapping chunks on paragraph boundaries."""
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if not paras:
+        return []
+    chunks, current = [], ""
+    for para in paras:
+        if len(current) + len(para) + 2 > size and current:
+            chunks.append(current)
+            current = current[-overlap:] if len(current) > overlap else current
+        current = (current + "\n\n" + para).strip() if current else para
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _load_workroom_chunks(workroom_id: str):
+    """{doc_id: {'filename': ..., 'chunks': [...]}} from stored text."""
+    out = {}
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        return out
+    text_dir = _workroom_dir(workroom_id) / "text"
+    for doc in workroom.get("docs", []):
+        p = text_dir / f"{doc['id']}.txt"
+        if not p.exists():
+            continue
+        out[doc["id"]] = {"filename": doc["filename"],
+                          "chunks": _chunk_text(p.read_text(encoding="utf-8", errors="replace"))}
+    return out
+
+
+def _search_workroom(workroom_id: str, query: str, top_n: int = 5):
+    """Keyword search over the workroom's documents. Returns passages
+    with document name + chunk number — the receipts for an answer."""
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower())
+             if len(w) > 2 and w not in _WORKROOM_STOPWORDS]
+    if not words:
+        words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    if not words:
+        return []
+    phrase = query.lower().strip()
+    scored = []
+    for doc_id, doc in _load_workroom_chunks(workroom_id).items():
+        for i, chunk in enumerate(doc["chunks"]):
+            low = chunk.lower()
+            score = sum(low.count(w) for w in words)
+            if phrase and phrase in low:
+                score += 5
+            if score > 0:
+                scored.append({"doc_id": doc_id, "filename": doc["filename"],
+                               "chunk": i, "excerpt": chunk[:600], "score": score})
+    scored.sort(key=lambda s: -s["score"])
+    return scored[:top_n]
+
+
+def _redact_text(text: str, terms):
+    """Replace sensitive values with placeholders. Returns
+    (redacted_text, counts, mapping). The mapping (placeholder -> real
+    value) lives only in memory for this one ask — it is never saved."""
+    counts, mapping = {}, {}
+    counters = {}
+
+    def _replace(label, pattern, value):
+        def _sub(m):
+            counters[label] = counters.get(label, 0) + 1
+            tag = f"[{label.upper()}-{counters[label]}]"
+            mapping[tag] = m.group(0)
+            return tag
+        return pattern.sub(_sub, value)
+
+    out = text
+    for label, pattern in _REDACTION_PATTERNS:
+        before = counters.get(label, 0)
+        out = _replace(label, pattern, out)
+        if counters.get(label, 0) > before:
+            counts[label] = counters[label] - before
+    for term in sorted((terms or []), key=len, reverse=True):
+        term = (term or "").strip()
+        if len(term) < 3:
+            continue
+        pattern = re.compile(re.escape(term), re.IGNORECASE)
+        before = counters.get("term", 0)
+        out = _replace("term", pattern, out)
+        if counters.get("term", 0) > before:
+            counts["private_term"] = counts.get("private_term", 0) + (counters["term"] - before)
+    return out, counts, mapping
+
+
+def _unredact_text(text: str, mapping):
+    for tag, value in mapping.items():
+        text = text.replace(tag, value)
+    return text
+
+
+def _add_workroom_doc(workroom_id: str, filename: str, data: bytes):
+    """Store a document's bytes + extracted text, register it, return its record."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in WORKROOM_ALLOWED_SUFFIXES:
+        raise HTTPException(400, f"That file type ({suffix or 'none'}) is not supported yet. Use: {', '.join(sorted(WORKROOM_ALLOWED_SUFFIXES))}.")
+    if len(data) > WORKROOM_MAX_BYTES:
+        raise HTTPException(400, "That file is over 20 MB. Split it, or add a shorter extract.")
+    doc_id = uuid.uuid4().hex[:8]
+    safe = _safe_doc_filename(filename)
+    d = _workroom_dir(workroom_id)
+    (d / "docs" / f"{doc_id}_{safe}").write_bytes(data)
+    text, note = _extract_text(d / "docs" / f"{doc_id}_{safe}", suffix)
+    (d / "text" / f"{doc_id}.txt").write_text(text, encoding="utf-8")
+    record = {"id": doc_id, "filename": safe, "size_bytes": len(data),
+              "chars": len(text), "chunks": len(_chunk_text(text)),
+              "added_at": int(time.time()), "note": note}
+    workrooms = load_workrooms()
+    for w in workrooms:
+        if w["id"] == workroom_id:
+            w.setdefault("docs", []).append(record)
+    save_workrooms(workrooms)
+    return record
+
+
+def _workroom_summary(w):
+    asks = load_workroom_asks(w["id"])
+    return {"id": w["id"], "name": w["name"], "description": w.get("description", ""),
+            "office_id": w.get("office_id") or "", "provider": w.get("provider") or DEFAULT_PROVIDER,
+            "model": w.get("model") or "", "docs": len(w.get("docs", [])),
+            "asks": len(asks), "created_at": w.get("created_at")}
+
+
+@app.get("/api/workrooms")
+def list_workrooms():
+    return [_workroom_summary(w) for w in load_workrooms()]
+
+
+@app.post("/api/workrooms", status_code=201)
+def create_workroom(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Give the workroom a name, e.g. Marina Tower — Tender 14.")
+    office_id = (body.get("office_id") or "").strip()
+    if office_id and not get_office(office_id):
+        raise HTTPException(400, "That office does not exist.")
+    provider = (body.get("provider") or DEFAULT_PROVIDER).lower()
+    if provider not in PROVIDERS:
+        provider = DEFAULT_PROVIDER
+    workroom = {"id": uuid.uuid4().hex[:8], "name": name,
+                "description": (body.get("description") or "").strip(),
+                "office_id": office_id, "provider": provider,
+                "model": (body.get("model") or "").strip(),
+                "redact_terms": [str(t).strip() for t in (body.get("redact_terms") or []) if str(t).strip()],
+                "docs": [], "notes": [], "created_at": int(time.time())}
+    workrooms = load_workrooms()
+    workrooms.append(workroom)
+    save_workrooms(workrooms)
+    _workroom_dir(workroom["id"])
+    save_workroom_asks(workroom["id"], [])
+    return workroom
+
+
+@app.get("/api/workrooms/{workroom_id}")
+def get_workroom_detail(workroom_id: str):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    detail = dict(workroom)
+    detail["asks"] = load_workroom_asks(workroom_id)[-10:]
+    return detail
+
+
+@app.patch("/api/workrooms/{workroom_id}")
+def update_workroom(workroom_id: str, body: dict):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    workrooms = load_workrooms()
+    for w in workrooms:
+        if w["id"] != workroom_id:
+            continue
+        if (body.get("name") or "").strip():
+            w["name"] = body["name"].strip()
+        if "description" in body:
+            w["description"] = (body.get("description") or "").strip()
+        if (body.get("provider") or "").lower() in PROVIDERS:
+            w["provider"] = body["provider"].lower()
+        if "model" in body:
+            w["model"] = (body.get("model") or "").strip()
+        if isinstance(body.get("redact_terms"), list):
+            w["redact_terms"] = [str(t).strip() for t in body["redact_terms"] if str(t).strip()]
+    save_workrooms(workrooms)
+    return get_workroom(workroom_id)
+
+
+@app.delete("/api/workrooms/{workroom_id}")
+def delete_workroom(workroom_id: str):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    save_workrooms([w for w in load_workrooms() if w["id"] != workroom_id])
+    shutil.rmtree(_workroom_dir(workroom_id), ignore_errors=True)
+    return {"deleted": workroom_id}
+
+
+@app.post("/api/workrooms/{workroom_id}/docs", status_code=201)
+async def upload_workroom_doc(workroom_id: str, file: UploadFile = File(...)):
+    if not get_workroom(workroom_id):
+        raise HTTPException(404, "Workroom not found")
+    data = await file.read()
+    return _add_workroom_doc(workroom_id, file.filename or "document", data)
+
+
+@app.post("/api/workrooms/{workroom_id}/docs/from-workspace", status_code=201)
+def add_workroom_doc_from_workspace(workroom_id: str, body: dict):
+    if not get_workroom(workroom_id):
+        raise HTTPException(404, "Workroom not found")
+    rel = (body.get("path") or "").strip()
+    if not rel:
+        raise HTTPException(400, "Give a file path inside the workspace folder, e.g. tender-14.pdf.")
+    path = _safe_workspace_path(rel)
+    if not path.exists() or not path.is_file():
+        raise HTTPException(404, f"No file at {rel} inside the workspace folder.")
+    return _add_workroom_doc(workroom_id, path.name, path.read_bytes())
+
+
+@app.delete("/api/workrooms/{workroom_id}/docs/{doc_id}")
+def delete_workroom_doc(workroom_id: str, doc_id: str):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    before = len(workroom.get("docs", []))
+    workrooms = load_workrooms()
+    for w in workrooms:
+        if w["id"] == workroom_id:
+            w["docs"] = [d for d in w.get("docs", []) if d["id"] != doc_id]
+    after = len(next(w for w in workrooms if w["id"] == workroom_id).get("docs", []))
+    if after == before:
+        raise HTTPException(404, "Document not found")
+    save_workrooms(workrooms)
+    d = _workroom_dir(workroom_id)
+    for p in (d / "docs").glob(f"{doc_id}_*"):
+        p.unlink(missing_ok=True)
+    (d / "text" / f"{doc_id}.txt").unlink(missing_ok=True)
+    return {"deleted": doc_id}
+
+
+@app.get("/api/workrooms/{workroom_id}/search")
+def search_workroom(workroom_id: str, q: str = "", top: int = 5):
+    if not get_workroom(workroom_id):
+        raise HTTPException(404, "Workroom not found")
+    if not (q or "").strip():
+        raise HTTPException(400, "Type something to search for.")
+    return _search_workroom(workroom_id, q.strip(), top_n=max(1, min(int(top), 10)))
+
+
+@app.post("/api/workrooms/{workroom_id}/ask")
+def ask_workroom(workroom_id: str, body: dict):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "Ask a question about the documents in this workroom.")
+    provider = (body.get("provider") or workroom.get("provider") or DEFAULT_PROVIDER).lower()
+    if provider not in PROVIDERS:
+        provider = DEFAULT_PROVIDER
+    cfg = get_provider_config(provider)
+    model = (body.get("model") or workroom.get("model") or "").strip() or cfg["default_model"]
+    hits = _search_workroom(workroom_id, question, top_n=5)
+    is_local = provider in _LOCAL_PROVIDERS
+    force = body.get("redact")
+    do_redact = bool(force) if force is not None else (not is_local)
+    ask = {"id": uuid.uuid4().hex[:8], "question": question, "provider": provider,
+           "model": model, "sources": hits, "ts": int(time.time()),
+           "redacted": {"applied": do_redact, "counts": {}}}
+    if not hits:
+        ask["answer"] = ("I could not find anything about that in this workroom's "
+                         "documents. Add the document it is in, or ask it a different way.")
+        asks = load_workroom_asks(workroom_id)
+        asks.append(ask)
+        save_workroom_asks(workroom_id, asks)
+        return ask
+    # Build the model's context from the matching passages only.
+    mapping = {}
+    passages = []
+    for i, h in enumerate(hits):
+        text = h["excerpt"]
+        if do_redact:
+            text, counts, _map = _redact_text(text, workroom.get("redact_terms") or [])
+            mapping.update(_map)
+            for k, v in counts.items():
+                ask["redacted"]["counts"][k] = ask["redacted"]["counts"].get(k, 0) + v
+        passages.append(f"[Source {i + 1}: {h['filename']}, passage {h['chunk'] + 1}]\n{text}")
+    context = "\n\n".join(passages)
+    if MOCK_MODE:
+        lines = [f"{i + 1}. {h['filename']} (passage {h['chunk'] + 1}): {h['excerpt'][:300]}"
+                 for i, h in enumerate(hits)]
+        ask["answer"] = ("[MOCK MODE — no local model running] Based on the documents in "
+                         "this workroom, here is what I found:\n\n" + "\n\n".join(lines) +
+                         "\n\nWith a model running, the answer is written from these same "
+                         "passages, with each claim tied to its source above. If the answer "
+                         "is not in the documents, I say so instead of guessing.")
+    else:
+        system = ("You answer questions using ONLY the document passages below. "
+                  "Every claim in your answer must come from a passage — cite it as "
+                  "[Source N]. Never invent a price, measurement, date, name or figure "
+                  "that is not in the passages. If the passages do not contain the "
+                  "answer, say so plainly and say which document would settle it. "
+                  "Answer in plain language, short where possible.")
+        try:
+            reply = llm_chat([{"role": "system", "content": system},
+                              {"role": "user", "content": f"Question: {question}\n\nPassages:\n{context}"}],
+                             model, provider)
+            ask["answer"] = _unredact_text(reply, mapping) if do_redact else reply
+        except Exception as e:
+            ask["error"] = str(e)
+            ask["answer"] = (f"Could not get an answer from {cfg['label']}: {e}. "
+                             "The matching passages are saved with this question below, "
+                             "so you can still read them. Switch the workroom to LM Studio "
+                             "to work offline, or check the provider key in Settings > Secure store.")
+    asks = load_workroom_asks(workroom_id)
+    asks.append(ask)
+    save_workroom_asks(workroom_id, asks)
+    return ask
+
+
+@app.get("/api/workrooms/{workroom_id}/asks")
+def list_workroom_asks(workroom_id: str):
+    if not get_workroom(workroom_id):
+        raise HTTPException(404, "Workroom not found")
+    return load_workroom_asks(workroom_id)
+
+
+@app.post("/api/workrooms/{workroom_id}/notes", status_code=201)
+def add_workroom_note(workroom_id: str, body: dict):
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Write a note first.")
+    note = {"id": uuid.uuid4().hex[:8], "text": text,
+            "ask_id": (body.get("ask_id") or "").strip(),
+            "ts": int(time.time())}
+    workrooms = load_workrooms()
+    for w in workrooms:
+        if w["id"] == workroom_id:
+            w.setdefault("notes", []).append(note)
+    save_workrooms(workrooms)
+    return note
+
+
+@app.get("/api/workrooms/{workroom_id}/export")
+def export_workroom(workroom_id: str):
+    """One JSON package: workroom, documents (with text), questions and
+    answers with their sources, redaction log and reviewer notes — so
+    another reviewer can pick the work up and check it."""
+    workroom = get_workroom(workroom_id)
+    if not workroom:
+        raise HTTPException(404, "Workroom not found")
+    text_dir = _workroom_dir(workroom_id) / "text"
+    docs = []
+    for doc in workroom.get("docs", []):
+        p = text_dir / f"{doc['id']}.txt"
+        docs.append({"filename": doc["filename"], "added_at": doc.get("added_at"),
+                     "note": doc.get("note", ""),
+                     "text": p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""})
+    package = {"app": "LocalBotz", "version": APP_VERSION, "exported_at": int(time.time()),
+               "workroom": {k: v for k, v in workroom.items() if k != "docs"},
+               "documents": docs, "asks": load_workroom_asks(workroom_id),
+               "notes": workroom.get("notes", [])}
+    return Response(content=json.dumps(package, indent=2, ensure_ascii=False),
+                    media_type="application/json",
+                    headers={"Content-Disposition": f"attachment; filename=workroom-{workroom_id}.json"})
 
 @app.delete("/api/bots/{bot_id}")
 def delete_bot(bot_id: str):
