@@ -182,10 +182,10 @@ PROVIDERS = {
     # VPS_API_TOKEN). Default model is filled in from the gateway's
     # GET /v1/models list when it is reachable.
     "vps":       {"label": "VPS Premium", "kind": "openai",
-                  "base_url": "https://YOUR-VPS/v1", "default_model": "",
+                  "base_url": "https://api.localbotz.io/v1", "default_model": "",
                   "key_env": "VPS_API_TOKEN", "env_base": "VPS_BASE_URL"},
 }
-VPS_PLACEHOLDER_URL = "https://YOUR-VPS/v1"
+VPS_PLACEHOLDER_URL = "https://api.localbotz.io/v1"
 
 def get_vps_base_url() -> str:
     # VPS base URL: env first, then the value saved in Settings > Connectors
@@ -1903,7 +1903,7 @@ def vps_register(body: dict):
     if not name or not email or "@" not in email:
         raise HTTPException(400, "Name and a valid email are required to register.")
     if not base_url or base_url == VPS_PLACEHOLDER_URL:
-        raise HTTPException(400, "Set the VPS base URL first (e.g. https://YOUR-VPS/v1).")
+        raise HTTPException(400, "Set the VPS base URL first (e.g. https://api.localbotz.io/v1).")
     try:
         with _http_client(timeout=20, external=not _is_local_url(base_url)) as c:
             r = c.post(f"{base_url}/register", json={"name": name, "email": email})

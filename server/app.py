@@ -236,6 +236,9 @@ def health():
 @app.get("/v1/models")
 def list_models(request: Request):
     _auth(request)  # token, workspace_id
+    return {"object": "list",
+            "data": [{"id": m, "object": "model", "owned_by": _owner_of(m)}
+                     for m in PREMIUM_MODELS]}
 
 @app.get("/v1/pricing")
 def public_pricing():
