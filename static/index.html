@@ -468,6 +468,12 @@ async function connectorsHtml(isSettings){
   <label>Your VPS token (stored in Secure store, never shown)</label><input id="vps-token" type="password" autocomplete="off" placeholder="Leave blank to keep the current token">
   <div style="margin:8px 0"><button id="vps-save">Save VPS Premium</button> <button id="vps-test" class="ghost">Test connection</button> <button id="vps-models" class="ghost">List premium models</button></div>
   <div id="vps-models-out"></div>
+  <h3>📝 No token yet? Register on the VPS</h3>
+  <p class="note">If you installed LocalBotz and don't have a premium token, register on the VPS server: give your name and email, and the server creates your workspace and gives you your own token. The token is saved here automatically — you don't have to paste anything. (If registration is closed on that server, ask the VPS owner for a token instead.)</p>
+  <label>Your name</label><input id="vps-reg-name" type="text" placeholder="Your name">
+  <label>Email</label><input id="vps-reg-email" type="email" placeholder="you@example.com">
+  <div style="margin:8px 0"><button id="vps-register">Register for Premium</button></div>
+  <div id="vps-register-out"></div>
   <h3>Service connectors</h3><table><tr><th>Service</th><th>Auth</th><th>Status</th><th>Setup</th><th></th></tr>${svcRows}</table>
   <p class="note">Keys are added in Settings &gt; Secure store. Test connection probes the provider and updates its status.</p><div id="page-msg"></div>`;
 }
@@ -602,6 +608,21 @@ function bindPage(name){
   if(q('vps-save')) q('vps-save').onclick=async()=>{const body={base_url:q('vps-url').value.trim()}; const tok=q('vps-token').value.trim(); if(tok) body.token=tok; await api('/api/vps/config',{method:'POST',body:JSON.stringify(body)}); q('vps-token').value=''; await loadProviders(); msg('VPS Premium saved. Pick provider “VPS Premium” per bot to use it.'); renderPage(name);};
   if(q('vps-test')) q('vps-test').onclick=async()=>{const r=await api('/api/connectors/provider/vps/test',{method:'POST'}); msg(`VPS Premium: ${r.status} — ${r.detail||''}`);};
   if(q('vps-models')) q('vps-models').onclick=async()=>{const r=await api('/api/vps/models'); const out=$('vps-models-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Premium models on your VPS:</p><ul>${(r.models||[]).map(m=>`<li><code>${esc(m)}</code></li>`).join('')||'<li>None listed by the gateway.</li>'}</ul>`; msg(r.error||`${(r.models||[]).length} premium model(s) listed.`);};
+  if(q('vps-register')) q('vps-register').onclick=async()=>{
+    const out=$('vps-register-out');
+    const name=q('vps-reg-name').value.trim(), email=q('vps-reg-email').value.trim();
+    const base_url=q('vps-url').value.trim();
+    if(!name||!email){ if(out) out.innerHTML='<p class="note">Enter your name and email first.</p>'; return; }
+    if(!base_url){ if(out) out.innerHTML='<p class="note">Enter the VPS base URL above first (e.g. https://YOUR-VPS/v1).</p>'; return; }
+    if(out) out.innerHTML='<p class="note">Registering…</p>';
+    try{
+      const r=await api('/api/vps/register',{method:'POST',body:JSON.stringify({name,email,base_url})});
+      if(out) out.innerHTML=`<p class="note">✅ Registered! Workspace <code>${esc(r.workspace_id||'')}</code> for ${esc(r.email||email)}. Your token is saved — pick provider “VPS Premium” per bot to use premium models.</p>`;
+      await loadProviders(); msg('Registered for VPS Premium. Your token is saved.');
+    }catch(e){
+      if(out) out.innerHTML=`<p class="note">❌ Registration failed: ${esc(e.message||e)}</p>`;
+    }
+  };
 }
 loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };

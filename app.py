@@ -207,6 +207,48 @@ def vps_configured() -> bool:
     return bool(os.getenv("VPS_API_TOKEN")) and base != VPS_PLACEHOLDER_URL \
         and base.startswith(("http://", "https://"))
 
+# ---- VPS heartbeat: where this install is used -------------------------
+# On startup, if VPS Premium is configured, the app tells the VPS
+# gateway "this install exists": install id, app version, platform/OS.
+# That is how the owner's admin panel (GET /admin on the VPS) knows
+# where the software is used. No personal data, no chat or file content,
+# no provider keys — and it never blocks startup (background thread,
+# 10 s timeout, failures ignored). No VPS configured = nothing is sent.
+INSTALL_FILE = DATA_DIR / "install.json"
+
+def _get_install_id() -> str:
+    try:
+        data = _load_json(INSTALL_FILE, {})
+        if data.get("install_id"):
+            return str(data["install_id"])
+    except Exception:
+        pass
+    install_id = "inst_" + uuid.uuid4().hex[:16]
+    try:
+        INSTALL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        INSTALL_FILE.write_text(json.dumps({"install_id": install_id}), encoding="utf-8")
+    except Exception:
+        pass
+    return install_id
+
+def _send_vps_heartbeat():
+    try:
+        if MOCK_MODE or not vps_configured():
+            return
+        base = get_vps_base_url()
+        with _http_client(timeout=10, external=not _is_local_url(base)) as c:
+            c.post(f"{base}/heartbeat",
+                   headers={"Authorization": f"Bearer {os.getenv('VPS_API_TOKEN')}"},
+                   json={"install_id": _get_install_id(), "app_version": APP_VERSION,
+                         "platform": sys.platform,
+                         "os": f"{platform.system()} {platform.release()}"})
+    except Exception:
+        pass  # Heartbeat must never break the app.
+
+# NOTE: the startup hook that calls _send_vps_heartbeat lives just after
+# `app = FastAPI(...)` below — `app` does not exist yet at this point in
+# the file, so it cannot be registered here.
+
 def playwright_available() -> bool:
     try:
         import playwright  # noqa: F401
@@ -1708,6 +1750,13 @@ def meter_usage(ws_id: str, bot_id: str, provider: str, model: str, usage,
 app = FastAPI(title="LocalBotz", version="0.1.0")
 app.mount("/screenshots", StaticFiles(directory=SHOTS_DIR), name="screenshots")
 
+@app.on_event("startup")
+def _startup_heartbeat():
+    # VPS heartbeat (see _send_vps_heartbeat above): tells the VPS gateway
+    # this install exists, so the owner's admin panel can show where the
+    # software is used. Background thread, never blocks startup.
+    threading.Thread(target=_send_vps_heartbeat, daemon=True).start()
+
 class BotCreate(BaseModel):
     name: str
     instructions: str = ""
@@ -1805,6 +1854,45 @@ def set_vps_config(body: dict):
     if token:
         _set_env_key("VPS_API_TOKEN", token)
     return vps_config()
+
+@app.post("/api/vps/register")
+def vps_register(body: dict):
+    # Register this user on the VPS gateway: POST {base}/register with
+    # name + email. The gateway creates their workspace and returns their
+    # own token ONCE. We save the base URL + token the same way as the
+    # manual VPS setup (URL in the connectors store, token in .env).
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    base_url = (body.get("base_url") or get_vps_base_url() or "").strip().rstrip("/")
+    if not name or not email or "@" not in email:
+        raise HTTPException(400, "Name and a valid email are required to register.")
+    if not base_url or base_url == VPS_PLACEHOLDER_URL:
+        raise HTTPException(400, "Set the VPS base URL first (e.g. https://YOUR-VPS/v1).")
+    try:
+        with _http_client(timeout=20, external=not _is_local_url(base_url)) as c:
+            r = c.post(f"{base_url}/register", json={"name": name, "email": email})
+        if r.status_code == 409:
+            raise HTTPException(409, "This email is already registered on that VPS. If you lost your token, ask the VPS owner for a new one.")
+        if r.status_code == 403:
+            raise HTTPException(403, "Registration is closed on that VPS. Ask the VPS owner for a premium token.")
+        if r.status_code == 429:
+            raise HTTPException(429, "Registration limit reached for today on that VPS. Try again tomorrow.")
+        r.raise_for_status()
+        data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Could not reach the VPS gateway at {base_url}: {e}. Check the base URL and that the gateway is running.")
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(502, "The VPS gateway did not return a token.")
+    store = load_connectors_store()
+    store.setdefault("vps", {})["base_url"] = base_url
+    save_connectors_store(store)
+    _set_env_key("VPS_API_TOKEN", token)
+    return {"workspace_id": data.get("workspace_id"), "email": data.get("email"),
+            "configured": True,
+            "note": "Registered. Your token is saved in Secure store — pick provider 'VPS Premium' per bot to use premium models."}
 
 @app.get("/api/vps/models")
 def vps_models():

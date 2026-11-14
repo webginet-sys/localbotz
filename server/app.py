@@ -41,7 +41,10 @@ Run:
 import hashlib
 import json
 import os
+import re
+import secrets
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -69,6 +72,40 @@ _load_dotenv()
 PREMIUM_API_TOKEN = (os.getenv("PREMIUM_API_TOKEN") or "").strip()
 EXTRA_TOKENS = [t.strip() for t in (os.getenv("PREMIUM_API_TOKENS") or "").split(",") if t.strip()]
 VALID_TOKENS = {t for t in [PREMIUM_API_TOKEN, *EXTRA_TOKENS] if t}
+
+# ---- User registration -------------------------------------------------
+# Where users register: on this gateway, at POST /register (and the
+# sign-up page GET /register). A user gives a name + email, the gateway
+# creates their workspace and issues them their own token (returned once,
+# shown on the page and saved by the LocalBotz app). Only the token's
+# SHA-256 hash is stored, never the token itself.
+# REGISTRATION_OPEN=true (default) lets anyone sign up; set it to false
+# and only tokens you issue by hand (PREMIUM_API_TOKEN / PREMIUM_API_TOKENS)
+# work. ADMIN_TOKEN guards the admin list/disable endpoints below.
+REGISTRATION_OPEN = (os.getenv("REGISTRATION_OPEN", "true") or "true").strip().lower() in ("1", "true", "yes", "on")
+REGISTRATION_DAILY_LIMIT = int(os.getenv("REGISTRATION_DAILY_LIMIT", "100") or 100)
+ADMIN_TOKEN = (os.getenv("ADMIN_TOKEN") or "").strip()
+USERS_FILE = BASE_DIR / "data" / "users.json"
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+def _load_users():
+    try:
+        data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _save_users(users):
+    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    USAGE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+def _find_user_by_token(token: str):
+    h = hashlib.sha256(token.encode()).hexdigest()
+    for u in _load_users():
+        if u.get("token_hash") == h:
+            return u
+    return None
 
 # Premium models, configurable in .env — never hardcoded as the only list.
 # Default: Claude Sonnet, GPT, Gemini.
@@ -105,9 +142,11 @@ def _provider_key(key_env: str):
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()[:12]
 
-def _log_usage(token: str, model: str, provider: str, usage: dict):
+def _log_usage(token: str, model: str, provider: str, usage: dict, workspace_id: str = "", ip: str = ""):
     try:
         entry = {"ts": int(time.time()), "token_hash": _token_hash(token),
+                 "workspace_id": workspace_id or "",
+                 "ip": ip or "",
                  "model": model, "provider": provider,
                  "input_tokens": int((usage or {}).get("input_tokens")
                                      or (usage or {}).get("prompt_tokens") or 0),
@@ -118,17 +157,25 @@ def _log_usage(token: str, model: str, provider: str, usage: dict):
     except Exception:
         pass  # Usage logging must never break a chat reply.
 
-def _auth(request: Request) -> str:
-    """Require Authorization: Bearer <PREMIUM_API_TOKEN>. Returns the token."""
-    if not VALID_TOKENS:
-        raise HTTPException(503, "Premium gateway is not configured: PREMIUM_API_TOKEN is not set in the server .env.")
+def _auth(request: Request):
+    """Require Authorization: Bearer <token>. Accepts the master token(s)
+    from .env AND any per-user token issued by /register. Returns
+    (token, workspace_id) — workspace_id is "master" for master tokens,
+    or the user's workspace id for registered users."""
     auth = request.headers.get("authorization") or ""
     if not auth.lower().startswith("bearer "):
-        raise HTTPException(401, "Missing Authorization: Bearer token. Ask the VPS owner for a premium token.")
+        raise HTTPException(401, "Missing Authorization: Bearer token. Register at /register or ask the VPS owner for a premium token.")
     token = auth[7:].strip()
-    if token not in VALID_TOKENS:
-        raise HTTPException(401, "Invalid premium token.")
-    return token
+    if token in VALID_TOKENS:
+        return token, "master"
+    user = _find_user_by_token(token)
+    if user and user.get("status") == "active":
+        return token, user.get("workspace_id", "")
+    if user:
+        raise HTTPException(403, "This premium account is disabled. Contact the VPS owner.")
+    if not VALID_TOKENS:
+        raise HTTPException(503, "Premium gateway is not configured: PREMIUM_API_TOKEN is not set in the server .env.")
+    raise HTTPException(401, "Invalid premium token. Register at /register or ask the VPS owner for a premium token.")
 
 app = FastAPI(title="LocalBotz VPS Premium gateway", version=APP_VERSION)
 
@@ -142,10 +189,226 @@ def health():
 
 @app.get("/v1/models")
 def list_models(request: Request):
-    _auth(request)
+    _auth(request)  # token, workspace_id
     return {"object": "list",
             "data": [{"id": m, "object": "model", "created": 0,
                       "owned_by": _owner_of(m)} for m in PREMIUM_MODELS]}
+
+
+# ---------- registration ----------
+# Where users register: POST /register (JSON) or the sign-up page
+# GET /register. Both also work under /v1/ for clients whose base URL
+# already ends in /v1.
+REGISTER_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register — LocalBotz Premium</title>
+<style>body{font-family:system-ui,sans-serif;max-width:520px;margin:60px auto;padding:0 20px;color:#1f1b2e;line-height:1.6}
+h1{font-size:28px}label{display:block;font-weight:700;margin:14px 0 4px}
+input{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px}
+button{margin-top:18px;background:linear-gradient(90deg,#ec2a8a,#7c3aed);color:#fff;border:0;border-radius:999px;padding:14px 26px;font-size:17px;font-weight:700;cursor:pointer}
+#out{margin-top:20px;padding:16px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;display:none;word-break:break-all}
+code{background:#f3f0fa;padding:2px 6px;border-radius:6px}</style></head><body>
+<h1>Register for LocalBotz Premium</h1>
+<p>Sign up to use premium models (Claude, GPT, Gemini) from this server.
+Your provider keys stay on the server — you only get a token, which you
+paste into the LocalBotz app under Settings &gt; Connectors &gt; VPS Premium.</p>
+<form id="f"><label>Your name</label><input id="name" required>
+<label>Email</label><input id="email" type="email" required>
+<button type="submit">Register</button></form>
+<div id="out"></div>
+<script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();
+const r=await fetch('/register',{method:'POST',headers:{'content-type':'application/json'},
+body:JSON.stringify({name:document.getElementById('name').value,email:document.getElementById('email').value})});
+const d=await r.json();const o=document.getElementById('out');o.style.display='block';
+if(!r.ok){o.style.background='#fef2f2';o.style.borderColor='#fecaca';o.textContent=d.detail||'Registration failed.';return;}
+o.innerHTML='Registered! Your workspace is <code>'+d.workspace_id+'</code>.<br>Your token (shown once — copy it now):<br><code>'+d.token+'</code><br><br>In the LocalBotz app, go to Settings &gt; Connectors &gt; VPS Premium, paste this token, and save.';};</script>
+</body></html>"""
+
+@app.get("/register")
+@app.get("/v1/register")
+def register_page():
+    from fastapi.responses import HTMLResponse
+    if not REGISTRATION_OPEN:
+        return HTMLResponse("<h1>Registration is closed</h1><p>Ask the VPS owner for a premium token.</p>", status_code=403)
+    return HTMLResponse(REGISTER_PAGE)
+
+@app.post("/register")
+@app.post("/v1/register")
+async def register(request: Request):
+    if not REGISTRATION_OPEN:
+        raise HTTPException(403, "Registration is closed. Ask the VPS owner for a premium token.")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    if not name:
+        raise HTTPException(400, "Name is required.")
+    if not EMAIL_RE.match(email):
+        raise HTTPException(400, "A valid email address is required.")
+    users = _load_users()
+    if any(u.get("email") == email for u in users):
+        raise HTTPException(409, "This email is already registered. If you lost your token, ask the VPS owner for a new one.")
+    today = datetime.now(timezone.utc).date().isoformat()
+    if sum(1 for u in users if (u.get("created") or "")[:10] == today) >= REGISTRATION_DAILY_LIMIT:
+        raise HTTPException(429, "Registration limit reached for today. Try again tomorrow.")
+    token = "lbx_" + secrets.token_urlsafe(32)
+    workspace_id = "ws_" + secrets.token_hex(4)
+    users.append({"workspace_id": workspace_id, "name": name, "email": email,
+                  "token_hash": hashlib.sha256(token.encode()).hexdigest(),
+                  "status": "active", "created": datetime.now(timezone.utc).isoformat()})
+    _save_users(users)
+    # The token is returned ONCE here and never stored in plain text.
+    return {"workspace_id": workspace_id, "email": email,
+            "token": token,
+            "note": "Save this token now — it is shown once. Paste it in the LocalBotz app under Settings > Connectors > VPS Premium."}
+
+def _require_admin(request: Request):
+    if not ADMIN_TOKEN:
+        raise HTTPException(503, "ADMIN_TOKEN is not set in the server .env.")
+    if (request.headers.get("x-admin-token") or "") != ADMIN_TOKEN:
+        raise HTTPException(401, "Admin token required (X-Admin-Token header).")
+
+@app.get("/admin/users")
+def admin_list_users(request: Request):
+    _require_admin(request)
+    return [{"workspace_id": u.get("workspace_id"), "name": u.get("name"),
+             "email": u.get("email"), "status": u.get("status"),
+             "created": u.get("created")} for u in _load_users()]
+
+@app.post("/admin/users/{workspace_id}/disable")
+def admin_disable_user(workspace_id: str, request: Request):
+    _require_admin(request)
+    users = _load_users()
+    for u in users:
+        if u.get("workspace_id") == workspace_id:
+            u["status"] = "disabled"
+            _save_users(users)
+            return {"workspace_id": workspace_id, "status": "disabled"}
+    raise HTTPException(404, "No such workspace.")
+
+@app.post("/admin/users/{workspace_id}/enable")
+def admin_enable_user(workspace_id: str, request: Request):
+    _require_admin(request)
+    users = _load_users()
+    for u in users:
+        if u.get("workspace_id") == workspace_id:
+            u["status"] = "active"
+            _save_users(users)
+            return {"workspace_id": workspace_id, "status": "active"}
+    raise HTTPException(404, "No such workspace.")
+
+
+# ---------- installs, usage, admin panel ----------
+# The admin panel (GET /admin, file server/admin.html) is where the VPS
+# owner manages where the software is used and what it logs — like the
+# admin side of abacus.ai. It shows: registered users/workspaces, every
+# install that has phoned home (heartbeat), and the usage log.
+# What is logged: per chat request — time, workspace, model, provider,
+# input/output tokens, client IP. Message content is NEVER logged.
+# Heartbeat (POST /v1/heartbeat, needs a valid token): install id, app
+# version, platform/OS, first/last seen. No personal data, no file or
+# chat content. Only sent when the client has VPS Premium configured.
+INSTALLS_FILE = BASE_DIR / "data" / "installs.json"
+
+def _load_installs():
+    try:
+        data = json.loads(INSTALLS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _save_installs(installs):
+    INSTALLS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    INSTALLS_FILE.write_text(json.dumps(installs, indent=2), encoding="utf-8")
+
+def _load_usage():
+    try:
+        lines = USAGE_LOG.read_text(encoding="utf-8").splitlines()
+        return [json.loads(x) for x in lines if x.strip()]
+    except Exception:
+        return []
+
+@app.post("/v1/heartbeat")
+async def heartbeat(request: Request):
+    token, workspace_id = _auth(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    install_id = (body.get("install_id") or "").strip()
+    if not install_id:
+        raise HTTPException(400, "install_id is required.")
+    now = datetime.now(timezone.utc).isoformat()
+    installs = _load_installs()
+    for inst in installs:
+        if inst.get("install_id") == install_id:
+            inst["last_seen"] = now
+            inst["workspace_id"] = workspace_id
+            inst["app_version"] = (body.get("app_version") or inst.get("app_version") or "")
+            inst["platform"] = (body.get("platform") or inst.get("platform") or "")
+            inst["os"] = (body.get("os") or inst.get("os") or "")
+            inst["ip"] = (request.client.host if request.client else "") or inst.get("ip", "")
+            _save_installs(installs)
+            return {"install_id": install_id, "workspace_id": workspace_id, "status": "ok"}
+    installs.append({"install_id": install_id, "workspace_id": workspace_id,
+                     "app_version": (body.get("app_version") or ""),
+                     "platform": (body.get("platform") or ""),
+                     "os": (body.get("os") or ""),
+                     "ip": (request.client.host if request.client else ""),
+                     "first_seen": now, "last_seen": now})
+    _save_installs(installs)
+    return {"install_id": install_id, "workspace_id": workspace_id, "status": "ok"}
+
+@app.get("/admin")
+def admin_panel():
+    from fastapi.responses import HTMLResponse, FileResponse
+    page = BASE_DIR / "admin.html"
+    if page.exists():
+        return FileResponse(page, media_type="text/html")
+    return HTMLResponse("<h1>Admin panel</h1><p>admin.html is missing on this server.</p>", status_code=404)
+
+@app.get("/admin/stats")
+def admin_stats(request: Request):
+    _require_admin(request)
+    users = _load_users()
+    installs = _load_installs()
+    usage = _load_usage()
+    now = int(time.time())
+    day_ago = now - 86400
+    per_model, per_workspace = {}, {}
+    in_tok = out_tok = 0
+    for u in usage:
+        per_model[u.get("model", "?")] = per_model.get(u.get("model", "?"), 0) + 1
+        ws = u.get("workspace_id") or "master"
+        per_workspace[ws] = per_workspace.get(ws, 0) + 1
+        in_tok += int(u.get("input_tokens") or 0)
+        out_tok += int(u.get("output_tokens") or 0)
+    return {"users_total": len(users),
+            "users_active": sum(1 for u in users if u.get("status") == "active"),
+            "users_disabled": sum(1 for u in users if u.get("status") != "active"),
+            "installs_total": len(installs),
+            "installs_last_24h": sum(1 for i in installs
+                                     if i.get("last_seen", "") >= datetime.fromtimestamp(day_ago, timezone.utc).isoformat()),
+            "requests_total": len(usage),
+            "requests_last_24h": sum(1 for u in usage if int(u.get("ts") or 0) >= day_ago),
+            "input_tokens_total": in_tok, "output_tokens_total": out_tok,
+            "per_model": per_model, "per_workspace": per_workspace,
+            "registration_open": REGISTRATION_OPEN,
+            "premium_models": PREMIUM_MODELS}
+
+@app.get("/admin/installs")
+def admin_installs(request: Request):
+    _require_admin(request)
+    return sorted(_load_installs(), key=lambda i: i.get("last_seen", ""), reverse=True)
+
+@app.get("/admin/usage")
+def admin_usage(request: Request, limit: int = 100):
+    _require_admin(request)
+    entries = _load_usage()
+    entries.sort(key=lambda u: int(u.get("ts") or 0), reverse=True)
+    return entries[:max(1, min(int(limit or 100), 500))]
 
 # ---------- provider clients ----------
 async def _chat_openai_compatible(model: str, messages, tools, base_url: str,
@@ -237,7 +500,7 @@ async def _chat_anthropic(model: str, messages, tools, key: str):
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    token = _auth(request)
+    token, workspace_id = _auth(request)
     try:
         body = await request.json()
     except Exception:
@@ -266,7 +529,8 @@ async def chat_completions(request: Request):
     else:
         result = await _chat_openai_compatible(model, messages, tools,
                                                base_url, key, temperature)
-    _log_usage(token, model, provider, result.get("usage"))
+    _log_usage(token, model, provider, result.get("usage"), workspace_id,
+               ip=(request.client.host if request.client else ""))
     return JSONResponse(result)
 
 if __name__ == "__main__":

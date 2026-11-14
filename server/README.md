@@ -203,9 +203,58 @@ a missing provider key on the VPS gets `502` naming the provider
 
 Every completed chat is appended to `usage.log` (JSON lines):
 timestamp, a SHA-256 hash prefix of the token (never the token
-itself), model, provider, input/output tokens. No message content
-and no provider keys are ever logged. Rotate it if it grows:
-`logrotate` or just `> usage.log` when the gateway is stopped.
+itself), workspace id, client IP, model, provider, input/output
+tokens. No message content and no provider keys are ever logged.
+Rotate it if it grows: `logrotate` or just `> usage.log` when the
+gateway is stopped.
+
+## Where users register
+
+When someone installs LocalBotz and has no premium token, they
+register **on this server** — there is no separate website to sign
+up on. Two ways in:
+
+1. **In the app:** Settings → Connectors → VPS Premium → "No token
+   yet? Register on the VPS" — name + email. The app calls
+   `POST /register` here and saves the token it gets back.
+2. **In a browser:** open the sign-up page `GET /register` on the
+   gateway (same host as the gateway, e.g. `https://YOUR-VPS/register`)
+   — name + email, and the page shows the token once, to paste into
+   the app under Settings → Connectors → VPS Premium.
+
+`POST /register` (no auth) takes `{"name", "email"}` and returns
+`{"workspace_id", "email", "token"}`. The token is shown **once** —
+only its SHA-256 hash is stored, in `data/users.json`, next to the
+name, email, workspace id and status. One account per email (`409`
+if it already exists), invalid email gets `400`, and
+`REGISTRATION_DAILY_LIMIT` (default 100/day) caps sign-ups.
+Set `REGISTRATION_OPEN=false` in `.env` to close sign-ups — then
+only tokens you issue by hand (`PREMIUM_API_TOKEN` /
+`PREMIUM_API_TOKENS`) work. Registered users' tokens work exactly
+like the master token for `/v1/models` and `/v1/chat/completions`.
+
+## Admin panel — where the software is used, and what it logs
+
+Open `GET /admin` in a browser and enter the `ADMIN_TOKEN` from
+`.env` (header `X-Admin-Token` for the API). The panel shows:
+
+- **Overview** — registered users (active / disabled), installs
+  seen (and in the last 24h), premium requests (total / last 24h),
+  total tokens in+out, whether registration is open, premium models.
+- **Registered users / workspaces** — name, email, status, when
+  they registered. Disable a workspace to cut off its premium
+  access at once; enable it again just as fast.
+- **Installs** — where the software is used. Every LocalBotz install
+  with VPS Premium configured sends a heartbeat when it starts
+  (`POST /v1/heartbeat`): install id, app version, platform/OS,
+  first/last seen, IP. No personal data, no chat content.
+- **Usage log** — one line per premium chat request: time, workspace,
+  model, provider, tokens in/out, client IP. Message content is
+  never logged.
+
+API (all need `X-Admin-Token`): `GET /admin/stats`,
+`GET /admin/users`, `POST /admin/users/<workspace>/disable|enable`,
+`GET /admin/installs`, `GET /admin/usage?limit=100`.
 
 ## Security notes
 

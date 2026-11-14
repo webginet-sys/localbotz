@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalBotz Admin — where the software is used, and what it logs</title>
+<style>
+  :root { --pink:#ec2a8a; --purple:#7c3aed; --ink:#1f1b2e; --muted:#5b5566; --line:#e9e4f2; --soft:#faf7ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#fff; line-height:1.6; }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 20px 60px; }
+  header { border-bottom:1px solid var(--line); padding:20px 0; }
+  header h1 { margin:0; font-size:26px; }
+  header h1 span { background:linear-gradient(90deg,var(--pink),var(--purple)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header p { color:var(--muted); margin:4px 0 0; }
+  h2 { font-size:22px; margin:36px 0 8px; }
+  p.note { color:var(--muted); }
+  .login { margin-top:24px; }
+  .login input { padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; width:320px; max-width:100%; }
+  button { background:linear-gradient(90deg,var(--pink),var(--purple)); color:#fff; border:0; border-radius:999px; padding:10px 20px; font-size:15px; font-weight:700; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--purple); border:2px solid var(--purple); }
+  button.small { padding:6px 12px; font-size:13px; }
+  button.danger { background:#dc2626; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-top:8px; }
+  .stat { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--soft); }
+  .stat b { font-size:28px; display:block; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:var(--soft); }
+  code { background:#f3f0fa; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:0.92em; word-break:break-all; }
+  .err { color:#dc2626; font-weight:700; }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>LocalBotz <span>Admin</span></h1>
+  <p>Where the software is used, and what it logs. Only the VPS owner sees this page.</p>
+</div></header>
+<div class="wrap">
+  <div class="login" id="login">
+    <label for="token"><b>Admin token</b> <span class="muted">(ADMIN_TOKEN from the server .env)</span></label><br>
+    <input id="token" type="password" autocomplete="off" placeholder="Paste your admin token">
+    <button onclick="login()">Open admin panel</button>
+    <p class="note">The token is kept only in this browser (localStorage) and sent as the X-Admin-Token header.</p>
+    <p id="login-err" class="err"></p>
+  </div>
+
+  <div id="panel" style="display:none">
+    <p><button class="ghost" onclick="loadAll()">↻ Refresh</button> <button class="ghost" onclick="logout()">Log out</button></p>
+    <h2>Overview</h2>
+    <div class="stats" id="stats"></div>
+    <p class="note" id="reg-note"></p>
+
+    <h2>Registered users / workspaces</h2>
+    <p class="note">People who registered on this server (name + email). Each has their own token; disable one to cut off their premium access.</p>
+    <table><thead><tr><th>Workspace</th><th>Name</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr></thead><tbody id="users"></tbody></table>
+
+    <h2>Installs — where the software is used</h2>
+    <p class="note">Every LocalBotz install that has VPS Premium configured sends a heartbeat when it starts: install id, app version, platform/OS, and when it was last seen. No personal data, no chat content.</p>
+    <table><thead><tr><th>Install</th><th>Workspace</th><th>Version</th><th>Platform / OS</th><th>IP</th><th>First seen</th><th>Last seen</th></tr></thead><tbody id="installs"></tbody></table>
+
+    <h2>Usage log</h2>
+    <p class="note">One line per premium chat request: time, workspace, model, provider, tokens in/out, client IP. Message content is never logged.</p>
+    <table><thead><tr><th>Time</th><th>Workspace</th><th>Model</th><th>Provider</th><th>Tokens in / out</th><th>IP</th></tr></thead><tbody id="usage"></tbody></table>
+  </div>
+</div>
+<script>
+let TOKEN = localStorage.getItem('lb-admin-token') || '';
+async function api(path, opts={}) {
+  const r = await fetch(path, {headers:{'X-Admin-Token': TOKEN, ...(opts.headers||{})}, ...opts});
+  if (r.status === 401) throw new Error('Wrong admin token.');
+  if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || ('HTTP ' + r.status)); }
+  return r.json();
+}
+function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtTime(iso){ if(!iso) return '—'; const d=new Date(iso); return isNaN(d)?esc(iso):d.toLocaleString(); }
+function fmtTs(ts){ if(!ts) return '—'; return new Date(ts*1000).toLocaleString(); }
+async function login(){
+  TOKEN = document.getElementById('token').value.trim();
+  if(!TOKEN){ document.getElementById('login-err').textContent='Enter the admin token.'; return; }
+  try { await api('/admin/stats'); localStorage.setItem('lb-admin-token', TOKEN);
+    document.getElementById('login').style.display='none';
+    document.getElementById('panel').style.display='block';
+    loadAll();
+  } catch(e){ document.getElementById('login-err').textContent=e.message; }
+}
+function logout(){ localStorage.removeItem('lb-admin-token'); TOKEN=''; location.reload(); }
+async function loadAll(){
+  try{
+    const s = await api('/admin/stats');
+    document.getElementById('stats').innerHTML =
+      `<div class="stat"><b>${s.users_total}</b><span>Registered users</span></div>`+
+      `<div class="stat"><b>${s.users_active}</b><span>Active / ${s.users_disabled} disabled</span></div>`+
+      `<div class="stat"><b>${s.installs_total}</b><span>Installs seen (${s.installs_last_24h} in last 24h)</span></div>`+
+      `<div class="stat"><b>${s.requests_total}</b><span>Premium requests (${s.requests_last_24h} in last 24h)</span></div>`+
+      `<div class="stat"><b>${(s.input_tokens_total+s.output_tokens_total).toLocaleString()}</b><span>Total tokens in+out</span></div>`;
+    document.getElementById('reg-note').textContent =
+      'Registration is ' + (s.registration_open ? 'OPEN — anyone can sign up at /register.' : 'CLOSED — only tokens you issue by hand work.') +
+      ' Premium models: ' + (s.premium_models||[]).join(', ') + '.';
+    const users = await api('/admin/users');
+    document.getElementById('users').innerHTML = users.length ? users.map(u=>
+      `<tr><td><code>${esc(u.workspace_id)}</code></td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.status)}</td><td>${fmtTime(u.created)}</td><td>${u.status==='active'
+        ? `<button class="small danger" onclick="setUser('${esc(u.workspace_id)}','disable')">Disable</button>`
+        : `<button class="small" onclick="setUser('${esc(u.workspace_id)}','enable')">Enable</button>`}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted">No users registered yet. Sign-ups appear here after someone registers at /register.</td></tr>';
+    const installs = await api('/admin/installs');
+    document.getElementById('installs').innerHTML = installs.length ? installs.map(i=>
+      `<tr><td><code>${esc(i.install_id)}</code></td><td><code>${esc(i.workspace_id)}</code></td><td>${esc(i.app_version||'—')}</td><td>${esc(i.platform||'—')} ${esc(i.os||'')}</td><td>${esc(i.ip||'—')}</td><td>${fmtTime(i.first_seen)}</td><td>${fmtTime(i.last_seen)}</td></tr>`).join('')
+      : '<tr><td colspan="7" class="muted">No installs have phoned home yet. An install appears here after it starts with VPS Premium configured.</td></tr>';
+    const usage = await api('/admin/usage?limit=100');
+    document.getElementById('usage').innerHTML = usage.length ? usage.map(u=>
+      `<tr><td>${fmtTs(u.ts)}</td><td><code>${esc(u.workspace_id||'master')}</code></td><td><code>${esc(u.model)}</code></td><td>${esc(u.provider)}</td><td>${(u.input_tokens||0).toLocaleString()} / ${(u.output_tokens||0).toLocaleString()}</td><td>${esc(u.ip||'—')}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted">No premium requests logged yet.</td></tr>';
+  }catch(e){ alert(e.message); }
+}
+async function setUser(ws, action){
+  if(!confirm(action==='disable' ? 'Disable this workspace? Its premium token stops working.' : 'Enable this workspace again?')) return;
+  await api('/admin/users/'+encodeURIComponent(ws)+'/'+action, {method:'POST'});
+  loadAll();
+}
+if (TOKEN) { document.getElementById('token').value = TOKEN; login(); }
+</script>
+</body>
+</html>
