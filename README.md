@@ -1,7 +1,7 @@
 ![LocalBotz — animated logo](assets/logo-animated.gif)
 <!-- Static logo: assets/logo.png. Short video version: assets/logo-animated.mp4 -->
 
-# LocalBotz — a simpler, fully local clone of AbacusAI Bot
+# LocalBotz — a simpler, 
 
 A personal-agent app you run on your own computer. No Electron, no cloud,
 no API keys. Bots have their own name, instructions/persona, model, chat
