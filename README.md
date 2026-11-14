@@ -10,6 +10,8 @@ history and memory file. The agent can search the web, drive a real browser
 commands — driven by a downloaded local model in **LM Studio**.
 
 > **MIT licensed and built in the open.** [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).
+>
+> **Landing page:** [landing.html](landing.html) — also at `docs/index.html` for GitHub Pages. Same style as the Abacus AI Bot page: hero, try-it prompts, what you can build, open source, and download.
 
 ## Download — for everyone
 
