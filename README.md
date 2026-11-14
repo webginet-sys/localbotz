@@ -23,17 +23,27 @@ downloaded an app from GitHub before, start here:
 
 GitHub repo: https://github.com/webginet-sys/localbotz
 
-## Install from GitHub (terminal)
+## Install — no Git needed
+
+**You do not need Git, and you do not need a terminal.** Git is only for
+developers who want to clone the code — normal users never need it.
+
+1. Download the ZIP: https://github.com/webginet-sys/localbotz/archive/refs/heads/main.zip
+   — or go to https://github.com/webginet-sys/localbotz and click
+   **Code → Download ZIP**.
+2. Extract the ZIP.
+3. Run it — Windows: double-click `start.bat`, macOS: double-click
+   `start.command`, Linux: `./start.sh`
+   (first run: `chmod +x start.sh start.command`). The starter creates a
+   venv, installs the dependencies and starts the app on
+   http://localhost:8000. It only needs Python — no Git anywhere.
+
+For developers only (optional, needs Git installed):
 
 ```bash
 git clone https://github.com/webginet-sys/localbotz.git
 cd localbotz
 ```
-
-Then run it — Windows: `start.bat`, macOS: double-click `start.command`
-(or `./start.sh`), Linux: `./start.sh`
-(first run: `chmod +x start.sh start.command`). The starter creates a venv, installs
-the dependencies and starts the app on http://localhost:8000.
 
 **Lightweight install** (core only, no browser automation — smaller and
 faster to download, and the app still runs; browser tools just say
