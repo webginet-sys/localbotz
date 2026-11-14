@@ -19,7 +19,7 @@ downloaded an app from GitHub before, start here:
   steps in [DOWNLOAD.md](DOWNLOAD.md).
 - **🪟 [Download for Windows](https://github.com/webginet-sys/localbotz)** — Windows 10 / 11. On GitHub, click **Code → Download ZIP**, extract it, then double-click `start.bat`.
 - **🍎 [Download for Mac](https://github.com/webginet-sys/localbotz)** — Apple Silicon (M1 / M2 / M3 / M4) and Intel. On GitHub, click **Code → Download ZIP**, open the ZIP, then double-click `start.command`.
-- Then open your browser to `http://localhost:8000`. First, set up LM Studio + Qwen3.5 (free, 5 minutes, once) — the download page walks you through it step by step.
+- Then open your browser to `http://localhost:8000`. **Just install LocalBotz — that's it.** Double-click `install.bat` (Windows) or `start.command` (Mac) and it downloads and sets up Python, LM Studio and the Qwen3.5 model for you in that one step. No Git, no separate Python download, no separate LM Studio download.
 
 GitHub repo: https://github.com/webginet-sys/localbotz
 

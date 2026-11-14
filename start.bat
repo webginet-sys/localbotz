@@ -1,41 +1,152 @@
 @echo off
-REM LocalBotz — Windows starter (Command Prompt or PowerShell).
-REM Installs the lightweight core first (fastapi, uvicorn, httpx), then
-REM browser automation (Playwright + Chromium) unless you ask for light.
-REM Usage:  start.bat                 (normal, needs LM Studio running)
+REM LocalBotz — Windows starter. Just install LocalBotz, that's it.
+REM
+REM Double-click this file (or install.bat, which calls this file).
+REM The user does NOT download anything else separately — no Git,
+REM no Python, no LM Studio, no model. This one step does it all:
+REM   1. Python 3.12 — downloaded and installed if missing (per-user,
+REM      no admin needed, added to PATH)
+REM   2. LM Studio — installed if missing (winget, per-user)
+REM   3. Qwen3.5 model — downloaded with LM Studio's own `lms` tool,
+REM      then loaded, then the local server started on port 1234
+REM   4. LocalBotz — virtual environment, Python packages, then the
+REM      app on http://127.0.0.1:8000
+REM
+REM First run needs internet and takes a while (Python ~30 MB,
+REM LM Studio several hundred MB, Qwen3.5 model ~6 GB). Later runs
+REM are fast — everything already installed is skipped.
+REM
+REM Usage:  start.bat                 (normal — full auto-setup, then run)
 REM         start.bat --mock          (test without a model)
 REM         start.bat --light         (lightweight: core only, no browser)
 REM         start.bat --no-browser    (same as --light)
 REM         start.bat --with-browser  (explicit: install browser deps too)
-REM The --light / --no-browser / --with-browser flags are consumed here
-REM and are NOT passed to app.py; other flags (--mock, --port) are passed on.
-REM In PowerShell, run:  .\start.bat  -- or:  .\start.bat --mock
-REM (If PowerShell blocks scripts, this is a .bat file, not a .ps1, so
-REM  it runs normally; you can also double-click it in Explorer.)
+REM         start.bat --skip-setup    (skip Python / LM Studio / model setup,
+REM                                    just start the app — use only if you
+REM                                    already set Python + LM Studio up)
+REM The --light / --no-browser / --with-browser / --skip-setup flags are
+REM consumed here and are NOT passed to app.py; other flags (--mock,
+REM --port) are passed on.
+REM In PowerShell, run:  .\start.bat  -- or double-click it in Explorer.
 
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set BROWSER=1
+set SKIPSETUP=0
 set APP_ARGS=
 for %%A in (%*) do (
   if "%%A"=="--light" set BROWSER=0
   if "%%A"=="--no-browser" set BROWSER=0
   if "%%A"=="--with-browser" set BROWSER=1
-  if not "%%A"=="--light" if not "%%A"=="--no-browser" if not "%%A"=="--with-browser" set APP_ARGS=!APP_ARGS! %%A
+  if "%%A"=="--skip-setup" set SKIPSETUP=1
+  if not "%%A"=="--light" if not "%%A"=="--no-browser" if not "%%A"=="--with-browser" if not "%%A"=="--skip-setup" set APP_ARGS=!APP_ARGS! %%A
 )
 
+if "%SKIPSETUP%"=="1" goto :have_python
+
+REM ---------- Step 1: Python (auto-install if missing) ----------
+where python >nul 2>&1
+if not errorlevel 1 goto :have_python
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" goto :have_python
+if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" goto :have_python
+echo [LocalBotz] Python was not found — installing it for you now.
+echo [LocalBotz] This is part of the LocalBotz install. No separate download.
+where winget >nul 2>&1
+if not errorlevel 1 (
+  echo [LocalBotz] Installing Python 3.12 with winget...
+  winget install --id Python.Python.3.12 -e --silent --accept-package-agreements --accept-source-agreements
+  if not errorlevel 1 goto :python_installed
+  echo [LocalBotz] winget install did not work, trying the direct download...
+)
+echo [LocalBotz] Downloading the Python installer...
+powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe' -OutFile '%TEMP%\python-3.12.10-amd64.exe'"
+if errorlevel 1 (
+  echo [LocalBotz] Could not download Python. Check your internet connection,
+  echo then run start.bat again. Or install Python 3.12 from python.org
+  echo (tick "Add python.exe to PATH") and run start.bat again.
+  pause
+  exit /b 1
+)
+echo [LocalBotz] Installing Python 3.12 (quiet, for your user account only)...
+"%TEMP%\python-3.12.10-amd64.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
+if errorlevel 1 (
+  echo [LocalBotz] Python install failed. Try running start.bat again,
+  echo or install Python 3.12 from python.org and run start.bat again.
+  pause
+  exit /b 1
+)
+:python_installed
+REM The new Python may not be on PATH in this window yet — use its
+REM usual per-user location if it is there.
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PATH=%LOCALAPPDATA%\Programs\Python\Python312\;%LOCALAPPDATA%\Programs\Python\Python312\Scripts\;%PATH%"
+if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" set "PATH=%LOCALAPPDATA%\Programs\Python\Python313\;%LOCALAPPDATA%\Programs\Python\Python313\Scripts\;%PATH%"
 where python >nul 2>&1
 if errorlevel 1 (
-  echo [LocalBotz] Python was not found. Install Python 3.11+ from
-  echo https://www.python.org/downloads/ and tick "Add python.exe to PATH",
-  echo then close and reopen this window and run start.bat again.
+  echo [LocalBotz] Python was installed but is still not on PATH in this window.
+  echo [LocalBotz] Close this window and double-click start.bat again.
   pause
   exit /b 1
 )
 
+:have_python
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [LocalBotz] %%v
 
+if "%SKIPSETUP%"=="1" goto :venv
+
+REM ---------- Step 2 + 3: LM Studio + Qwen3.5 (auto-install if missing) ----------
+REM Check for LM Studio: the `lms` tool, or the app folder.
+where lms >nul 2>&1
+if not errorlevel 1 goto :have_lmstudio
+if exist "%LOCALAPPDATA%\LM-Studio\LM Studio.exe" goto :have_lmstudio
+if exist "%LOCALAPPDATA%\Programs\LM-Studio\LM Studio.exe" goto :have_lmstudio
+echo [LocalBotz] LM Studio was not found — installing it for you now.
+echo [LocalBotz] This is part of the LocalBotz install. No separate download.
+where winget >nul 2>&1
+if not errorlevel 1 (
+  echo [LocalBotz] Installing LM Studio with winget (this takes a few minutes)...
+  winget install --id=ElementLabs.LMStudio -e --silent --accept-package-agreements --accept-source-agreements
+  if not errorlevel 1 goto :lmstudio_installed
+  echo [LocalBotz] winget install did not work. Please install LM Studio
+  echo [LocalBotz] once from https://lmstudio.ai/ and run start.bat again.
+  echo [LocalBotz] Continuing without it for now — LocalBotz will start,
+  echo [LocalBotz] but chat needs LM Studio running. Press any key to continue.
+  pause
+  goto :venv
+)
+echo [LocalBotz] winget was not found. Please install LM Studio once from
+echo [LocalBotz] https://lmstudio.ai/ and run start.bat again.
+echo [LocalBotz] Continuing without it for now — press any key to continue.
+pause
+goto :venv
+:lmstudio_installed
+echo [LocalBotz] LM Studio installed.
+
+:have_lmstudio
+REM Make `lms` available, then download the model and start the server.
+REM All of these steps are best-effort: if one fails, LocalBotz still
+REM starts, and its status line tells you LM Studio is not reachable yet.
+where lms >nul 2>&1
+if errorlevel 1 (
+  if exist "%LOCALAPPDATA%\LM-Studio\bin\lms.exe" set "PATH=%LOCALAPPDATA%\LM-Studio\bin\;%PATH%"
+)
+where lms >nul 2>&1
+if errorlevel 1 goto :venv
+echo [LocalBotz] Setting up LM Studio (model Qwen3.5 + local server)...
+lms bootstrap >nul 2>&1
+lms ls 2>nul | findstr /I "qwen3.5" >nul
+if not errorlevel 1 goto :model_present
+echo [LocalBotz] Downloading the Qwen3.5 model (~6 GB, first time only)...
+lms get qwen/qwen3.5-9b --yes
+if errorlevel 1 lms get qwen3.5-9b --yes
+:model_present
+echo [LocalBotz] Loading Qwen3.5 and starting the LM Studio local server...
+lms load qwen3.5-9b --yes >nul 2>&1
+if errorlevel 1 lms load qwen/qwen3.5-9b --yes >nul 2>&1
+lms server start >nul 2>&1
+echo [LocalBotz] LM Studio server should now be on http://localhost:1234
+
+:venv
 if not exist ".venv\Scripts\python.exe" (
   echo [LocalBotz] Creating virtual environment (.venv)...
   python -m venv .venv
@@ -67,6 +178,4 @@ if "%BROWSER%"=="1" (
 )
 
 echo [LocalBotz] Starting on http://127.0.0.1:8000 — open that in your browser.
-echo [LocalBotz] Make sure LM Studio is running with Qwen3.5 loaded and its
-echo [LocalBotz] local server started (Developer tab, Start Server).
 ".venv\Scripts\python.exe" app.py %APP_ARGS%

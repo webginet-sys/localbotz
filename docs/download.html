@@ -151,7 +151,7 @@
       <ul>
         <li><strong>A computer</strong> — Windows 10 or 11, or a Mac with macOS 13 or newer.</li>
         <li><strong>Internet for the first setup</strong> — to download LocalBotz and your AI model. After that, it works offline.</li>
-        <li><strong>LM Studio + Qwen3.5 (free)</strong> — this is the AI brain that runs on your computer. See the simple steps below.</li>
+        <li><strong>Nothing else to download</strong> — Python, LM Studio and the Qwen3.5 model are all set up automatically by the installer below. Just install LocalBotz — that's it.</li>
       </ul>
     </section>
 
@@ -176,33 +176,24 @@
     </div>
     <p class="lead" style="margin-top:16px;">Prefer ready-made installers? Check <a href="https://github.com/webginet-sys/localbotz/releases">Releases on GitHub</a> when they are available.</p>
 
-    <h2 class="section">First, get your AI model (5 minutes, once)</h2>
-    <p class="lead">LocalBotz needs an AI model on your computer. We use LM Studio — a free app — with the Qwen3.5 model. You only do this once.</p>
-    <div class="lmstudio">
-      <h3>🧠 Set up LM Studio + Qwen3.5</h3>
-      <ol>
-        <li><strong>Download LM Studio</strong> — go to <a href="https://lmstudio.ai/">lmstudio.ai</a> and download it for Windows or Mac, then install it like any normal app.</li>
-        <li><strong>Download the Qwen3.5 model</strong> — open LM Studio, search for <strong>Qwen3.5</strong>, and download it.</li>
-        <li><strong>Start the local server</strong> — in LM Studio, open the <strong>Developer</strong> tab (the <code>&lt;/&gt;</code> icon on the left), load Qwen3.5, and press <strong>Start Server</strong>. Leave LM Studio open while you use LocalBotz.</li>
-      </ol>
-      <div class="note"><strong>Tip:</strong> If LM Studio shows a longer name for the model, for example <code>qwen/qwen3.5-…</code>, that is fine — just copy that exact name into LocalBotz later if it asks for it. The normal name is <code>qwen3.5</code>.</div>
-    </div>
+    <h2 class="section">Just install LocalBotz — that's it</h2>
+    <p class="lead">You do <strong>not</strong> download Python, LM Studio or the Qwen3.5 model separately. Double-click <code>install.bat</code> (Windows) or <code>start.command</code> (Mac) and the installer downloads and sets all of them up for you in that one step. The first time takes a while — the Qwen3.5 model is about 6 GB — and later runs are fast.</p>
 
     <h2 class="section">Then, install LocalBotz</h2>
     <div class="steps">
       <div class="steps-box">
-        <h3>🪟 On Windows — 5 steps</h3>
+        <h3>🪟 On Windows — 4 steps</h3>
         <ol>
           <li><strong>Click “Get LocalBotz for Windows” above.</strong><br>You will see our GitHub page. Click the green <strong>Code</strong> button, then <strong>Download ZIP</strong>.</li>
           <li><strong>Open the downloaded ZIP.</strong><br>Find it in your Downloads folder, open it, and click <strong>Extract All</strong>. Choose a folder you will remember, for example your Desktop.</li>
-          <li><strong>Double-click <code>start.bat</code>.</strong><br>It is in the folder you just extracted. A small black window will appear — that is normal, it is setting LocalBotz up for you. The first time takes a few minutes.</li>
+          <li><strong>Double-click <code>install.bat</code> (or <code>start.bat</code>).</strong><br>It is in the folder you just extracted. A small black window will appear — that is normal, it is setting LocalBotz up for you. The first time it downloads Python, LM Studio and the Qwen3.5 model for you, so it takes a while.</li>
           <li><strong>Wait while it sets itself up.</strong><br>It installs what it needs and then starts LocalBotz. Please leave the black window open while you use LocalBotz.</li>
           <li><strong>LocalBotz opens in your browser.</strong><br>Your browser should open to <code>localhost:8000</code> — that is LocalBotz running on your own computer. If it does not open by itself, type <code>localhost:8000</code> into your browser's address bar.</li>
         </ol>
         <div class="note"><strong>What you will see:</strong> a chat screen where you can make a bot, pick a template, and start talking. Your first bot is ready to go.</div>
       </div>
       <div class="steps-box">
-        <h3>🍎 On Mac — 5 steps</h3>
+        <h3>🍎 On Mac — 4 steps</h3>
         <ol>
           <li><strong>Click “Get LocalBotz for Mac” above.</strong><br>You will see our GitHub page. Click the green <strong>Code</strong> button, then <strong>Download ZIP</strong>.</li>
           <li><strong>Open the ZIP.</strong><br>Find it in your Downloads folder and double-click it. It will open into a folder called <code>localbotz</code>.</li>
@@ -231,11 +222,11 @@
       </details>
       <details>
         <summary>What if it doesn't open?</summary>
-        <p>First, check that the small setup window is still open — LocalBotz stops when you close it. Then open your browser and type <code>localhost:8000</code> in the address bar. If you see an error about Python, install Python 3.11 or newer from <a href="https://www.python.org/downloads/">python.org</a> (on Windows, tick “Add python.exe to PATH” during install), then double-click the start file again.</p>
+        <p>First, check that the small setup window is still open — LocalBotz stops when you close it. Then open your browser and type <code>localhost:8000</code> in the address bar. The first run downloads a lot (Python, LM Studio and a ~6 GB model), so give it time and keep your internet connected.</p>
       </details>
       <details>
         <summary>What if LM Studio isn't running?</summary>
-        <p>LocalBotz will tell you it cannot reach LM Studio. Open LM Studio, make sure Qwen3.5 is loaded, press <strong>Start Server</strong> in the Developer tab, and try again. LocalBotz will reconnect automatically.</p>
+        <p>LocalBotz will tell you it cannot reach LM Studio. Just double-click <code>start.bat</code> again — it sets LM Studio and Qwen3.5 up for you. Or open LM Studio yourself, make sure Qwen3.5 is loaded, press <strong>Start Server</strong> in the Developer tab, and try again. LocalBotz will reconnect automatically.</p>
       </details>
       <details>
         <summary>Can I use Claude, GPT or Gemini instead?</summary>
