@@ -567,7 +567,14 @@ async function generalHtml(){
   <label>Workspace folder (relative to the app folder)</label><input id="set-ws" type="text" value="${esc(settings.workspace_folder||'workspace')}">
   <label>Theme</label><select id="set-theme"><option value="light" ${settings.theme==='light'?'selected':''}>Light</option><option value="dark" ${settings.theme==='dark'?'selected':''}>Dark</option></select>
   <p>Data location: <code>${esc(settings.data_location||'')}</code><br>Workspace: <code>${esc(settings.workspace_absolute||'')}</code><br>App version: <b>${esc(settings.app_version||'')}</b></p>
-  <button id="set-save">Save settings</button> <button id="set-reset" class="ghost">Reset settings</button><div id="page-msg"></div>`;
+  <button id="set-save">Save settings</button> <button id="set-reset" class="ghost">Reset settings</button>
+  <h3 style="margin-top:28px">How LocalBotz runs</h3>
+  <p>Use the subscriptions you already pay for to run agents in your personal office. Works with Claude, ChatGPT, Grok, Gemini and more. Give your agents your computer — or rent one from us.</p>
+  <table><tr><th>How it runs</th><th>What it means</th><th></th></tr>
+  <tr><td><b>🖥️ Your computer</b><br>Free</td><td>Your agents run on your own computer, on your downloaded local model (LM Studio / Qwen3.5). Nothing leaves the computer.</td><td><button class="small" id="run-local">Use my computer</button></td></tr>
+  <tr><td><b>🔑 Your subscriptions</b><br>Bring your own keys</td><td>Use the provider accounts you already pay for — Claude, ChatGPT, Grok, Gemini, DeepSeek and more. Add each key once in Secure store; LocalBotz sends it only to that provider.</td><td><button class="small" id="run-subs">Add my subscriptions</button></td></tr>
+  <tr><td><b>☁️ Rent one from us</b><br>Premium, metered</td><td>No keys of your own? Rent our computer instead — premium models (Claude Sonnet, GPT, Gemini) from our server, registered on the VPS and metered to your wallet.</td><td><button class="small" id="run-rent">Rent from us</button></td></tr></table>
+  <div id="page-msg"></div>`;
 }
 async function walletHtml(){
   const w=await api('/api/wallet');
@@ -635,6 +642,9 @@ function bindPage(name){
   if(q('skill-enable')) q('skill-enable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:true})}); msg('Skill enabled for bot.');};
   if(q('skill-disable')) q('skill-disable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:false})}); msg('Skill disabled for bot.');};
   if(q('set-save')) q('set-save').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');};
+  if(q('run-local')) q('run-local').onclick=async()=>{q('set-provider').value='lmstudio'; q('set-model').value='qwen3.5'; q('set-save').click(); msg('Running on your computer — local model (LM Studio / Qwen3.5).');};
+  if(q('run-subs')) q('run-subs').onclick=()=>{showView('set-connectors');};
+  if(q('run-rent')) q('run-rent').onclick=()=>{showView('set-connectors');};
   if(q('set-reset')) q('set-reset').onclick=async()=>{await api('/api/settings/reset',{method:'POST'}); document.body.classList.remove('dark'); renderPage(name);};
   if(q('wal-save')) q('wal-save').onclick=async()=>{await api('/api/wallet/budget',{method:'POST',body:JSON.stringify({monthly_budget_usd:parseFloat(q('wal-budget').value)||0,alert_enabled:q('wal-alert').checked})}); renderPage(name);};
   if(q('wal-reset')) q('wal-reset').onclick=async()=>{await api('/api/wallet/reset',{method:'POST'}); renderPage(name);};

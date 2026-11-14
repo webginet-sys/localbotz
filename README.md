@@ -326,6 +326,29 @@ The **Library** section in the sidebar has 5 pages, sharing the same data files 
 - **Skills** — built-in skills (Research, File help, Browser help, Coding help, Email drafting, Morning Brief) plus custom skills you add (name + instructions + optional source folder/file). Enable/disable per bot, delete custom ones. Stored in `data/skills.json`. Enabled skills are added to the bot's system prompt.
 - **Tools** — the full built-in tool list (`browser_open`, `browser_read`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_search`, `web_search`, `list_files`, `read_file`, `write_file`, `run_command`) with descriptions, global enable/disable, per-bot toggles, and which bots use each. Toggles are enforced in the agent loop.
 
+## How LocalBotz runs
+
+Use the subscriptions you already pay for to run agents in your
+personal office. Works with Claude, ChatGPT, Grok, Gemini and more.
+Give your agents your computer — or rent one from us.
+
+1. **Your computer (free)** — your agents run on your own computer,
+   on your downloaded local model (LM Studio / Qwen3.5). Nothing
+   leaves the computer. Settings → General → "Use my computer".
+2. **Your subscriptions (bring your own keys)** — Claude, ChatGPT,
+   Grok, Gemini, DeepSeek, Kimi, GLM, OpenRouter, Groq, Mistral,
+   Cerebras. Add each key once in Settings → Secure store; it is
+   sent only to its own provider. (These are API keys, not the
+   terminal CLIs — see `docs/how-it-runs.md`.)
+3. **Rent one from us (premium, metered)** — no keys of your own?
+   Premium models (Claude Sonnet, GPT, Gemini) from our server:
+   register on the VPS (Settings → Connectors → VPS Premium →
+   "Register on the VPS"), pick provider **VPS Premium** per bot,
+   and usage is metered to your workspace wallet.
+
+A different bot — or a different member of your Office team — can
+run a different way. See `docs/how-it-runs.md`.
+
 ## Office — your AI team, on your own computer
 
 Sidebar → **Office**. Modelled on Munder Difflin
