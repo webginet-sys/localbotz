@@ -302,7 +302,7 @@ Click **＋ Make a bot** in the sidebar:
 
 - **Avatar picker** — 8 choices (🤖 👔 🔬 🌅 📰 📝 💬 👀), stored per bot.
 - **Name your bot** + **Describe the job** — the job becomes part of the bot's instructions when you create it from scratch.
-- **Template tabs** — Featured, Personal Assistant, Productivity, Research, More (More shows all 30 templates).
+- **Template tabs** — Featured, Personal Assistant, Productivity, Research, Sectors, More (More shows all 40 templates).
 - **Template cards** — each has an icon, name and short description. Clicking one pre-fills name, instructions, avatar, provider/model (default LM Studio / Qwen3.5), enabled tools and schedule — all still editable before you press Create bot.
 
 Templates (in `templates.json`, copied to `data/templates.json` on first run):
@@ -312,7 +312,16 @@ Templates (in `templates.json`, copied to `data/templates.json` on first run):
 | Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher, VC Due Diligence, Journalist, Earnings Call Analyst, HN Briefing, Release Radar, Legal Researcher |
 | Personal Assistant | Chief of Staff, Email Drafting, Morning Brief, Meeting Prep, Follow-Up Tracker, WhatsApp Agent, Travel Planner, Health & Fitness Coach, Financial Coach, Business Consultant, Teacher |
 | Productivity | Task Planner, Meeting Notes, Research Scout, Inbox Triage, Data Analyst, System Architect, Sales Intelligence, Doc Q&A |
-| Featured | Deep Researcher, News Radar, Chief of Staff, Morning Brief, Task Planner, Research Scout, Data Analyst, Travel Planner, HN Briefing |
+| Sectors | Construction Office, MEP Office, Electrical Engineering Office, IT Services Office, E-commerce Office, Real Estate Office, Clinic & Healthcare Office, Logistics Office, Manufacturing Office, Hotel & Hospitality Office |
+| Featured | Deep Researcher, News Radar, Chief of Staff, Morning Brief, Task Planner, Research Scout, Data Analyst, Travel Planner, HN Briefing, Construction Office, IT Services Office, E-commerce Office |
+
+LocalBotz is built for **office, sales and marketing work — in every
+sector**. The Sectors tab has a ready-made office assistant for each
+kind of company: construction, MEP, electrical engineering, IT services,
+e-commerce, real estate, healthcare, logistics, manufacturing and
+hospitality. Each one knows the trade's own documents and words —
+BOQs and tenders, SOWs and SLAs, listings and campaigns — and never
+invents a price, a measurement or a date that is not confirmed.
 
 Each template stores its full instructions, default tools and a schedule (e.g. `daily 07:00`, `on_demand`). The schedule is stored per bot and shown in the sidebar; scheduled *running* of bots is not built yet in v1 — bots run when you chat with them.
 
