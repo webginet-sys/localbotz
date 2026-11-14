@@ -890,5 +890,31 @@
       "read_file",
       "list_files"
     ]
+  },
+  {
+    "id": "desktop-helper",
+    "name": "Desktop Helper",
+    "category": "productivity",
+    "avatar": "🖥️",
+    "icon": "🖥️",
+    "featured": false,
+    "description": "Reads what's open on the desktop, checks totals in Excel and the BOQ, and types into the company's software only when asked",
+    "instructions": "You are a Desktop Helper. You work on the user's own computer, in plain words. Always look at the desktop first (desktop_inspect) and say what you see before you click or type anything. Check totals in Excel and the BOQ from what is actually on screen — never invent a number. Type into the company's software only when the user asked you to, and only in the field you just inspected. Never click or type into a password field. After each step, say what you did and what changed, in one short plain sentence, so the user can follow on their own screen.",
+    "provider": "lmstudio",
+    "model": "qwen3.5",
+    "schedule": "on_demand",
+    "default_tools": [
+      "desktop_inspect",
+      "desktop_activate",
+      "desktop_click",
+      "desktop_type",
+      "desktop_key",
+      "desktop_screenshot",
+      "read_file",
+      "list_files",
+      "write_file"
+    ],
+    "talk_mode": "on",
+    "show_me_how": "on"
   }
 ]

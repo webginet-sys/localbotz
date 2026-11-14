@@ -58,6 +58,28 @@ def main():
     except Exception as e:  # noqa: BLE001
         check("Chromium launches (browser automation ready)", False, str(e))
 
+    # Desktop control — import-only. On a headless machine (no display)
+    # pyautogui may still import but cannot take a screenshot; that is
+    # reported honestly and is NOT a failure of the install — the app
+    # still starts, and desktop tools say so on the Desktop page.
+    for pkg in ("pyautogui", "pygetwindow"):
+        try:
+            __import__(pkg)
+            check(f"Desktop control: {pkg}", True)
+        except Exception as e:  # noqa: BLE001
+            check(f"Desktop control: {pkg}", False, str(e))
+    try:
+        import os as _os
+        if _os.name == "nt":
+            import pywinauto  # noqa: F401
+            check("Desktop control: pywinauto (Windows accessibility tree)", True)
+        else:
+            check("Desktop control: pywinauto (Windows only — skipped)", True, "not needed on this OS")
+    except Exception as e:  # noqa: BLE001
+        check("Desktop control: pywinauto (Windows accessibility tree)", False, str(e))
+    if not _os.environ.get("DISPLAY") and sys.platform.startswith("linux"):
+        check("Desktop: no display here (headless)", True, "import-only check — a real desktop is checked on the user's computer")
+
     # LM Studio — best-effort only; the installer tries to start it,
     # but the app can still start without it (mock / online providers).
     try:
@@ -70,7 +92,9 @@ def main():
 
     failed = [name for name, ok, _ in checks if not ok]
     # LM Studio not being up yet is not a failure of the install itself.
-    hard_fail = [n for n in failed if "LM Studio" not in n]
+    # Desktop import failures are not either: the app checks the desktop
+    # itself and says so on the Desktop page (e.g. headless servers).
+    hard_fail = [n for n in failed if "LM Studio" not in n and "Desktop" not in n]
     if hard_fail:
         print("RESULT: FAIL — missing: " + ", ".join(hard_fail))
         return 1

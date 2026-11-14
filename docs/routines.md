@@ -27,6 +27,27 @@ label that was stored and shown — nothing ran it. Routines run it.
   scheduled run. Pausing keeps the next run time, so resuming catches
   up once if the time passed while it was paused.
 
+## Desktop step (optional)
+
+A routine can do one thing on the desktop as well as — or instead
+of — the bot task. On the Routines page, under "Desktop step
+(optional)": pick an action (inspect the desktop, activate a
+window, click a control, type text, press keys, take a
+screenshot), a target (a window/control ref from the Desktop
+page, e.g. w1 or e1), text to type, and keys to press. Example:
+every morning at 08:00, activate Excel and press ctrl+s — or
+leave the task empty and the routine is the desktop step alone.
+
+It runs after the bot task (or alone), through the same desktop
+runner as the tools: Desktop control must be on in Settings >
+Permissions, and the action is logged in the desktop log with
+source=routine. If the desktop step fails (refused, not
+available, blocked), the run is recorded as failed, so it is not
+silently lost. The bot can already use desktop tools inside its
+task — the direct step is for a fixed action you always want,
+e.g. "open the BOQ in Excel and read the total" as a task, plus
+"press ctrl+s" as the fixed step. See `docs/desktop.md`.
+
 ## What it is not (yet)
 
 - **Not a system service.** Nothing runs while LocalBotz is closed.
@@ -51,7 +72,7 @@ label that was stored and shown — nothing ran it. Routines run it.
 | Endpoint | What it does |
 |---|---|
 | `GET /api/routines` | List routines (with `schedule_text`, next run, last run) |
-| `POST /api/routines` | Create — `{name, bot_id, task, kind, time?, weekday?, interval_minutes?}` |
+| `POST /api/routines` | Create — `{name, bot_id, task, kind, time?, weekday?, interval_minutes?, desktop_action?, desktop_target?, desktop_text?, desktop_keys?}` — task may be empty when a desktop action is given. |
 | `GET /api/routines/{id}` | One routine, with its run history (last 20) |
 | `PATCH /api/routines/{id}` | Change fields, or `{enabled: false}` to pause / `{enabled: true}` to resume |
 | `DELETE /api/routines/{id}` | Delete the routine |

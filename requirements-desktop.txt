@@ -1,0 +1,15 @@
+# LocalBotz — desktop control. Installed by default, upfront,
+# as part of the one full install (install.bat / start.bat / start.sh).
+# There is no light / optional install any more: if the user needs a
+# bot to use the desktop, whatever it needs is installed before,
+# in the installation step. Without these, desktop tools reply with
+# a clear "not installed" message instead of crashing.
+# Install with: pip install -r requirements-desktop.txt
+#   pyautogui  — mouse, keyboard and screenshots (all OS)
+#   pygetwindow — list the windows that are open (all OS)
+#   pywinauto  — Windows only: the accessibility tree (buttons and
+#                fields inside a window). On macOS/Linux the window
+#                list + screenshots still work without it.
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pywinauto>=0.6.8; sys_platform == 'win32'

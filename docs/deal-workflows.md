@@ -62,6 +62,19 @@ step list, not a canvas.)
 | Add a note to the timeline | Writes a note (e.g. "Lost: client chose the cheaper bid"). |
 | Wait… | Pauses the chain for N minutes (1 minute to 30 days). The chain resumes on its own — the background worker picks it up — and the deal is re-read fresh at that point. |
 | IF… | Checks a condition, and stops the chain here if it is not met. Conditions: deal value over/under a number, deal is still in a stage, deal is no longer in a stage. |
+| 🖥️ Inspect the desktop | Looks at what's open on the computer (windows + controls, with refs) — put it before a click or type step so the chain uses a fresh ref. |
+| 🖥️ Activate a window | Brings a window to the front, by ref (w1) or title (e.g. BOQ.xlsx). |
+| 🖥️ Click on the desktop | Clicks a control by its ref (e1) from the inspect step. |
+| 🖥️ Type on the desktop | Types text into a control by its ref (or the focused window if no ref). Placeholders {deal} {client} {value} {currency} {stage} are filled in. Never types into a password field — refused. |
+| 🖥️ Press keys on the desktop | Presses keys, e.g. enter, tab, ctrl+s. |
+| 🖥️ Screenshot the desktop | Takes a picture of the whole desktop and saves it to data/screenshots/. |
+
+Desktop steps run through the same desktop runner as the tools, so
+they are permission-checked (Desktop control must be on in Settings
+> Permissions) and logged in the desktop log with source=workflow.
+A chain can mix them with wait and IF — e.g. wait 1 minute, IF the
+deal is still Quoted, inspect the desktop, then type the follow-up
+into the open quotation. See `docs/desktop.md`.
 
 Example chain — Quoted → chase after 3 days (this one ships
 ready-made for General):

@@ -454,6 +454,52 @@ it (e.g. your pricing when it drafts a quotation). You can also
 teach the team directly ("Always add 12% margin to Cisco quotes")
 and delete any learning that is wrong. See `docs/learnings.md`.
 
+## Desktop control — "use the computer"
+
+A bot that can see and use the desktop apps on this computer —
+Excel and the BOQ, the company's old accounting software that has
+no API, a supplier portal. Sidebar → 🖥️ Desktop — use the
+computer. It works observe → act → verify: first it **inspects**
+the desktop (a short list of windows and controls, with refs like
+w1 and e1), then it clicks or types on a ref, then it looks again
+to check the result. Clicking and typing need Desktop control on
+in Settings > Permissions, and a bot on Ask asks before it clicks
+anything. Every action is logged, it never types or clicks into a
+password field, and it never clicks from a screenshot — only from
+the list it just read. Desktop control is installed up front in
+the one full install (`requirements-desktop.txt`: pyautogui,
+pygetwindow, pywinauto on Windows). The **Desktop Helper**
+template has all six desktop tools, Talk mode and Show-me-how on.
+Deal workflows can have desktop steps too (inspect, activate,
+click, type, press keys, screenshot), and a routine can have one
+direct desktop step after its bot task — or on its own. See
+`docs/desktop.md`. Honest limit: built and tested in mock mode
+here — no real Windows desktop was available in this sandbox, so
+the first real run on your computer is the real test; on macOS
+and Linux you mostly get the window list, not the controls
+inside a window.
+
+## Talk + Show-me-how
+
+Everyone should be able to talk to their computer in plain
+words — no prompting, no tutorials. In the chat header: **🎙️
+Talk** (tap, speak, it types what you said — Chrome/Edge,
+browser speech recognition, no install, no keys), **🔊
+Listen** (reads the bot's replies out loud, short replies only),
+and **👀 Show me how** (the bot explains each step in plain
+words before it does it, and shows a picture of each step —
+"Here's how I did it"). Talk mode is also a per-bot setting
+(Make-a-bot → Talk mode): short plain sentences, no jargon, no
+menus, and if something is unclear it asks ONE simple question.
+`POST /api/bots/{bot_id}/show-me-how` runs a task with visible
+steps; `POST /api/talk/transcribe` transcribes audio locally
+only if faster-whisper is installed, otherwise an honest 501 —
+it is deliberately not in the install, so the install stays
+light. See `docs/talk.md`. Honest limits: browser speech
+recognition needs Chrome/Edge and internet for its speech
+service; show-me-how screenshots need the desktop/browser to be
+available; in mock mode steps are labelled [MOCK MODE].
+
 ## Clients & Deals — deal workflows
 
 A small local CRM for sales work. A **deal** is a client, a value,
@@ -467,7 +513,7 @@ create a task for a bot, run an office job with the team (Auditor +
 approval gate applies), write a draft, add a note, **wait** (the
 chain pauses and resumes on its own), or **IF** (stop the chain
 here if the deal's value or stage doesn't match — e.g. wait 3 days,
-then chase only if the deal is still Quoted). Chains are limited to
+then chase only if the deal is still Quoted), or a **desktop step** (inspect the desktop, activate a window, click, type, press keys, take a screenshot — e.g. type the follow-up into the open quotation). Chains are limited to
 one department, or any. Write the steps with `{deal}`, `{client}`,
 `{value}`, `{currency}`, `{stage}` and they are filled in from the
 deal. Every department ships with two starter workflows (a handover

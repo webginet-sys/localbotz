@@ -13,9 +13,13 @@ REM   4. LocalBotz — virtual environment, ALL Python packages, then the
 REM      app on http://127.0.0.1:8000
 REM   5. Browser automation — Playwright + Chromium, installed upfront
 REM      in this same install step, and verified (Chromium launches).
+REM   6. Desktop control — pyautogui + pygetwindow (+ pywinauto on
+REM      Windows), installed upfront in this same install step, so a
+REM      bot can use the desktop apps on this computer.
 REM      There is no light / optional install: if the user needs to run
-REM      browser automation, whatever they need is installed before,
-REM      in the installation. Nothing is left to install later.
+REM      browser automation or use the desktop, whatever they need is
+REM      installed before, in the installation. Nothing is left to
+REM      install later.
 REM
 REM First run needs internet and takes a while (Python ~30 MB,
 REM LM Studio several hundred MB, Qwen3.5 model ~6 GB, Chromium ~150 MB).
@@ -183,6 +187,17 @@ echo [LocalBotz] Installing Playwright Chromium (skipped if already installed)..
 if errorlevel 1 (
   echo [LocalBotz] Chromium install failed. Browser automation will not work.
   echo [LocalBotz] Try running start.bat again, then check your internet.
+  pause
+  exit /b 1
+)
+REM ---------- Desktop control — always installed upfront ----------
+echo [LocalBotz] Installing desktop control (mouse/keyboard/window tools)...
+echo [LocalBotz] This is part of the full install, so a bot can use the
+echo [LocalBotz] desktop apps on this computer — Excel, the BOQ, the old
+echo [LocalBotz] accounting software — with nothing to install later.
+".venv\Scripts\python.exe" -m pip install -q -r requirements-desktop.txt
+if errorlevel 1 (
+  echo [LocalBotz] Desktop control install failed. See the error above.
   pause
   exit /b 1
 )

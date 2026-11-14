@@ -84,6 +84,7 @@
     <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
     <button class="navbtn" data-view="deals">💼 Deals — clients & workflows</button>
     <button class="navbtn" data-view="runs">📋 Runs — what the team did</button>
+    <button class="navbtn" data-view="desktop">🖥️ Desktop — use the computer</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -111,6 +112,9 @@
         <select id="botmodel-list" style="width:220px" title="Available models — only models that can actually work right now, grouped by source"></select>
         <button class="ghost small" id="refresh-models" title="Refresh the available-model list">↻ Models</button>
         <button class="ghost small" id="applybot">Apply</button>
+        <button class="ghost small" id="talk-btn" title="Talk to your bot — tap, speak in plain words, and it types what you said">🎙️ Talk</button>
+        <button class="ghost small" id="speak-toggle" title="Read the bot's replies out loud">🔊 Listen: off</button>
+        <button class="ghost small" id="showhow-toggle" title="Show me how — the bot explains each step in plain words before it does it, and shows you a picture of each step">👀 Show me how: off</button>
         <button class="ghost" id="reset">Clear chat</button>
       </header>
       <div id="chat"><div class="empty">Select a bot on the left, then ask it something.<br>Try: “Search the web for today’s weather in Doha” or “List the files in my workspace”.</div></div>
@@ -142,6 +146,8 @@
         <div><label>Model</label><input id="mb-model" type="text" value="qwen3.5" title="Model for this bot — type your own, or pick from the Available models list below"></div>
         <div><label>Available models</label><select id="mb-model-list" title="Only models that can actually work right now, grouped by source"></select></div>
         <div><label>Smart routing</label><select id="mb-routing" title="Auto: simple questions answered free on the local model, hard work goes to this provider. Off: always use this provider."><option value="off">Off — always this provider</option><option value="auto">Auto — simple free on local, hard to premium</option></select></div>
+        <div><label>Talk mode</label><label style="display:block;margin-top:6px"><input type="checkbox" id="mb-talk"> Talk — plain words, short sentences, no jargon. For talking, not typing.</label></div>
+        <div><label>Show me how</label><label style="display:block;margin-top:6px"><input type="checkbox" id="mb-showhow"> Show me how — explain each step in plain words before doing it, with a picture of each step.</label></div>
       </div>
       <label>Describe the job</label>
       <textarea id="mb-job" rows="3" placeholder="e.g. Every morning, summarise what happened overnight on the topics I care about."></textarea>
@@ -294,6 +300,9 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
       f.style.cssText='font-size:12px;color:#888;margin-top:8px';
       f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)} · Wallet $${Number(m.wallet_balance??NaN).toFixed(2)}${m.mode?` · ${m.mode} mode`:''}${m.key_source?` · key: ${m.key_source}`:''}${m.routed_from?` · routed free to local (from ${m.routed_from.provider})`:''}`;
       d.appendChild(f);}
+    if(m.steps&&m.steps.length){const st=document.createElement('div'); st.className='tools';
+      st.innerHTML='<strong>👀 Here\'s how I did it:</strong><ol>'+m.steps.map(s=>`<li>${esc(s.plain||('Step '+s.n))}${s.screenshot?` <a href="/${esc(s.screenshot)}" target="_blank">📷 see this step</a>`:''}<br><span class="note">${esc((s.result_summary||'').slice(0,160))}</span></li>`).join('')+'</ol>';
+      d.appendChild(st);}
     if(m.tools&&m.tools.length){const t=document.createElement('div'); t.className='tools';
       t.innerHTML='<strong>🛠 Tools used:</strong>';
       m.tools.forEach(tool=>{const det=document.createElement('details');
@@ -319,6 +328,7 @@ async function selectBot(id){current=bots.find(b=>b.id===id); if(!current) retur
   $('botmeta').textContent=(current.provider||'')+' · '+(current.model||'')+(current.schedule&&current.schedule!=='on_demand'?' · '+current.schedule:'');
   $('botprovider').value=current.provider||'lmstudio'; $('botmodel').value=current.model||'';
   fillModelList($('botmodel-list'), current.model||'', current.provider||'lmstudio');
+  showHowOn=(current.show_me_how||'off')==='on'; syncTalkButtons();
   document.querySelectorAll('.botlist li').forEach((li,i)=>li.classList.toggle('active',bots[i].id===id));
   showView('chat'); renderChat(await api(`/api/bots/${id}/chat`)); loadMemory(); loadTasks(); loadStatus();
 }
@@ -326,8 +336,10 @@ async function send(){const inp=$('input'); const text=inp.value.trim(); if(!tex
   inp.value=''; const msgs=await api(`/api/bots/${current.id}/chat`);
   msgs.push({role:'user',content:text}); renderChat(msgs);
   $('chat').insertAdjacentHTML('beforeend','<div class="msg assistant">Thinking… (may use tools — up to 8 steps)</div>');
-  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace()})});
+  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace(), talk:talkUsed||speakOn, show_me_how:showHowOn})});
+    talkUsed=false;
     renderChat(await api(`/api/bots/${current.id}/chat`));
+    if(res.reply) speakText(res.reply);
     if(res.error==='model_unavailable'&&res.suggested_model){const b=document.createElement('button'); b.textContent=`Switch to ${res.suggested_model} (${res.suggested_provider}) — available now`; b.style.margin='10px 20px';
       b.onclick=async()=>{await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({provider:res.suggested_provider,model:res.suggested_model})}); await loadBots(); selectBot(current.id);};
       $('chat').appendChild(b);}
@@ -350,6 +362,57 @@ $('persistent-toggle').onchange=async e=>{if(!current) return;
 $('reset').onclick=async()=>{if(!current) return; await api(`/api/bots/${current.id}/chat/reset`,{method:'POST'}); renderChat([]);};
 $('newbotbtn').onclick=()=>{showView('makebot'); initMakeBot();};
 document.querySelectorAll('.navbtn[data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view));
+
+// ---------- Talk (voice in, voice out) + Show-me-how ----------
+// Zero-install: the browser's own speech recognition and speech
+// synthesis. Both degrade honestly when the browser has none.
+let speakOn=localStorage.getItem('localbotz-speak')==='on';
+let showHowOn=false;
+let recognising=false, recog=null;
+function speakText(text){
+  if(!speakOn || !('speechSynthesis' in window)) return;
+  try{
+    window.speechSynthesis.cancel();
+    const clean=String(text||'').replace(/[#*`_\[\]()]/g,' ').replace(/\s+/g,' ').trim();
+    if(!clean) return;
+    // Short plain replies only: first two sentences, max ~600 chars.
+    const short=clean.split(/(?<=[.!?])\s+/).slice(0,2).join(' ').slice(0,600);
+    const u=new SpeechSynthesisUtterance(short); u.lang='en-GB';
+    window.speechSynthesis.speak(u);
+  }catch(e){ /* speech is a nicety — never break the chat */ }
+}
+function syncTalkButtons(){
+  const sp=$('speak-toggle'); if(sp) sp.textContent=speakOn?'🔊 Listen: on':'🔊 Listen: off';
+  const sh=$('showhow-toggle'); if(sh) sh.textContent=showHowOn?'👀 Show me how: on':'👀 Show me how: off';
+}
+function startTalk(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ alert('Talk needs Chrome or Edge — your browser has no speech recognition. You can still type, or use the speaker button to hear replies.'); return; }
+  if(recognising){ try{recog.stop();}catch(e){} return; }
+  try{
+    recog=new SR(); recog.lang='en-GB'; recog.interimResults=true; recog.continuous=false;
+    const btn=$('talk-btn'); if(btn) btn.textContent='🎙️ Listening… tap to stop';
+    recognising=true;
+    recog.onresult=e=>{
+      let interim='', final='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+        else interim+=e.results[i][0].transcript;
+      }
+      const inp=$('input'); if(!inp) return;
+      if(final){ talkUsed=true; inp.value=final.trim(); recognising=false; if(btn) btn.textContent='🎙️ Talk'; try{recog.stop();}catch(err){} send(); }
+      else if(interim){ inp.value=interim; }
+    };
+    recog.onerror=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; };
+    recog.onend=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; };
+    recog.start();
+  }catch(e){ recognising=false; alert('Could not start listening: '+e.message); }
+}
+let talkUsed=false;
+if($('talk-btn')) $('talk-btn').onclick=startTalk;
+if($('speak-toggle')) $('speak-toggle').onclick=()=>{ speakOn=!speakOn; localStorage.setItem('localbotz-speak', speakOn?'on':'off'); if(!speakOn && 'speechSynthesis' in window) window.speechSynthesis.cancel(); syncTalkButtons(); };
+if($('showhow-toggle')) $('showhow-toggle').onclick=async()=>{ showHowOn=!showHowOn; syncTalkButtons(); if(current){ try{ await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({show_me_how:showHowOn?'on':'off'})}); await loadBots(); current=bots.find(b=>b.id===current.id); }catch(e){ /* toggle still works for this chat */ } } };
+syncTalkButtons();
 
 // ---------- Workspaces + operating mode (Super Admin) ----------
 let EFFECTIVE=null;
@@ -469,6 +532,8 @@ function renderCards(){
       $('mb-name').value=t.name; $('mb-job').value=''; $('mb-instructions').value=t.instructions||'';
       mbAvatar=t.avatar||t.icon||'🤖'; $('mb-provider').value=t.provider||'lmstudio'; $('mb-model').value=t.model||'qwen3.5';
       $('mb-schedule').value=t.schedule||'on_demand'; mbTools=[...(t.default_tools||[])];
+      if($('mb-talk')) $('mb-talk').checked=(t.talk_mode||'off')==='on';
+      if($('mb-showhow')) $('mb-showhow').checked=(t.show_me_how||'off')==='on';
       initMakeBot(); $('mb-msg').textContent='Template loaded — edit anything, then Create bot.';};
     $('tpl-cards').appendChild(c);});
 }
@@ -483,7 +548,7 @@ $('mb-create').onclick=async()=>{
   const b=await api('/api/bots',{method:'POST',body:JSON.stringify({
     name, job:$('mb-job').value.trim(), instructions:$('mb-instructions').value.trim(),
     template:mbTemplate, avatar:mbAvatar, provider:$('mb-provider').value, model:$('mb-model').value.trim()||'qwen3.5',
-    routing:$('mb-routing').value, schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
+    routing:$('mb-routing').value, talk_mode:$('mb-talk')&&$('mb-talk').checked?'on':'off', show_me_how:$('mb-showhow')&&$('mb-showhow').checked?'on':'off', schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
   $('mb-msg').textContent='Created ✓';
   mbTemplate=''; mbTools=[]; await loadBots(); selectBot(b.id);
 };
@@ -499,6 +564,7 @@ async function renderPage(name){
     else if(name==='routines') el.innerHTML=await routinesHtml();
     else if(name==='deals') el.innerHTML=await dealsHtml();
     else if(name==='runs') el.innerHTML=await runsHtml();
+    else if(name==='desktop') el.innerHTML=await desktopHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -517,7 +583,7 @@ async function routinesHtml(){
   const bots=await api('/api/bots');
   const learnings=await api('/api/learnings');
   const botName=id=>(bots.find(b=>b.id===id)||{}).name||'deleted bot';
-  const rows=routines.map(r=>`<tr><td><b>${esc(r.name)}</b><br><span class="note">${esc((r.task||'').slice(0,120))}</span></td><td>${esc(botName(r.bot_id))}</td><td>${esc(r.schedule_text||'')}</td><td>${r.next_run?new Date(r.next_run*1000).toLocaleString():'—'}</td><td>${r.enabled?'✅ On':'⏸ Off'}${r.last_status?`<br><span class="note">last: ${esc(r.last_status)}${r.last_run?` · ${new Date(r.last_run*1000).toLocaleString()}`:''}</span>`:''}</td><td><button class="small" data-rt-run="${r.id}">▶ Run now</button> <button class="small" data-rt-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-rt-del="${r.id}">Delete</button></td></tr>`).join('');
+  const rows=routines.map(r=>`<tr><td><b>${esc(r.name)}</b><br><span class="note">${esc((r.task||'').slice(0,120))}</span>${r.desktop_action?`<br><span class="note">🖥️ ${esc(r.desktop_action)}${r.desktop_target?` ${esc(r.desktop_target)}`:''}${r.desktop_text?` — ${esc(r.desktop_text.slice(0,60))}`:''}${r.desktop_keys?` — ${esc(r.desktop_keys)}`:''}</span>`:''}</td><td>${esc(botName(r.bot_id))}</td><td>${esc(r.schedule_text||'')}</td><td>${r.next_run?new Date(r.next_run*1000).toLocaleString():'—'}</td><td>${r.enabled?'✅ On':'⏸ Off'}${r.last_status?`<br><span class="note">last: ${esc(r.last_status)}${r.last_run?` · ${new Date(r.last_run*1000).toLocaleString()}`:''}</span>`:''}</td><td><button class="small" data-rt-run="${r.id}">▶ Run now</button> <button class="small" data-rt-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-rt-del="${r.id}">Delete</button></td></tr>`).join('');
   const runsHtml=routines.flatMap(r=>(r.runs||[]).slice(-3).map(run=>`<li><b>${esc(r.name)}</b> — ${esc(run.status)} · ${new Date(run.at*1000).toLocaleString()} — ${esc((run.summary||'').slice(0,200))}</li>`)).join('');
   return `<h2>⏰ Routines — work that runs itself</h2>
   <p class="note">A routine is a bot with a job and a clock. It runs on its own while LocalBotz is open — daily at 09:00, every hour, once on Friday. If the app was closed when a routine was due, it runs once when you open it again, then goes back to its normal time. Nothing runs while the app is closed.</p>
@@ -529,6 +595,12 @@ async function routinesHtml(){
   <div id="rt-time-row"><label>Time</label><input id="rt-time" type="time" value="09:00"></div>
   <div id="rt-weekday-row" style="display:none"><label>Weekday</label><select id="rt-weekday"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select></div>
   <div id="rt-interval-row" style="display:none"><label>Every</label><select id="rt-interval"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option><option value="240">4 hours</option><option value="1440">1 day</option></select></div>
+  <h3>Desktop step (optional)</h3>
+  <p class="note">After the bot task — or on its own, if you leave the task empty — the routine can do one thing on the desktop: open a window, click a control, type, or press keys. The bot can already do this itself in its task; this is for a fixed step you always want, e.g. every morning at 08:00, activate Excel and press ctrl+s. It is logged like every desktop action, and it needs Desktop control on in Settings &gt; Permissions.</p>
+  <label>Desktop action</label><select id="rt-desktop-action"><option value="">None — bot task only</option><option value="inspect">Inspect the desktop</option><option value="activate">Activate a window</option><option value="click">Click a control</option><option value="type">Type text</option><option value="key">Press keys</option><option value="screenshot">Take a screenshot</option></select>
+  <label>Target (window/control ref, e.g. w1 or e1 — from the Desktop page)</label><input id="rt-desktop-target" type="text" placeholder="e.g. w1">
+  <label>Text to type</label><input id="rt-desktop-text" type="text" placeholder="e.g. the value to type into the cell">
+  <label>Keys to press</label><input id="rt-desktop-keys" type="text" placeholder="e.g. enter, tab, ctrl+s">
   <div style="margin:8px 0"><button id="rt-create">Create routine</button></div>
   <h3>Your routines</h3>
   ${routines.length?`<table><tr><th>Routine</th><th>Bot</th><th>Schedule</th><th>Next run</th><th>Status</th><th></th></tr>${rows}</table>`:'<p class="note">No routines yet. Create one above — for example, a daily price check or a weekly sales summary.</p>'}
@@ -546,7 +618,7 @@ let dealDeptFilter='all';
 let dealPipelines={};
 let wfSteps=[{type:'note',text:''}];
 let wfBots=[], wfOffices=[];
-const WF_STEP_LABELS={create_task:'Create a task for a bot',office_job:'Run an office job with the team',draft:'Write a draft on the deal',note:'Add a note to the timeline',wait:'Wait…',if:'IF…'};
+const WF_STEP_LABELS={create_task:'Create a task for a bot',office_job:'Run an office job with the team',draft:'Write a draft on the deal',note:'Add a note to the timeline',wait:'Wait…',if:'IF…',desktop_inspect:'🖥️ Inspect the desktop',desktop_activate:'🖥️ Activate a window',desktop_click:'🖥️ Click on the desktop',desktop_type:'🖥️ Type on the desktop',desktop_key:'🖥️ Press keys on the desktop',desktop_screenshot:'🖥️ Screenshot the desktop'};
 function pipeStageLabel(dept,stage){const p=dealPipelines[dept]; if(!p) return stage; const s=p.stages.find(x=>x[0]===stage); return s?s[1]:stage;}
 function wfStepRow(i){
   const s=wfSteps[i];
@@ -557,6 +629,11 @@ function wfStepRow(i){
   else if(s.type==='draft'||s.type==='note') fields=`<input type="text" data-wf-f="text" value="${esc(s.text||'')}" placeholder="Write it here. Use {deal} {client} {value} {currency} {stage}">`;
   else if(s.type==='wait') fields=`<input type="number" data-wf-f="minutes" value="${s.minutes||60}" min="1" max="43200" style="width:90px"> minutes <span class="note">(1 minute to 30 days — 4320 = 3 days)</span>`;
   else if(s.type==='if') fields=`<select data-wf-f="condition">${['value_over','value_under','stage_is','stage_is_not'].map(c=>`<option value="${c}" ${s.condition===c?'selected':''}>${{value_over:'Deal value over',value_under:'Deal value under',stage_is:'Deal is still in stage',stage_is_not:'Deal is no longer in stage'}[c]}</option>`).join('')}</select> <input type="text" data-wf-f="value" value="${esc(String(s.value??''))}" placeholder="e.g. 100000, or quoted">`;
+  else if(s.type==='desktop_inspect'||s.type==='desktop_screenshot') fields=`<span class="note">No target needed — it looks at / photographs the whole desktop. Put it before a click or type step so the chain uses a fresh ref.</span>`;
+  else if(s.type==='desktop_activate') fields=`<input type="text" data-wf-f="target" value="${esc(s.target||'')}" placeholder="Window ref or title, e.g. w1 or BOQ.xlsx">`;
+  else if(s.type==='desktop_click') fields=`<input type="text" data-wf-f="target" value="${esc(s.target||'')}" placeholder="Control ref, e.g. e1 (from desktop_inspect)">`;
+  else if(s.type==='desktop_type') fields=`<input type="text" data-wf-f="target" value="${esc(s.target||'')}" placeholder="Control ref, e.g. e1 (leave blank for the focused window)"> <input type="text" data-wf-f="text" value="${esc(s.text||'')}" placeholder="Text to type. Use {deal} {client} {value} {currency} {stage}">`;
+  else if(s.type==='desktop_key') fields=`<input type="text" data-wf-f="keys" value="${esc(s.keys||'')}" placeholder="e.g. enter, tab, ctrl+s">`;
   return `<div data-wf-row="${i}" style="border:1px solid #ddd;border-radius:6px;padding:8px;margin:6px 0"><b>Step ${i+1}</b> <select data-wf-f="type">${typeOpts}</select> ${fields} <button class="small" data-wf-up="${i}" ${i===0?'disabled':''}>↑</button> <button class="small" data-wf-down="${i}" ${i===wfSteps.length-1?'disabled':''}>↓</button> <button class="small" data-wf-del="${i}">✕</button></div>`;
 }
 function wfStepsRender(){const el=q('wf-steps'); if(el) el.innerHTML=wfSteps.map((s,i)=>wfStepRow(i)).join('');}
@@ -575,8 +652,38 @@ function wfStepsClean(){
   return wfSteps.map(s=>{
     if(s.type==='wait') return {type:'wait',minutes:s.minutes||60};
     if(s.type==='if') return {type:'if',condition:s.condition||'stage_is',value:(s.condition==='value_over'||s.condition==='value_under')?Number(s.value||0):String(s.value||'')};
+    if(s.type.startsWith('desktop_')) return {type:s.type,target:(s.target||'').trim()||undefined,text:(s.text||'').trim()||undefined,keys:(s.keys||'').trim()||undefined};
     return {type:s.type,text:(s.text||'').trim(),bot_id:s.bot_id||undefined,office_id:s.office_id||undefined};
   });
+}
+async function desktopHtml(){
+  const st=await api('/api/desktop/status');
+  const snap=await api('/api/desktop/snapshot');
+  const log=await api('/api/desktop/log');
+  const winRows=(snap.windows||[]).map(w=>`<tr><td><b>${esc(w.ref)}</b></td><td>${esc(w.title)}</td><td>${esc(w.app||'')}</td><td>${w.focused?'● focused':''}</td></tr>`).join('');
+  const elRows=(snap.elements||[]).map(e=>`<tr><td><b>${esc(e.ref)}</b></td><td>${esc(e.name||'')}</td><td>${esc(e.type||'')}</td><td>${e.x!=null?`(${e.x}, ${e.y})`:''}</td><td>${esc(e.value||'')}</td></tr>`).join('');
+  const logRows=(log||[]).slice(0,30).map(l=>`<tr><td>${new Date(l.at*1000).toLocaleString()}</td><td>${esc(l.action)}</td><td>${esc(l.target||'')}</td><td>${esc(l.source||'')}</td><td>${l.verified?'✓ verified':'—'}</td><td style="white-space:pre-wrap">${esc((l.result||'').slice(0,200))}</td></tr>`).join('');
+  return `<h2>🖥️ Desktop — use the computer</h2>
+  <p class="note">A bot that can see and use the desktop apps on this computer — Excel and the BOQ, the company's old accounting software that has no API, a supplier portal. It works the same way as the browser: first it <b>inspects</b> the desktop (a short list of windows and controls, with refs like w1 and e1), then it clicks or types on a ref, then it looks again to check the result. Clicking and typing need Desktop control on in Settings &gt; Permissions, and a bot on Ask asks before it clicks anything. Every action is logged below. It never clicks or types into a password field, and it never clicks from a screenshot — only from the list it just read.</p>
+  <h3>Status</h3>
+  <p>${st.available?`✅ Desktop control is available — ${esc(st.backend)} on ${esc(st.platform)}${st.mock?' (mock desktop — no real computer is attached here, so the windows below are examples)':''}`:`❌ Desktop control is not available — ${esc(st.detail||'')}`}${st.enabled?'':' — and it is switched off in Settings &gt; Permissions.'}</p>
+  <p class="note">Libraries: pyautogui ${st.libs&&st.libs.pyautogui?'✅':'❌'} · pygetwindow ${st.libs&&st.libs.pygetwindow?'✅':'❌'} · pywinauto (Windows accessibility tree) ${st.libs&&st.libs.pywinauto?'✅':'❌'} — they are installed by the full install, up front.</p>
+  <p class="note">Honest limits: the controls list depends on the app — on Windows the accessibility tree sees most buttons and fields; on Mac and Linux you mostly get the window list, so activate a window and click by coordinates from a screenshot. Custom-drawn apps may be invisible. On macOS the app needs an Accessibility permission grant first. A real Windows desktop has not been tested from here — this page was tested in mock mode.</p>
+  <h3>Windows open now</h3>
+  ${winRows?`<table><tr><th>Ref</th><th>Window</th><th>App</th><th></th></tr>${winRows}</table>`:'<p class="note">No windows found. '+(snap.note?esc(snap.note):'')+'</p>'}
+  <h3>Controls in the focused window</h3>
+  ${elRows?`<table><tr><th>Ref</th><th>Control</th><th>Type</th><th>At</th><th>Shows</th></tr>${elRows}</table>`:'<p class="note">No controls listed for this window — see the limits above.</p>'}
+  <h3>Do something on the desktop</h3>
+  <p class="note">Inspect first, act by ref, then check the verified result it reports back.</p>
+  <label>Action</label><select id="desk-action"><option value="inspect">Inspect the desktop</option><option value="activate">Activate a window</option><option value="click">Click</option><option value="type">Type text</option><option value="key">Press keys</option><option value="screenshot">Take a screenshot</option></select>
+  <label>Target (ref or title, e.g. w1 or e1)</label><input id="desk-target" type="text" placeholder="e.g. w1">
+  <label>Text to type</label><input id="desk-text" type="text" placeholder="e.g. 2,390,907">
+  <label>Keys to press</label><input id="desk-keys" type="text" placeholder="e.g. enter, tab, ctrl+s">
+  <div style="margin:8px 0"><button id="desk-act">Do it on the desktop</button> <button id="desk-refresh">↻ Refresh the list</button></div>
+  <div id="desk-result"></div>
+  <h3>Desktop log — every action, verified or not</h3>
+  ${logRows?`<table><tr><th>When</th><th>Action</th><th>Target</th><th>From</th><th>Verified</th><th>Result</th></tr>${logRows}</table>`:'<p class="note">Nothing on the desktop yet. Inspect it above, or let a bot or a workflow do something.</p>'}
+  <div id="page-msg"></div>`;
 }
 async function runsHtml(){
   const runs=await api('/api/chain-runs');
@@ -603,7 +710,7 @@ async function dealsHtml(){
   if(!currentDeal){
     const shown=dealDeptFilter==='all'?deals:deals.filter(d=>(d.department||'general')===dealDeptFilter);
     const rows=shown.map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.client)}</td><td>${esc(d.department_label||'')}</td><td>${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'—'}</td><td>${esc(d.stage_label||d.stage)}</td><td><button class="small" data-deal-open="${d.id}">Open</button> <button class="small" data-deal-del="${d.id}">Delete</button></td></tr>`).join('');
-    const stepSummary=r=>(r.steps||[{type:r.action,text:r.text,bot_id:r.bot_id,office_id:r.office_id}]).map(s=>s.type==='wait'?`⏳ wait ${s.minutes||60}m`:s.type==='if'?`🔀 if ${esc(s.condition||'')}`:s.type).join(' → ');
+    const stepSummary=r=>(r.steps||[{type:r.action,text:r.text,bot_id:r.bot_id,office_id:r.office_id}]).map(s=>s.type==='wait'?`⏳ wait ${s.minutes||60}m`:s.type==='if'?`🔀 if ${esc(s.condition||'')}`:s.type.startsWith('desktop_')?`🖥️ ${s.type.replace('desktop_','')}${s.target?` ${esc(s.target)}`:''}`:s.type).join(' → ');
     const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${r.department?esc(dealPipelines[r.department]?.label||r.department):'Any department'}</td><td>When a deal moves to <b>${esc(pipeStageLabel(r.department||'general',r.stage))}</b></td><td>${esc(stepSummary(r))}<br><span class="note">${esc(((r.steps||[])[0]?.text||r.text||'').slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
     const runs=await api('/api/chain-runs');
     const waiting=runs.filter(r=>r.status==='waiting');
@@ -995,7 +1102,9 @@ function bindPage(name){
   document.querySelectorAll('[data-job-changes]').forEach(el=>el.onclick=async()=>{const note=prompt('What should the team fix?'); if(note===null) return; try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobChanges}/request-changes`,{method:'POST',body:JSON.stringify({note})}); msg('Changes requested — the job stays a draft. Run it again with the fix in the brief.'); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-job-export]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobExport}/export`,{method:'POST',body:JSON.stringify({format:el.dataset.fmt})}); msg(`Exported as ${d.filename} (${(d.size_bytes/1024).toFixed(1)} KB) — it is in Documents below. Click it to download.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('rt-kind')) q('rt-kind').onchange=()=>{const k=q('rt-kind').value; q('rt-time-row').style.display=(k==='interval')?'none':'block'; q('rt-weekday-row').style.display=(k==='weekly')?'block':'none'; q('rt-interval-row').style.display=(k==='interval')?'block':'none';};
-  if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value)})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value),desktop_action:q('rt-desktop-action')?q('rt-desktop-action').value:'',desktop_target:q('rt-desktop-target')?q('rt-desktop-target').value:'',desktop_text:q('rt-desktop-text')?q('rt-desktop-text').value:'',desktop_keys:q('rt-desktop-keys')?q('rt-desktop-keys').value:''})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('desk-act')) q('desk-act').onclick=async()=>{const b=q('desk-act'); b.disabled=true; b.textContent='Working…'; try{const r=await api('/api/desktop/action',{method:'POST',body:JSON.stringify({action:q('desk-action').value,target:q('desk-target').value,text:q('desk-text').value,keys:q('desk-keys').value})}); const el=q('desk-result'); if(el) el.innerHTML='<p style="white-space:pre-wrap">'+esc(r.result||'')+'</p>'; renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Do it on the desktop';}};
+  if(q('desk-refresh')) q('desk-refresh').onclick=()=>renderPage(name);
   document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-rt-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/routines/${el.dataset.rtToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-rt-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this routine?')) return; await api(`/api/routines/${el.dataset.rtDel}`,{method:'DELETE'}); renderPage(name);});

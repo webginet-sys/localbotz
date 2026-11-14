@@ -392,6 +392,12 @@ TOOL_DEFS = [
     {"type": "function", "function": {"name": "browser_screenshot", "description": "Screenshot the current browser page, save it, and return its path.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "browser_click", "description": "Click an element on the current page, by CSS selector.", "parameters": {"type": "object", "properties": {"selector": {"type": "string"}}, "required": ["selector"]}}},
     {"type": "function", "function": {"name": "browser_type", "description": "Type text into an element on the current page, by CSS selector.", "parameters": {"type": "object", "properties": {"selector": {"type": "string"}, "text": {"type": "string"}}, "required": ["selector", "text"]}}},
+    {"type": "function", "function": {"name": "desktop_inspect", "description": "Look at the desktop first: list open windows and the controls in the focused window, with refs (w1, e1). Always call this before any desktop click or type.", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "desktop_activate", "description": "Bring a desktop window to the front, by its ref (w1) or title. Inspect first.", "parameters": {"type": "object", "properties": {"target": {"type": "string"}}, "required": ["target"]}}},
+    {"type": "function", "function": {"name": "desktop_click", "description": "Click a desktop control by its ref (e1/w1), or by x,y coordinates from the snapshot. Inspect first, then verify the result it reports.", "parameters": {"type": "object", "properties": {"target": {"type": "string"}, "x": {"type": "integer"}, "y": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "desktop_type", "description": "Type text into a desktop control by its ref (e1), or into the focused window if no ref is given. Never type into a password field — it will be refused.", "parameters": {"type": "object", "properties": {"target": {"type": "string"}, "text": {"type": "string"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "desktop_key", "description": "Press keys on the desktop, e.g. enter, tab, esc, ctrl+s. Inspect first.", "parameters": {"type": "object", "properties": {"keys": {"type": "string"}}, "required": ["keys"]}}},
+    {"type": "function", "function": {"name": "desktop_screenshot", "description": "Take a screenshot of the whole desktop, save it, and return its path. Use it to see what is on screen when the snapshot has no controls for an app.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "list_files", "description": "List files in the workspace folder (relative path, default '.').", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}}},
     {"type": "function", "function": {"name": "read_file", "description": "Read a file in the workspace folder (relative path).", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
     {"type": "function", "function": {"name": "write_file", "description": "Write content to a file in the workspace folder (relative path). Creates parent folders.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
@@ -425,11 +431,19 @@ def load_bots():
         _save_json(BOTS_FILE, bots)
     # Migration: bots created before providers existed get the default.
     for b in bots:
+        # Desktop inspection is read-only, so every bot gets it; clicking
+        # and typing stay opt-in (Desktop Helper template / Tools page),
+        # and Ask mode still blocks them.
+        tools = b.get("enabled_tools")
+        if isinstance(tools, list) and tools and "desktop_inspect" not in tools:
+            tools.append("desktop_inspect")
         b.setdefault("provider", DEFAULT_PROVIDER)
         if b["provider"] not in PROVIDERS:
             b["provider"] = DEFAULT_PROVIDER
         b.setdefault("model", PROVIDERS[b["provider"]]["default_model"])
         b.setdefault("routing", "off")
+        b.setdefault("talk_mode", "off")
+        b.setdefault("show_me_how", "off")
     return bots
 
 def save_bots(bots):
@@ -618,6 +632,446 @@ def tool_browser_type(selector: str, text: str) -> str:
     except Exception as e:
         return f"browser_type failed: {e}"
 
+
+# ---------- Desktop control — "use the computer" (LocalBotz-native) ----------
+# Idea only, learned from public computer-use projects (Cua Driver and
+# Agent Desktop): an agent inspects the desktop as a structured list of
+# windows + controls, acts on a control by its ref, then re-reads the
+# desktop to verify. LocalBotz's own code, no copied code, no external
+# CLI, no cloud, no screenshot-based clicking: refs / coordinates from
+# the snapshot only. Backends are lazy imports — the app still starts
+# if none of them is installed; desktop tools then say so honestly.
+# Safety: desktop_click/type/key/activate are mutating, so they are in
+# _MUTATING_TOOLS (Ask mode blocks them) and need the global "desktop"
+# permission. Typing into a password field is refused. Every action is
+# logged to data/desktop_log.json (capped 200) — never the typed text
+# itself when it looks like a password, and never a screenshot's pixels.
+DESKTOP_LOG_FILE = DATA_DIR / "desktop_log.json"
+DESKTOP_ACTIONS = ("inspect", "activate", "click", "type", "key", "screenshot")
+_DESKTOP_KEYS = {"enter", "tab", "esc", "escape", "space", "up", "down", "left",
+                 "right", "home", "end", "pageup", "pagedown", "delete",
+                 "backspace"} | {f"f{i}" for i in range(1, 13)}
+_MOCK_DESKTOP = {"focused": "w1", "typed": {}}
+
+
+def _desktop_libs():
+    libs = {"pyautogui": False, "pygetwindow": False, "pywinauto": False}
+    for name in libs:
+        try:
+            __import__(name)
+            libs[name] = True
+        except Exception:
+            pass
+    return libs
+
+
+def _desktop_available():
+    """(available, backend, detail). Mock mode counts as available."""
+    if MOCK_MODE:
+        return True, "mock", "Mock desktop — no real computer is attached here."
+    libs = _desktop_libs()
+    if sys.platform.startswith("win") and libs["pywinauto"]:
+        return True, "pywinauto", "Windows accessibility tree (pywinauto) + pyautogui."
+    if libs["pyautogui"] and libs["pygetwindow"]:
+        return True, "pyautogui", "Window list (pygetwindow) + mouse/keyboard (pyautogui)."
+    if libs["pyautogui"]:
+        return True, "pyautogui", "Mouse/keyboard/screenshot only (pyautogui) — no window list."
+    return False, "none", ("Desktop control is not installed on this computer. "
+                           "It is part of the full install (requirements-desktop.txt); "
+                           "re-run start.bat / start.sh, or: pip install -r requirements-desktop.txt")
+
+
+def _desktop_status_dict():
+    available, backend, detail = _desktop_available()
+    libs = _desktop_libs()
+    return {"available": available, "backend": backend, "detail": detail,
+            "platform": sys.platform, "mock": bool(MOCK_MODE),
+            "libs": libs,
+            "enabled": bool(load_permissions().get("global", {}).get("desktop", True))}
+
+
+def _desktop_screen_size():
+    try:
+        import pyautogui
+        w, h = pyautogui.size()
+        return int(w), int(h)
+    except Exception:
+        return 1920, 1080
+
+
+def _mock_desktop_snapshot():
+    focused = _MOCK_DESKTOP.get("focused", "w1")
+    windows = [
+        {"ref": "w1", "title": "BOQ.xlsx — Excel", "app": "Excel", "focused": focused == "w1"},
+        {"ref": "w2", "title": "Calculator", "app": "Calculator", "focused": focused == "w2"},
+        {"ref": "w3", "title": "Inbox — Outlook", "app": "Outlook", "focused": focused == "w3"},
+    ]
+    elements = [
+        {"ref": "e1", "window": "w1", "name": "Total (QAR)", "type": "cell",
+         "value": "2,390,907", "x": 1200, "y": 400, "w": 200, "h": 24},
+        {"ref": "e2", "window": "w1", "name": "Save", "type": "button",
+         "x": 60, "y": 40, "w": 48, "h": 24},
+        {"ref": "e3", "window": "w2", "name": "7", "type": "button",
+         "x": 100, "y": 200, "w": 48, "h": 48},
+        {"ref": "e4", "window": "w3", "name": "Search mail", "type": "textbox",
+         "x": 200, "y": 60, "w": 240, "h": 28},
+        {"ref": "e5", "window": "w3", "name": "Password", "type": "password",
+         "x": 200, "y": 120, "w": 240, "h": 28},
+    ]
+    return {"available": True, "mock": True, "platform": sys.platform,
+            "backend": "mock", "screen": [1920, 1080], "focused": focused,
+            "windows": windows, "elements": elements}
+
+
+def _desktop_snapshot():
+    """Structured, token-light snapshot: windows + controls, capped at 50
+    elements. Never a screenshot, never raw pixels."""
+    if MOCK_MODE:
+        return _mock_desktop_snapshot()
+    available, backend, detail = _desktop_available()
+    snap = {"available": available, "mock": False, "platform": sys.platform,
+            "backend": backend, "screen": list(_desktop_screen_size()),
+            "focused": None, "windows": [], "elements": [], "note": detail}
+    if not available:
+        return snap
+    libs = _desktop_libs()
+    # Window list.
+    try:
+        if libs["pygetwindow"]:
+            import pygetwindow as gw
+            for i, w in enumerate(gw.getAllWindows()):
+                title = (getattr(w, "title", "") or "").strip()
+                if not title:
+                    continue
+                ref = f"w{i + 1}"
+                is_active = bool(getattr(w, "isActive", False))
+                snap["windows"].append({"ref": ref, "title": title[:120],
+                                        "app": title[:60], "focused": is_active})
+                if is_active:
+                    snap["focused"] = ref
+                if len(snap["windows"]) >= 20:
+                    break
+    except Exception:
+        pass
+    if not snap["windows"] and sys.platform == "darwin":
+        # macOS fallback: visible apps via AppleScript (no extra library).
+        try:
+            out = subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to get name of every process whose visible is true'],
+                capture_output=True, text=True, timeout=5).stdout or ""
+            for i, name in enumerate([n.strip() for n in out.split(",") if n.strip()][:20]):
+                snap["windows"].append({"ref": f"w{i + 1}", "title": name,
+                                        "app": name, "focused": False})
+        except Exception:
+            pass
+    if not snap["windows"] and shutil.which("wmctrl"):
+        # Linux fallback: wmctrl -l lists windows.
+        try:
+            out = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5).stdout or ""
+            for i, line in enumerate(out.splitlines()[:20]):
+                parts = line.split(None, 3)
+                title = parts[3] if len(parts) > 3 else line
+                snap["windows"].append({"ref": f"w{i + 1}", "title": title[:120],
+                                        "app": title[:60], "focused": False})
+        except Exception:
+            pass
+    # Controls of the focused window, Windows only, via the accessibility
+    # tree (pywinauto). Other platforms get windows only — honest, and
+    # the agent can still activate a window and click by coordinates
+    # from a screenshot it asked for. Custom-drawn apps may be invisible.
+    if sys.platform.startswith("win") and libs["pywinauto"]:
+        try:
+            from pywinauto import Desktop
+            win = Desktop(backend="uia").window(active_only=True)
+            n = 0
+            for el in win.descendants():
+                try:
+                    rect = el.rectangle()
+                    name = (el.element_info.name or "").strip()
+                    ctype = (el.element_info.control_type or "").strip()
+                except Exception:
+                    continue
+                if not name and not ctype:
+                    continue
+                snap["elements"].append({
+                    "ref": f"e{n + 1}", "window": snap.get("focused") or "",
+                    "name": name[:120], "type": (ctype or "control").lower(),
+                    "x": int(rect.left + rect.width() // 2),
+                    "y": int(rect.top + rect.height() // 2),
+                    "w": int(rect.width()), "h": int(rect.height())})
+                n += 1
+                if n >= 50:
+                    break
+        except Exception:
+            pass
+    return snap
+
+
+def load_desktop_log():
+    log = _load_json(DESKTOP_LOG_FILE, None)
+    return log if isinstance(log, list) else []
+
+
+def _desktop_log(action, target, source, result, verified, bot_id=None):
+    log = load_desktop_log()
+    log.append({"at": int(time.time()), "action": action,
+                "target": (target or "")[:200], "source": source or "manual",
+                "bot_id": bot_id or "", "result": (result or "")[:500],
+                "verified": bool(verified)})
+    _save_json(DESKTOP_LOG_FILE, log[-200:])
+    return log[-1]
+
+
+def _desktop_find(snap, target):
+    """Find a window/element by ref (w1/e1) or by title/name substring."""
+    target = (target or "").strip()
+    if not target:
+        return None
+    for w in snap.get("windows", []):
+        if w.get("ref") == target or w.get("title", "").lower() == target.lower():
+            return {"kind": "window", **w}
+    for e in snap.get("elements", []):
+        if e.get("ref") == target or (e.get("name") or "").lower() == target.lower():
+            return {"kind": "element", **e}
+    low = target.lower()
+    for w in snap.get("windows", []):
+        if low in w.get("title", "").lower():
+            return {"kind": "window", **w}
+    for e in snap.get("elements", []):
+        if low in (e.get("name") or "").lower():
+            return {"kind": "element", **e}
+    return None
+
+
+def _desktop_is_password(item):
+    if not item:
+        return False
+    hay = f"{item.get('type', '')} {item.get('name', '')}".lower()
+    return "password" in hay
+
+
+def _desktop_verify(target):
+    """Observe again after acting: is the target still there / focused?
+    Returns (verified, note)."""
+    try:
+        snap = _desktop_snapshot()
+    except Exception as e:
+        return False, f"Could not re-read the desktop to verify: {e}"
+    if not target:
+        return True, "Desktop re-read OK."
+    item = _desktop_find(snap, target)
+    if item:
+        return True, f"Verified — {item.get('title') or item.get('name')} is still there."
+    return False, "Could not verify — the target is no longer in the snapshot."
+
+
+def _desktop_do(action, target="", text="", keys="", x=None, y=None,
+                source="manual", bot=None):
+    """Run one desktop action, then verify by re-reading the desktop.
+    Returns a one-line result string. Global desktop permission is
+    enforced here too, so workflows/routines cannot bypass it."""
+    if action not in DESKTOP_ACTIONS:
+        return f"Unknown desktop action '{action}'."
+    if not load_permissions().get("global", {}).get("desktop", True):
+        result = "Desktop control is off (Settings > Permissions)."
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    if action == "inspect":
+        result = tool_desktop_inspect()
+        _desktop_log(action, target, source, result[:500], True,
+                     bot.get("id") if bot else None)
+        return result
+    if action == "screenshot":
+        result = tool_desktop_screenshot()
+        ok = "saved" in result.lower()
+        _desktop_log(action, target, source, result, ok,
+                     bot.get("id") if bot else None)
+        return result
+    # Mutating actions from here on.
+    snap = _desktop_snapshot()
+    if not snap.get("available"):
+        result = f"Desktop control is not available: {snap.get('note', '')}"
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    item = _desktop_find(snap, target) if target else None
+    if target and not item and x is None:
+        result = (f"Desktop {action} failed: no window or control matches "
+                  f"{target!r} — inspect the desktop first and use a ref like w1 or e1.")
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    if action in ("click", "type") and _desktop_is_password(item):
+        result = "Refused: that control is a password field — LocalBotz never types or clicks into password fields."
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    if action == "type" and not (text or "").strip():
+        result = "Desktop type needs text to type."
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    if action == "key":
+        parts = [k.strip().lower() for k in (keys or "").replace("+", " ").split() if k.strip()]
+        if not parts:
+            result = "Desktop key needs keys, e.g. enter, tab, or ctrl+s."
+            _desktop_log(action, target, source, result, False,
+                         bot.get("id") if bot else None)
+            return result
+        bad = [k for k in parts if k not in _DESKTOP_KEYS and k not in ("ctrl", "alt", "shift", "win", "cmd")
+               and not (len(k) == 1 and k.isalnum())]  # single letters/digits are fine in combos like ctrl+s
+        if bad:
+            result = f"Desktop key refused: unknown key(s) {', '.join(bad)}."
+            _desktop_log(action, target, source, result, False,
+                         bot.get("id") if bot else None)
+            return result
+    if x is not None or y is not None:
+        try:
+            xi, yi = int(x), int(y)
+        except (TypeError, ValueError):
+            result = "Desktop click needs numbers for x and y."
+            _desktop_log(action, target, source, result, False,
+                         bot.get("id") if bot else None)
+            return result
+        sw, sh = snap.get("screen") or [1920, 1080]
+        if not (0 <= xi < sw and 0 <= yi < sh):
+            result = f"Refused: coordinates ({xi}, {yi}) are outside the screen ({sw}x{sh})."
+            _desktop_log(action, target, source, result, False,
+                         bot.get("id") if bot else None)
+            return result
+    if MOCK_MODE:
+        if action == "activate" and item and item.get("kind") == "window":
+            _MOCK_DESKTOP["focused"] = item["ref"]
+            result = f"[MOCK MODE] Activated {item.get('title')} ({item['ref']})."
+        elif action == "click":
+            if item and item.get("kind") == "window":
+                _MOCK_DESKTOP["focused"] = item["ref"]
+            label = item.get("title") or item.get("name") or f"({x}, {y})"
+            result = f"[MOCK MODE] Clicked {label}."
+            if item and item.get("value"):
+                result += f" It shows {item['value']}."
+        elif action == "type":
+            if item:
+                _MOCK_DESKTOP.setdefault("typed", {})[item.get("ref", "")] = text
+            result = f"[MOCK MODE] Typed {len(text)} characters into {item.get('name') or 'the focused window'}."
+        elif action == "key":
+            result = f"[MOCK MODE] Pressed {keys}."
+        else:
+            result = f"[MOCK MODE] Desktop {action} done."
+        verified, note = _desktop_verify(target if action != "key" else "")
+        result += f" {note}"
+        _desktop_log(action, target, source, result, verified,
+                     bot.get("id") if bot else None)
+        return result
+    # Real desktop.
+    try:
+        import pyautogui
+    except Exception as e:
+        result = f"Desktop {action} failed: pyautogui is not installed ({e})."
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    try:
+        if action == "activate" and item and item.get("kind") == "window":
+            try:
+                import pygetwindow as gw
+                wins = gw.getWindowsWithTitle(item["title"])
+                if wins:
+                    wins[0].activate()
+            except Exception:
+                pass
+            result = f"Activated {item.get('title')}."
+        elif action == "click":
+            cx, cy = (int(x), int(y)) if x is not None and y is not None else (item.get("x"), item.get("y"))
+            if cx is None or cy is None:
+                raise ValueError("nothing to click — no coordinates for this target")
+            pyautogui.click(cx, cy)
+            result = f"Clicked {item.get('title') or item.get('name') or f'({cx}, {cy})'}."
+        elif action == "type":
+            if item and item.get("x") is not None:
+                pyautogui.click(item["x"], item["y"])
+            pyautogui.typewrite(text, interval=0.02)
+            result = f"Typed {len(text)} characters into {item.get('name') or 'the focused window'}."
+        elif action == "key":
+            parts = [k.strip().lower() for k in (keys or "").replace("+", " ").split() if k.strip()]
+            if len(parts) == 1:
+                pyautogui.press(parts[0])
+            else:
+                pyautogui.hotkey(*parts)
+            result = f"Pressed {keys}."
+        else:
+            result = f"Desktop {action} done."
+    except Exception as e:
+        result = f"Desktop {action} failed: {e}"
+        _desktop_log(action, target, source, result, False,
+                     bot.get("id") if bot else None)
+        return result
+    verified, note = _desktop_verify(target if action in ("activate", "click", "type") else "")
+    result += f" {note}"
+    _desktop_log(action, target, source, result, verified,
+                 bot.get("id") if bot else None)
+    return result
+
+
+def tool_desktop_inspect() -> str:
+    snap = _desktop_snapshot()
+    if not snap.get("available"):
+        return f"Desktop is not available: {snap.get('note', '')}"
+    lines = []
+    if snap.get("mock"):
+        lines.append("[MOCK MODE — no real desktop here] Windows open:")
+    else:
+        lines.append(f"Desktop ({snap.get('backend')}, {snap.get('platform')}) — windows open:")
+    for w in snap.get("windows", []):
+        lines.append(f"  {w['ref']}: {w['title']}{'  [focused]' if w.get('focused') else ''}")
+    if snap.get("elements"):
+        lines.append("Controls in the focused window:")
+        for e in snap["elements"]:
+            val = f" — shows {e['value']}" if e.get("value") else ""
+            lines.append(f"  {e['ref']}: {e.get('name')} ({e.get('type')}) at ({e.get('x')}, {e.get('y')}){val}")
+    elif not snap.get("mock"):
+        lines.append("(No controls listed — this backend only sees windows. "
+                     "Activate a window, then click by coordinates from a screenshot.)")
+    return "\n".join(lines) if lines else "No windows found on the desktop."
+
+
+def tool_desktop_activate(target: str) -> str:
+    return _desktop_do("activate", target=target, source="bot")
+
+
+def tool_desktop_click(target: str = "", x=None, y=None) -> str:
+    return _desktop_do("click", target=target, x=x, y=y, source="bot")
+
+
+def tool_desktop_type(target: str = "", text: str = "") -> str:
+    return _desktop_do("type", target=target, text=text, source="bot")
+
+
+def tool_desktop_key(keys: str = "") -> str:
+    return _desktop_do("key", keys=keys, source="bot")
+
+
+def tool_desktop_screenshot() -> str:
+    try:
+        if MOCK_MODE:
+            # A minimal 1x1 PNG, so the file exists and the UI can show it.
+            import base64
+            name = f"desktop-{int(time.time())}.png"
+            path = SHOTS_DIR / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+            return f"[MOCK MODE] Desktop screenshot saved to data/screenshots/{name} (open /screenshots/{name})"
+        import pyautogui
+        name = f"desktop-{int(time.time())}.png"
+        path = SHOTS_DIR / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pyautogui.screenshot(str(path))
+        return f"Desktop screenshot saved to data/screenshots/{name} (open /screenshots/{name})"
+    except Exception as e:
+        return f"desktop_screenshot failed: {e}"
+
 # ---------- files (restricted to ./workspace) ----------
 def _safe_workspace_path(rel: str) -> Path:
     rel = (rel or ".").strip()
@@ -753,6 +1207,12 @@ TOOLS = {
     "browser_screenshot": lambda a: tool_browser_screenshot(),
     "browser_click": lambda a: tool_browser_click(a.get("selector", "")),
     "browser_type": lambda a: tool_browser_type(a.get("selector", ""), a.get("text", "")),
+    "desktop_inspect": lambda a: tool_desktop_inspect(),
+    "desktop_activate": lambda a: tool_desktop_activate(a.get("target", "")),
+    "desktop_click": lambda a: tool_desktop_click(a.get("target", ""), a.get("x"), a.get("y")),
+    "desktop_type": lambda a: tool_desktop_type(a.get("target", ""), a.get("text", "")),
+    "desktop_key": lambda a: tool_desktop_key(a.get("keys", "")),
+    "desktop_screenshot": lambda a: tool_desktop_screenshot(),
     "list_files": lambda a: tool_list_files(a.get("path", ".")),
     "read_file": lambda a: tool_read_file(a.get("path", "")),
     "write_file": lambda a: tool_write_file(a.get("path", ""), a.get("content", "")),
@@ -988,7 +1448,9 @@ def record_usage(provider_id: str, model: str, usage):
 def load_permissions():
     d = _load_json(PERMISSIONS_FILE, {})
     d.setdefault("global", {"file_read": True, "file_write": True, "shell": True,
-                            "browser": True, "web_search": True, "network": True})
+                            "browser": True, "web_search": True, "network": True,
+                            "desktop": True})
+    d.setdefault("global", {}).setdefault("desktop", True)
     d.setdefault("tools", {t["function"]["name"]: True for t in TOOL_DEFS})
     d.setdefault("bots", {})
     d.setdefault("blocked_paths", [])
@@ -1068,7 +1530,8 @@ def _is_blocked_path(rel: str) -> bool:
             return True
     return False
 
-_MUTATING_TOOLS = {"write_file", "run_command", "browser_click", "browser_type"}
+_MUTATING_TOOLS = {"write_file", "run_command", "browser_click", "browser_type",
+                    "desktop_activate", "desktop_click", "desktop_type", "desktop_key"}
 
 def _tool_allowed(name: str, bot: dict):
     # Returns (allowed, reason). Enforces, in order: template/bot tool list,
@@ -1091,6 +1554,8 @@ def _tool_allowed(name: str, bot: dict):
         return False, "shell commands are off (Settings > Permissions)"
     if name.startswith("browser_") and not g.get("browser", True):
         return False, "browser automation is off (Settings > Permissions)"
+    if name.startswith("desktop_") and not g.get("desktop", True):
+        return False, "desktop control is off (Settings > Permissions)"
     if name in ("web_search", "browser_search") and not g.get("web_search", True):
         return False, "web search is off (Settings > Permissions)"
     if name in ("web_search", "browser_search", "browser_open", "browser_read") and not g.get("network", True):
@@ -1387,7 +1852,53 @@ def _is_simple_question(text):
     return not any(k in low for k in ROUTING_HARD_WORDS)
 
 
-def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
+def _plain_step(tool: str, args: dict) -> str:
+    """One plain sentence for a tool call, for Show-me-how."""
+    a = args or {}
+    tgt = a.get("target") or a.get("selector") or a.get("url") or a.get("path") or ""
+    if tool == "desktop_inspect":
+        return "First, I'll look at what's open on your screen."
+    if tool == "desktop_activate":
+        return f"Now I'll bring {tgt or 'that window'} to the front, so you can see it."
+    if tool == "desktop_click":
+        return f"Now I'll click {tgt or 'there'} on your screen."
+    if tool == "desktop_type":
+        return f"Now I'll type into {tgt or 'the box on your screen'}."
+    if tool == "desktop_key":
+        return f"Now I'll press {a.get('keys') or 'a key'}."
+    if tool == "desktop_screenshot":
+        return "Now I'll take a picture of your screen, so you can see what happened."
+    if tool == "browser_open":
+        return f"Now I'll open {tgt} in the browser."
+    if tool == "browser_read":
+        return "Now I'll read what's on the page in the browser."
+    if tool == "browser_search" or tool == "web_search":
+        return f"Now I'll search for {a.get('query') or 'that'}."
+    if tool == "browser_click":
+        return f"Now I'll click {tgt} on the page."
+    if tool == "browser_type":
+        return f"Now I'll type into {tgt} on the page."
+    if tool == "browser_screenshot":
+        return "Now I'll take a picture of the browser page, so you can see it."
+    if tool == "read_file":
+        return f"Now I'll read the file {tgt}."
+    if tool == "write_file":
+        return f"Now I'll write the file {tgt}."
+    if tool == "list_files":
+        return "Now I'll look at the files in the workspace."
+    if tool == "run_command":
+        return f"Now I'll run {a.get('command') or 'a command'} on this computer."
+    return f"Now I'll do the next step: {tool}."
+
+
+def _screenshot_path_from(result: str):
+    import re as _re
+    m = _re.search(r"data/screenshots/([A-Za-z0-9_.\-]+\.png)", str(result or ""))
+    return f"data/screenshots/{m.group(1)}" if m else None
+
+
+def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
+              talk: bool = False, show_me_how=None):
     # Tool loop, max 8 turns. Returns (reply, tool_trace, extra).
     # extra carries error/fallback info for the UI; the loop itself is
     # identical for every provider (see llm_chat translation).
@@ -1425,9 +1936,22 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
     mem_text = "\n".join(f"- {f}" for f in mem.get("facts", [])) or "(no memory yet)"
     skills_text = _skills_text_for_bot(bot)
     learn_text = _learnings_text(bot_id=bot["id"])
+    talk_mode = bool(talk) or (bot.get("talk_mode") or "off") == "on"
+    show_how = (bot.get("show_me_how") or "off") == "on" if show_me_how is None else bool(show_me_how)
+    steps = []  # Show-me-how steps, filled in as tools run (mock + real).
     system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
               "You have tools for web search, browser automation, workspace files, "
-              "and safe shell commands. Use them when needed, then answer in plain text."
+              "safe shell commands, and desktop control (desktop_inspect first, "
+              "then act by ref and check the verified result). Use them when needed, "
+              "then answer in plain text."
+              + ("\n\nThe user is talking, not typing. Reply in short plain "
+                 "sentences, no jargon, no menus, no tutorials. If something is "
+                 "unclear, ask ONE simple question in plain words. Never ask the "
+                 "user to write a better prompt." if talk_mode else "")
+              + ("\n\nShow, don't just do: explain each step in plain words "
+                 "BEFORE you do it, one step at a time, and say what you are "
+                 "about to click or type and where, so the user can follow on "
+                 "their own screen." if show_how else "")
               + (f"\n\nEnabled skills:\n{skills_text}" if skills_text else "")
               + (f"\n\nWhat the team has learned from this user's daily work — "
                  f"use it when it fits, e.g. how they price a quotation:\n{learn_text}"
@@ -1458,13 +1982,29 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
                      f"start the local server (Developer tab), set MODEL to that model's exact id, "
                      f"and restart without --mock for real local-model replies. I can still search the web, "
                      f"browse, and read/write files in ./workspace.")
+        if show_how:
+            if not steps:
+                dresult, _blocked = _execute_tool("desktop_inspect", {}, bot)
+                trace.append({"tool": "desktop_inspect", "args": {}, "result": dresult[:2000]})
+                shot = tool_desktop_screenshot()
+                steps.append({"n": 1, "tool": "desktop_inspect",
+                              "plain": _plain_step("desktop_inspect", {}) + " [MOCK MODE]",
+                              "target": "", "result_summary": (dresult or "")[:200],
+                              "screenshot": _screenshot_path_from(shot)})
+            for i, st in enumerate(steps):
+                st["n"] = i + 1
+                if "[MOCK MODE]" not in st.get("plain", ""):
+                    st["plain"] = st["plain"] + " [MOCK MODE]"
         history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time()),
+                        "steps": steps if show_how else [],
                         "routed_from": routed_from, "routed_to": provider_id})
         save_chat(bot["id"], history)
         return reply, trace, {"mode": mode, "key_source": key_source,
                               "workspace": ws["id"], "cost_usd": 0.0,
                               "routed_from": routed_from,
                               "routed_to": provider_id,
+                              "steps": steps if show_how else [],
+                              "talk_mode": talk_mode, "show_me_how": show_how,
                               "wallet_balance": wallet_balance(ws["id"])}
 
     # Pre-check: provider disabled in Library/Settings > Connectors.
@@ -1640,6 +2180,23 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
             result, blocked = _execute_tool(name, args, bot)
             trace.append({"tool": name, "args": args, "result": str(result)[:3000],
                           "blocked": blocked})
+            if show_how and not blocked:
+                shot = None
+                if name.startswith("desktop_") and name != "desktop_screenshot":
+                    # Pause so the user can follow, then show the result.
+                    time.sleep(1)
+                    shot = _screenshot_path_from(tool_desktop_screenshot())
+                elif name.startswith("browser_") and name != "browser_screenshot":
+                    time.sleep(1)
+                    shot = _screenshot_path_from(tool_browser_screenshot())
+                elif name in ("desktop_screenshot", "browser_screenshot"):
+                    shot = _screenshot_path_from(str(result))
+                steps.append({"n": len(steps) + 1, "tool": name,
+                              "plain": _plain_step(name, args),
+                              "target": (args.get("target") or args.get("selector")
+                                         or args.get("url") or args.get("path") or ""),
+                              "result_summary": str(result)[:200],
+                              "screenshot": shot})
             messages.append({"role": "tool", "tool_call_id": tc.get("id", ""),
                              "content": str(result)[:8000]})
     else:
@@ -1656,8 +2213,11 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
                   "tokens_in": metered["tokens_in"], "tokens_out": metered["tokens_out"],
                   "wallet_balance": metered["balance_usd"],
                   "routed_from": routed_from, "routed_to": provider_id,
+                  "steps": steps if show_how else [],
+                  "talk_mode": talk_mode, "show_me_how": show_how,
                   "low_balance_warning": bool(low_warn)})
     history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time()),
+                    "steps": steps if show_how else [],
                     "cost_usd": metered["cost_usd"], "wallet_balance": metered["balance_usd"],
                     "mode": mode, "key_source": key_source,
                     "routed_from": routed_from, "routed_to": provider_id})
@@ -1934,6 +2494,8 @@ class BotCreate(BaseModel):
     avatar: str = ""
     schedule: str = ""
     routing: str = "off"
+    talk_mode: str = "off"
+    show_me_how: str = "off"
     enabled_tools: list = []
     skills: list = []
 
@@ -1946,6 +2508,8 @@ class BotUpdate(BaseModel):
     avatar: str = ""
     schedule: str = ""
     routing: str = ""
+    talk_mode: str = ""
+    show_me_how: str = ""
     enabled_tools: list = []
     skills: list = []
     persistent: bool = None
@@ -1953,6 +2517,8 @@ class BotUpdate(BaseModel):
 class ChatIn(BaseModel):
     message: str = Field(min_length=1)
     workspace: str = "default"
+    talk: bool = False
+    show_me_how: bool | None = None
 
 class MemoryIn(BaseModel):
     fact: str = Field(min_length=1)
@@ -2234,11 +2800,18 @@ def create_bot(body: BotCreate):
            "provider": provider, "model": model,
            "avatar": body.avatar or (tpl["avatar"] if tpl else "🤖"),
            "schedule": body.schedule or (tpl["schedule"] if tpl else "on_demand"),
-           "enabled_tools": body.enabled_tools or (tpl["default_tools"] if tpl else []),
+           "enabled_tools": (lambda _t: (_t + ["desktop_inspect"] if _t and "desktop_inspect" not in _t else _t))(body.enabled_tools or (tpl["default_tools"] if tpl else [])),
            "skills": body.skills or ["research", "file-help", "browser-help"],
            "routing": body.routing if body.routing in ("off", "auto") else "off",
+           "talk_mode": body.talk_mode if body.talk_mode in ("on", "off") else "off",
+           "show_me_how": body.show_me_how if body.show_me_how in ("on", "off") else "off",
            "persistent": False,
            "created_at": int(time.time())}
+    # A template can turn Talk / Show-me-how on (e.g. Desktop Helper).
+    if tpl and body.talk_mode not in ("on",) and (tpl.get("talk_mode") or "off") == "on":
+        bot["talk_mode"] = "on"
+    if tpl and body.show_me_how not in ("on",) and (tpl.get("show_me_how") or "off") == "on":
+        bot["show_me_how"] = "on"
     bots.append(bot); save_bots(bots)
     return bot
 
@@ -2260,6 +2833,10 @@ def update_bot(bot_id: str, body: BotUpdate):
         bot["model"] = body.model.strip()
     if body.routing in ("off", "auto"):
         bot["routing"] = body.routing
+    if body.talk_mode in ("on", "off"):
+        bot["talk_mode"] = body.talk_mode
+    if body.show_me_how in ("on", "off"):
+        bot["show_me_how"] = body.show_me_how
     if body.enabled_tools is not None:
         bot["enabled_tools"] = body.enabled_tools
     if body.skills is not None:
@@ -3769,10 +4346,73 @@ def post_chat(bot_id: str, body: ChatIn):
     if not bot:
         raise HTTPException(404, "Bot not found")
     ws_id = (body.workspace or "default").strip() or "default"
-    reply, trace, extra = run_agent(bot, body.message.strip(), workspace_id=ws_id)
+    reply, trace, extra = run_agent(bot, body.message.strip(), workspace_id=ws_id,
+                                    talk=bool(body.talk),
+                                    show_me_how=body.show_me_how)
     out = {"reply": reply, "tools": trace, "bot": bot["id"], "workspace": ws_id}
     out.update(extra or {})
     return out
+
+class ShowMeHowIn(BaseModel):
+    task: str = ""
+    talk: bool = False
+
+
+@app.post("/api/bots/{bot_id}/show-me-how")
+def show_me_how(bot_id: str, body: ShowMeHowIn):
+    bot = get_bot(bot_id)
+    if not bot:
+        raise HTTPException(404, "Bot not found")
+    task = (body.task or "").strip()
+    if not task:
+        raise HTTPException(400, "Give the bot a task to show you how to do.")
+    reply, trace, extra = run_agent(bot, task, talk=bool(body.talk), show_me_how=True)
+    return {"reply": reply, "steps": (extra or {}).get("steps", []),
+            "tools": trace, "bot": bot["id"]}
+
+
+@app.post("/api/talk/transcribe")
+async def talk_transcribe(file: UploadFile = File(None)):
+    """Transcribe an uploaded audio clip locally, with faster-whisper
+    if it is installed. No cloud key, no audio saved: the bytes are
+    read into memory and, if a local model is present, transcribed
+    from an in-memory tmpfs file that is deleted immediately. Without
+    faster-whisper this honestly says so (501) — Talk in the browser
+    works without it, and faster-whisper is deliberately NOT in
+    requirements.txt, so the install stays light."""
+    if file is None or not file.filename:
+        raise HTTPException(400, "Send an audio file to transcribe.")
+    try:
+        import faster_whisper  # noqa: F401
+    except ImportError:
+        raise HTTPException(501, "Local transcription is not installed — Talk in the browser works without it. "
+                                 "Optional: pip install faster-whisper (see docs/talk.md).")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "The audio file was empty.")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Audio is too large — keep it under 25 MB.")
+    import tempfile
+    tmpdir = "/dev/shm" if Path("/dev/shm").exists() else None
+    tmp = tempfile.NamedTemporaryFile(suffix=".audio", dir=tmpdir, delete=False)
+    try:
+        tmp.write(data)
+        tmp.close()
+        from faster_whisper import WhisperModel
+        model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        segments, _info = model.transcribe(tmp.name, language="en")
+        text = " ".join(s.text.strip() for s in segments).strip()
+        return {"text": text, "engine": "faster-whisper/tiny (local)"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Local transcription failed: {e}")
+    finally:
+        try:
+            Path(tmp.name).unlink(missing_ok=True)
+        except Exception:
+            pass
+
 
 @app.post("/api/bots/{bot_id}/chat/reset")
 def reset_chat(bot_id: str):
@@ -4014,9 +4654,10 @@ def _routine_schedule_text(routine):
 
 
 def _run_routine(routine: dict, manual: bool = False):
-    """Run one routine now: run_agent with the bot, record the run,
-    then put the routine back on its schedule (or switch it off if
-    it was a one-off). Returns the updated routine, or None."""
+    """Run one routine now: run_agent with the bot, then (or alone, if
+    the task is empty) its direct desktop action, record the run, then
+    put the routine back on its schedule (or switch it off if it was
+    a one-off). Returns the updated routine, or None."""
     routines = load_routines()
     stored = next((x for x in routines if x["id"] == routine["id"]), None)
     if not stored or stored.get("id") in _RUNNING_ROUTINES:
@@ -4030,13 +4671,35 @@ def _run_routine(routine: dict, manual: bool = False):
             stored["enabled"] = False
             stored["next_run"] = None
         else:
-            try:
-                reply, trace, extra = run_agent(bot, stored["task"])
-                run["status"] = "failed" if (extra or {}).get("error") else "done"
-                run["summary"] = (reply or "")[:500].replace("\n", " ").strip()
-            except Exception as e:
-                run["status"] = "failed"
-                run["summary"] = f"Routine failed: {e}"
+            task = (stored.get("task") or "").strip()
+            desktop_action = (stored.get("desktop_action") or "").strip()
+            if task:
+                try:
+                    reply, trace, extra = run_agent(bot, task)
+                    run["status"] = "failed" if (extra or {}).get("error") else "done"
+                    run["summary"] = (reply or "")[:500].replace("\n", " ").strip()
+                except Exception as e:
+                    run["status"] = "failed"
+                    run["summary"] = f"Routine failed: {e}"
+            else:
+                run["status"] = "done"
+                run["summary"] = "No bot task — desktop action only."
+            if desktop_action:
+                # Direct desktop step, after the bot task (or alone).
+                # Same runner, same permission check and log as the
+                # tools, with source=routine. A failed desktop step
+                # fails the run, so it is not silently lost.
+                dresult = _desktop_do(
+                    desktop_action, target=stored.get("desktop_target") or "",
+                    text=stored.get("desktop_text") or "",
+                    keys=stored.get("desktop_keys") or "",
+                    source=f"routine:{stored['name']}", bot=bot)
+                run["summary"] = ((run["summary"] + " | Desktop: " + dresult)
+                                  if run["summary"] else "Desktop: " + dresult)[:500]
+                if ("failed" in dresult.lower() or "refused" in dresult.lower()
+                        or "not available" in dresult.lower()
+                        or "is off" in dresult.lower()):
+                    run["status"] = "failed"
             # Remember what happened, like a Hermes task does.
             try:
                 mem = load_memory(bot["id"])
@@ -4052,7 +4715,7 @@ def _run_routine(routine: dict, manual: bool = False):
                 _record_learning(
                     bot["id"], None, "routine", stored["name"],
                     f"Daily work — routine '{stored['name']}': the user wants this done regularly: "
-                    f"{stored['task'][:200]} Last result: {run['summary'][:200]}")
+                    f"{(stored['task'] or stored.get('desktop_action') or '')[:200]} Last result: {run['summary'][:200]}")
         stored.setdefault("runs", []).append(run)
         stored["runs"] = stored["runs"][-20:]
         stored["last_run"] = run["at"]
@@ -4070,6 +4733,7 @@ def _run_routine(routine: dict, manual: bool = False):
         _RUNNING_ROUTINES.discard(stored["id"])
 
 
+
 def _validate_routine_fields(body, routine=None):
     """Validate + normalise the fields a routine is created/patched
     with. Returns (fields, error) — error is a message or None."""
@@ -4077,15 +4741,40 @@ def _validate_routine_fields(body, routine=None):
     if routine is not None:
         fields.update({k: routine.get(k) for k in
                        ("name", "bot_id", "task", "kind", "time", "weekday",
-                        "interval_minutes")})
+                        "interval_minutes", "desktop_action", "desktop_target",
+                        "desktop_text", "desktop_keys")})
     for key in ("name", "task"):
         if key in body:
             val = (body.get(key) or "").strip()
             if not val:
+                # An empty task is fine when the routine is a desktop
+                # action alone (desktop_action is parsed just below).
+                if key == "task" and (body.get("desktop_action") or ""):
+                    fields[key] = ""
+                    continue
                 return None, f"Give the routine a {key}."
             fields[key] = val
     if "bot_id" in body:
         fields["bot_id"] = (body.get("bot_id") or "").strip()
+    if "desktop_action" in body:
+        da = (body.get("desktop_action") or "").strip().lower()
+        if da.startswith("desktop_"):
+            da = da[len("desktop_"):]
+        if da and da not in DESKTOP_ACTIONS:
+            return None, f"Desktop action must be one of: {', '.join(DESKTOP_ACTIONS)}."
+        fields["desktop_action"] = da
+    for _k in ("desktop_target", "desktop_text", "desktop_keys"):
+        if _k in body:
+            fields[_k] = (body.get(_k) or "").strip()
+    _da = fields.get("desktop_action")
+    if _da in ("activate",) and not (fields.get("desktop_target") or "").strip():
+        return None, "A desktop activate step needs a target (a window ref or title)."
+    if _da == "click" and not (fields.get("desktop_target") or "").strip():
+        return None, "A desktop click step needs a target (a control ref from desktop_inspect)."
+    if _da == "type" and not (fields.get("desktop_text") or "").strip():
+        return None, "A desktop type step needs text to type."
+    if _da == "key" and not (fields.get("desktop_keys") or "").strip():
+        return None, "A desktop key step needs keys, e.g. enter or ctrl+s."
     if "kind" in body:
         kind = (body.get("kind") or "").strip().lower()
         if kind not in ROUTINE_KINDS:
@@ -4104,9 +4793,11 @@ def _validate_routine_fields(body, routine=None):
         except (TypeError, ValueError):
             return None, "Interval must be a number of minutes."
     if routine is None:
-        for key in ("name", "bot_id", "task", "kind"):
+        for key in ("name", "bot_id", "kind"):
             if not fields.get(key):
                 return None, f"Give the routine a {key}."
+        if not fields.get("task") and not fields.get("desktop_action"):
+            return None, "Give the routine a task, or a desktop action."
     kind = fields.get("kind")
     if kind in ("daily", "weekly", "once"):
         if not _parse_hhmm(fields.get("time") or ""):
@@ -4132,6 +4823,10 @@ class RoutineIn(BaseModel):
     time: str = ""
     weekday: int | None = None
     interval_minutes: int | None = None
+    desktop_action: str = ""
+    desktop_target: str = ""
+    desktop_text: str = ""
+    desktop_keys: str = ""
 
 
 @app.get("/api/routines")
@@ -4430,7 +5125,11 @@ def _render_deal_text(template, deal):
 
 
 CHAIN_RUNS_FILE = DATA_DIR / "chain_runs.json"
-WORKFLOW_STEP_TYPES = ("create_task", "office_job", "draft", "note", "wait", "if")
+WORKFLOW_STEP_TYPES = ("create_task", "office_job", "draft", "note", "wait", "if",
+                       "desktop_inspect", "desktop_activate", "desktop_click",
+                       "desktop_type", "desktop_key", "desktop_screenshot")
+DESKTOP_STEP_TYPES = ("desktop_inspect", "desktop_activate", "desktop_click",
+                      "desktop_type", "desktop_key", "desktop_screenshot")
 WORKFLOW_IF_CONDITIONS = ("value_over", "value_under", "stage_is", "stage_is_not")
 
 
@@ -4484,6 +5183,13 @@ def _validate_workflow_steps(steps):
                 raise HTTPException(400, "Pick a bot for the task step.")
             if stype == "office_job" and (not step.get("office_id") or not get_office(step.get("office_id"))):
                 raise HTTPException(400, "Pick an office for the job step.")
+        elif stype in DESKTOP_STEP_TYPES:
+            if stype in ("desktop_activate", "desktop_click") and not (step.get("target") or "").strip() and step.get("x") is None:
+                raise HTTPException(400, f"A {stype} step needs a target (a window/control ref from desktop_inspect, or x/y for a click).")
+            if stype == "desktop_type" and not (step.get("text") or "").strip():
+                raise HTTPException(400, "A desktop_type step needs text to type.")
+            if stype == "desktop_key" and not (step.get("keys") or "").strip():
+                raise HTTPException(400, "A desktop_key step needs keys, e.g. enter or ctrl+s.")
         elif stype == "wait":
             try:
                 minutes = int(step.get("minutes"))
@@ -4545,6 +5251,20 @@ def _run_workflow_step(rule, step, deal):
         return "Draft written on the deal — send it yourself when ready."
     if stype == "note":
         return text
+    if stype in DESKTOP_STEP_TYPES:
+        # Desktop steps run through the same desktop runner as the tools,
+        # so they are permission-checked and logged the same way
+        # (source=workflow). The deal's placeholders are filled into the
+        # typed text, not into a ref.
+        action = stype[len("desktop_"):]
+        typed = _render_deal_text(step.get("text") or "", deal)
+        result = _desktop_do(action, target=step.get("target") or "",
+                             text=typed, keys=step.get("keys") or "",
+                             x=step.get("x"), y=step.get("y"),
+                             source=f"workflow:{rule.get('name', '')}")
+        if action == "inspect":
+            return (result.splitlines()[0] if result else "Desktop inspected.") + " (see the Desktop log for the full list.)"
+        return result
     raise ValueError(f"Unknown step type '{stype}'")
 
 
@@ -5534,10 +6254,12 @@ def list_devices():
                      "python_version": sys.version.split()[0],
                      "playwright_chromium": chromium_ok, "chromium_path": chromium_path,
                      "lm_studio_reachable": lm_reachable,
-                     "browser_status": "ready" if chromium_ok else "chromium not installed - run: playwright install chromium"}
+                     "browser_status": "ready" if chromium_ok else "chromium not installed - run: playwright install chromium",
+                     "desktop": _desktop_status_dict()}
     return {"this_computer": this_computer,
             "browser": {"id": "browser-chromium", "name": "Chromium (Playwright)",
                         "installed": chromium_ok, "status": "ready" if chromium_ok else "not installed"},
+            "desktop": _desktop_status_dict(),
             "extra": load_devices_extra()}
 
 @app.post("/api/devices", status_code=201)
@@ -5554,6 +6276,57 @@ def delete_device(did: str):
         raise HTTPException(400, "This device cannot be removed from here")
     save_devices_extra([x for x in load_devices_extra() if x["id"] != did])
     return {"deleted": did}
+
+
+
+# ---------- Desktop control API ----------
+class DesktopActionIn(BaseModel):
+    action: str = ""
+    target: str = ""
+    text: str = ""
+    keys: str = ""
+    x: int | None = None
+    y: int | None = None
+    source: str = "manual"
+
+
+@app.get("/api/desktop/status")
+def desktop_status():
+    return _desktop_status_dict()
+
+
+@app.get("/api/desktop/snapshot")
+def desktop_snapshot():
+    snap = _desktop_snapshot()
+    if not snap.get("available"):
+        return snap
+    return snap
+
+
+@app.post("/api/desktop/action")
+def desktop_action(body: DesktopActionIn):
+    action = (body.action or "").strip().lower()
+    if action not in DESKTOP_ACTIONS:
+        raise HTTPException(400, f"Desktop action must be one of: {', '.join(DESKTOP_ACTIONS)}.")
+    if action.startswith("desktop_"):
+        action = action[len("desktop_"):]
+    # Permission checks, same as the tool loop: global desktop toggle,
+    # and the global tools toggle for the matching tool name.
+    perms = load_permissions()
+    if not perms.get("global", {}).get("desktop", True):
+        raise HTTPException(403, "Desktop control is off (Settings > Permissions).")
+    tool_name = f"desktop_{action}"
+    if not perms.get("tools", {}).get(tool_name, True):
+        raise HTTPException(403, f"Tool {tool_name} is disabled (Library > Tools).")
+    result = _desktop_do(action, target=body.target, text=body.text,
+                         keys=body.keys, x=body.x, y=body.y,
+                         source=body.source or "manual")
+    return {"action": action, "result": result, "snapshot": _desktop_snapshot()}
+
+
+@app.get("/api/desktop/log")
+def desktop_log():
+    return list(reversed(load_desktop_log()))
 
 
 # ---------- Operating models: platform / admin / workspaces / voice ----------

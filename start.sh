@@ -109,6 +109,11 @@ echo "[LocalBotz] Installing Playwright Chromium (skipped if already installed).
 if [ "$(uname)" = "Linux" ]; then
   (timeout 180 .venv/bin/playwright install-deps chromium </dev/null >/dev/null 2>&1 || echo "[LocalBotz] NOTE: could not install Chromium system libraries automatically — if Chromium fails to launch, run: .venv/bin/playwright install-deps chromium") || true
 fi
+# Desktop control — always installed upfront, in the full install.
+echo "[LocalBotz] Installing desktop control (mouse/keyboard/window tools)..."
+echo "[LocalBotz] This is part of the full install, so a bot can use the"
+echo "[LocalBotz] desktop apps on this computer — with nothing to install later."
+.venv/bin/python -m pip install -q -r requirements-desktop.txt
 echo "[LocalBotz] Verifying the full install (Python, packages, Chromium)..."
 .venv/bin/python scripts/check_install.py || echo "[LocalBotz] Install check reported a problem above — browser automation may not work yet. The app will still start."
 
