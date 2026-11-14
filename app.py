@@ -162,6 +162,19 @@ PROVIDERS = {
     "cerebras":  {"label": "Cerebras", "kind": "openai",
                   "base_url": "https://api.cerebras.ai/v1", "default_model": "llama-3.3-70b",
                   "key_env": "CEREBRAS_API_KEY", "env_base": "CEREBRAS_BASE_URL"},
+    # New providers from the ChatLLM model list (chatllm.abacus.ai, 2026-11-14,
+    # see models.json / docs/chatllm-model-reference.md). Reference-only:
+    # shown only when their key is set; confirm the exact model ID in the
+    # provider's own docs before use. No Git is needed to run any of this.
+    "grok":      {"label": "Grok (xAI)", "kind": "openai",
+                  "base_url": "https://api.x.ai/v1", "default_model": "grok-4",
+                  "key_env": "XAI_API_KEY", "env_base": "XAI_BASE_URL"},
+    "kimi":      {"label": "Kimi (Moonshot AI)", "kind": "openai",
+                  "base_url": "https://api.moonshot.ai/v1", "default_model": "kimi-k2",
+                  "key_env": "MOONSHOT_API_KEY", "env_base": "MOONSHOT_BASE_URL"},
+    "glm":       {"label": "GLM (Zhipu AI)", "kind": "openai",
+                  "base_url": "https://open.bigmodel.cn/api/paas/v4", "default_model": "glm-4.5",
+                  "key_env": "ZHIPU_API_KEY", "env_base": "ZHIPU_BASE_URL"},
     # VPS Premium — premium models from Thomas's own VPS gateway (server/).
     # The gateway holds the real provider keys; this client only sends a
     # user token (VPS_API_TOKEN) that Thomas issues. Base URL + token are
@@ -951,6 +964,13 @@ KNOWN_DEFAULT_MODELS = {
     "groq": ["llama-3.3-70b-versatile"],
     "mistral": ["mistral-small-latest"],
     "cerebras": ["llama-3.3-70b"],
+    # From the ChatLLM model list (see models.json). Reference-only models:
+    # only listed as usable when their key is set; confirm IDs in the
+    # provider's own docs. ChatLLM's marketing names (Grok-4.7, etc.) are
+    # NOT API IDs and are never sent to a provider.
+    "grok": ["grok-4"],
+    "kimi": ["kimi-k2"],
+    "glm": ["glm-4.5"],
 }
 
 def _live_models_for_provider(provider_id: str, timeout: int = 5):

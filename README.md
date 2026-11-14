@@ -366,7 +366,18 @@ The tool loop works the same for every provider. Claude uses its native Messages
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | |
 | Mistral | `MISTRAL_API_KEY` | `mistral-small-latest` | |
 | Cerebras | `CEREBRAS_API_KEY` | `llama-3.3-70b` | |
+| Grok (xAI) | `XAI_API_KEY` | `grok-4` | Reference-only, from the ChatLLM model list — confirm the ID in xAI's docs. |
+| Kimi (Moonshot AI) | `MOONSHOT_API_KEY` | `kimi-k2` | Reference-only, from the ChatLLM model list — confirm the ID in Moonshot's docs. |
+| GLM (Zhipu AI) | `ZHIPU_API_KEY` | `glm-4.5` | Reference-only, from the ChatLLM model list — confirm the ID in Zhipu's docs. |
 | VPS Premium | `VPS_API_TOKEN` (your token, not a provider key) | Claude Sonnet, GPT, Gemini — whatever the VPS offers | See below. No provider keys in the client. |
+
+Model list reference: [ChatLLM (Abacus.AI)](https://chatllm.abacus.ai/) — see
+`models.json` and `docs/chatllm-model-reference.md`. ChatLLM's marketing
+names (GPT 6 Astra, Fable 5.2, Gemini 4 Carbon, Grok-4.7, …) are **not**
+provider API IDs, so LocalBotz maps them to the closest real API IDs above
+and only lists a model as usable when its provider is actually available.
+**No Git is needed to run LocalBotz** — download the ZIP, extract it,
+double-click `start.bat` (Windows) or `start.command` (Mac).
 
 **Provider status** (Library / Settings → Connectors, and the Test button)
 uses these exact states, stored with the last-checked time in

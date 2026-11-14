@@ -24,9 +24,13 @@ Premium models: configured in .env as PREMIUM_MODELS (comma-separated).
 Default: Claude Sonnet (claude-sonnet-4-5), GPT (gpt-4o, gpt-4o-mini),
 Gemini (gemini-2.5-flash, gemini-2.5-pro). Add newer model ids there —
 e.g. PREMIUM_MODELS=claude-sonnet-4-5,gpt-4o,gpt-4o-mini,gpt-5,gemini-2.5-flash,gemini-2.5-pro
-— and restart. Routing is by model id prefix:
+— and restart. See models.json / docs/chatllm-model-reference.md for the
+ChatLLM model list used as a reference: Grok, Kimi and GLM can be added
+the same way (grok-4, kimi-k2, glm-4.5) once their provider keys are set
+on the VPS. Routing is by model id prefix:
     claude-* -> Anthropic   gpt-* -> OpenAI   gemini-* -> Google
-    deepseek-* -> DeepSeek
+    deepseek-* -> DeepSeek   grok-* -> xAI   kimi-* -> Moonshot
+    glm-* -> Zhipu
     anything else -> OpenRouter (if OPENROUTER_API_KEY is set)
 
 Run:
@@ -74,7 +78,7 @@ PREMIUM_MODELS = [m.strip() for m in
                   if m.strip()]
 
 # Model id -> provider + who owns it (for /v1/models responses).
-MODEL_OWNERS = {"claude-": "anthropic", "gpt-": "openai", "gemini-": "google", "deepseek-": "deepseek"}
+MODEL_OWNERS = {"claude-": "anthropic", "gpt-": "openai", "gemini-": "google", "deepseek-": "deepseek", "grok-": "xai", "kimi-": "moonshot", "glm-": "zhipu"}
 
 def _owner_of(model: str) -> str:
     for prefix, owner in MODEL_OWNERS.items():
