@@ -577,6 +577,14 @@ Five more ways LocalBotz works for a business, all of them approval-first:
   pairing. Customers message your business number, the bot drafts a reply,
   and nothing is sent until you approve it in Messaging channels. Senders
   not on the allowlist get nothing. See `docs/whatsapp-agent.md`.
+- **WhatsApp + Marketing from your own panels.** The same agent also
+  runs on the VPS gateway, so approvals work even when your computer is
+  off. Users connect their WhatsApp Business number + Meta tokens and
+  their Facebook / LinkedIn / X / Instagram accounts from the user panel
+  (WhatsApp and Marketing pages); admins see every workspace's status
+  and can enable or disable WhatsApp per workspace from the admin panel.
+  Tokens are masked everywhere and never logged. Posting still happens
+  in the app for now. See `docs/panels-whatsapp.md`.
 - **Always-on monitors.** A deal sitting Quoted for 3 days (or Negotiation
   for 7) gets a chase draft and a task, once per deal. See the "Always-on
   monitors" section of `docs/deal-workflows.md`.

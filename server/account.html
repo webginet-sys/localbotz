@@ -107,6 +107,8 @@
       <a href="#home" data-page="home" class="active">🏠 Home</a>
       <a href="#licence" data-page="licence">🔑 Licence</a>
       <a href="#plan" data-page="plan">📋 Plan</a>
+      <a href="#whatsapp" data-page="whatsapp">💬 WhatsApp</a>
+      <a href="#marketing" data-page="marketing">📣 Marketing</a>
       <a href="#payments" data-page="payments">💳 Payments</a>
       <a href="#signincode" data-page="signincode">🔐 Sign in code</a>
       <a href="#settings" data-page="settings">⚙️ Settings</a>
@@ -244,6 +246,54 @@
       <div class="card"><p><b>All your receipts in one place.</b></p><div id="receipts-plan"><p>Loading…</p></div></div>
     </section>
 
+    <!-- WHATSAPP -->
+    <section class="page" id="page-whatsapp">
+      <h1>WhatsApp</h1>
+      <p class="sub">Your WhatsApp sales agent, hosted on this server — it works even when your computer is off. Nothing is sent until you approve it here.</p>
+      <div class="card">
+        <h3>Connect your WhatsApp Business number</h3>
+        <p id="wa-status" class="note">Loading…</p>
+        <label>Business name</label>
+        <input id="wa-business" type="text" placeholder="e.g. Test Trading LLC">
+        <label>WhatsApp Business number</label>
+        <input id="wa-number" type="text" placeholder="+974 5555 1234">
+        <label>Phone number ID (from Meta)</label>
+        <input id="wa-pnid" type="text" placeholder="e.g. 999888777">
+        <label>Access token (Meta)</label>
+        <input id="wa-token" type="password" autocomplete="off" placeholder="Paste your Meta access token">
+        <label>Verify token (Meta webhook)</label>
+        <input id="wa-verify" type="password" autocomplete="off" placeholder="Paste your verify token">
+        <label>App secret (Meta — for signature checks)</label>
+        <input id="wa-secret" type="password" autocomplete="off" placeholder="Paste your app secret (optional)">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:500;"><input id="wa-enabled" type="checkbox" checked style="width:auto;"> WhatsApp agent enabled</label>
+        <p><button class="btn teal" style="width:auto;" onclick="saveWhatsApp()">Save WhatsApp settings</button></p>
+        <p class="msg" id="wa-msg"></p>
+      </div>
+      <div class="card">
+        <h3>Webhook — paste this into Meta</h3>
+        <p>In your Meta app dashboard (WhatsApp → Configuration → Webhook), set the callback URL to this, and the verify token to the one above.</p>
+        <p><code id="wa-webhook" style="word-break:break-all;">…</code> <button class="btn ghost" style="width:auto;" onclick="copyWebhook()">Copy</button></p>
+        <p class="note">The LocalBotz app on your computer has its own WhatsApp agent too, with its own webhook — this hosted one is separate and keeps working while your computer is off.</p>
+      </div>
+      <div class="card">
+        <h3>Inbox — messages waiting for you</h3>
+        <p class="note">Every incoming WhatsApp message lands here with a suggested reply. Nothing is sent until you press “Approve &amp; send”.</p>
+        <div id="wa-inbox"><p>Loading…</p></div>
+      </div>
+    </section>
+
+    <!-- MARKETING -->
+    <section class="page" id="page-marketing">
+      <h1>Marketing</h1>
+      <p class="sub">Connect your social accounts once — then post from the LocalBotz app.</p>
+      <div class="card">
+        <p class="note">Posting happens in the LocalBotz app for now — this page connects your accounts. The app's Marketing publisher composes, waits for your approval, then posts.</p>
+        <div id="mk-forms"></div>
+        <p><button class="btn teal" style="width:auto;" onclick="saveMarketing()">Save marketing accounts</button></p>
+        <p class="msg" id="mk-msg"></p>
+      </div>
+    </section>
+
     <!-- PAYMENTS -->
     <section class="page" id="page-payments">
       <h1>Payments</h1>
@@ -358,6 +408,8 @@ function showPage(name){
   $('crumb').textContent = name.charAt(0).toUpperCase() + name.slice(1).replace('signincode','Sign in code');
   try { history.replaceState(null, '', '#'+name); } catch(e){}
   window.scrollTo(0,0);
+  if (name === 'whatsapp') loadWhatsApp();
+  if (name === 'marketing') loadMarketing();
 }
 document.querySelectorAll('#nav a').forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); showPage(a.dataset.page); }));
 function initials(name){
@@ -404,7 +456,91 @@ async function load(){
   ].map(s=>'<div class="stop'+(s[2]==='here'?'':'')+(s[0]==='Up next'?' next':'')+'"><span class="when">'+esc(s[0])+'</span><b>'+esc(s[1])+'</b>'+esc(s[2]==='here'?'':s[2])+(s[2]==='here'?'<span class="here">We are here</span>':'')+'</div>').join('');
   renderPlans();
   const h = (location.hash||'#home').slice(1);
-  if (['home','licence','plan','payments','signincode','settings'].includes(h)) showPage(h);
+  if (['home','licence','plan','whatsapp','marketing','payments','signincode','settings'].includes(h)) showPage(h);
+}
+let WA = null, MK = null;
+async function loadWhatsApp(){
+  const r = await fetch('/api/account/whatsapp');
+  if (!r.ok) return;
+  WA = await r.json();
+  $('wa-status').textContent = WA.configured
+    ? (WA.enabled ? 'Connected — ' + WA.awaiting_count + ' message(s) waiting, ' + WA.sent_count + ' sent.' : 'Connected but disabled — the agent is off. Enable it below to receive messages again.')
+    : 'Not set up yet — fill in your WhatsApp Business number and Meta tokens below.';
+  $('wa-business').value = WA.business_name || '';
+  $('wa-number').value = WA.bot_number || '';
+  $('wa-pnid').value = WA.phone_number_id || '';
+  $('wa-token').placeholder = WA.has_access_token ? 'Saved (' + WA.access_token + ') — leave blank to keep it' : 'Paste your Meta access token';
+  $('wa-verify').placeholder = WA.has_verify_token ? 'Saved (' + WA.verify_token + ') — leave blank to keep it' : 'Paste your verify token';
+  $('wa-secret').placeholder = WA.has_app_secret ? 'Saved (' + WA.app_secret + ') — leave blank to keep it' : 'Paste your app secret (optional)';
+  $('wa-enabled').checked = WA.enabled !== false;
+  $('wa-webhook').textContent = WA.webhook_url || '';
+  const inbox = await (await fetch('/api/account/whatsapp/inbox')).json();
+  $('wa-inbox').innerHTML = inbox.length ? inbox.map(i=>
+    '<div style="border-top:1px solid var(--line);padding:12px 0;"><b>'+esc(i.sender_name||i.sender)+'</b> <span class="note">'+esc(i.sender)+' · '+new Date(i.created_at*1000).toLocaleString()+'</span>'
+    + '<p>'+esc(i.text)+'</p>'
+    + (i.draft_reply ? '<p><b>Suggested reply:</b> '+esc(i.draft_reply)+'</p>' : '<p class="note">'+esc(i.draft_note||'No draft yet.')+'</p>')
+    + (i.status==='awaiting_approval'
+        ? '<p><button class="btn teal" style="width:auto;" onclick="waApprove(\''+esc(i.id)+'\')">✓ Approve &amp; send</button> <button class="btn ghost" style="width:auto;" onclick="waDismiss(\''+esc(i.id)+'\')">Dismiss</button></p>'
+        : '<p class="note">Status: '+esc(i.status)+(i.sent_at ? ' · '+new Date(i.sent_at*1000).toLocaleString() : '')+'</p>')
+    + '</div>').join('') : '<p>Nothing here yet. When a customer messages your WhatsApp Business number, it appears here.</p>';
+}
+async function saveWhatsApp(){
+  $('wa-msg').textContent = '';
+  const body = {business_name: $('wa-business').value.trim(), bot_number: $('wa-number').value.trim(),
+    phone_number_id: $('wa-pnid').value.trim(), enabled: $('wa-enabled').checked};
+  for (const [id, key] of [['wa-token','access_token'],['wa-verify','verify_token'],['wa-secret','app_secret']]) {
+    const v = $(id).value.trim(); if (v) body[key] = v;
+  }
+  const r = await fetch('/api/account/whatsapp', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { $('wa-msg').textContent = d.detail || 'Could not save.'; $('wa-msg').className='msg err'; return; }
+  $('wa-msg').textContent = 'WhatsApp settings saved.'; $('wa-msg').className='msg ok';
+  ['wa-token','wa-verify','wa-secret'].forEach(id=>$(id).value='');
+  loadWhatsApp();
+}
+function copyWebhook(){
+  const t = $('wa-webhook').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(()=>{ $('wa-msg').textContent='Webhook URL copied.'; $('wa-msg').className='msg ok'; });
+  else { const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+}
+async function waApprove(id){
+  const r = await fetch('/api/account/whatsapp/inbox/'+encodeURIComponent(id)+'/approve', {method:'POST'});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { alert(d.detail || 'Could not send.'); return; }
+  loadWhatsApp();
+}
+async function waDismiss(id){
+  if (!confirm('Dismiss this message without replying?')) return;
+  const r = await fetch('/api/account/whatsapp/inbox/'+encodeURIComponent(id)+'/dismiss', {method:'POST'});
+  if (!r.ok) { const d = await r.json().catch(()=>({})); alert(d.detail || 'Could not dismiss.'); return; }
+  loadWhatsApp();
+}
+const MK_LABELS = {telegram:'Telegram', facebook:'Facebook', linkedin:'LinkedIn', x:'X (Twitter)', instagram:'Instagram'};
+async function loadMarketing(){
+  const r = await fetch('/api/account/marketing');
+  if (!r.ok) return;
+  MK = await r.json();
+  $('mk-forms').innerHTML = Object.keys(MK_LABELS).map(p=>{
+    const m = MK[p] || {};
+    const extra = p==='telegram' ? '<label>Chat ID</label><input id="mk-'+p+'-chat" type="text" value="'+esc(m.chat_id||'')+'" placeholder="e.g. -1001234567890">' : '';
+    return '<h3 style="margin-top:18px;">'+MK_LABELS[p]+' — '+esc(m.status||'Not connected')+'</h3>'
+      + '<label>'+MK_LABELS[p]+' token</label><input id="mk-'+p+'-token" type="password" autocomplete="off" placeholder="'+(m.has_token ? 'Saved ('+esc(m.token)+') — leave blank to keep it' : 'Paste your '+MK_LABELS[p]+' token')+'">'
+      + extra;
+  }).join('');
+}
+async function saveMarketing(){
+  const body = {};
+  for (const p of Object.keys(MK_LABELS)) {
+    const e = {token: $('mk-'+p+'-token').value.trim()};
+    if (p==='telegram') e.chat_id = $('mk-telegram-chat').value.trim();
+    body[p] = e;
+  }
+  const r = await fetch('/api/account/marketing', {method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { $('mk-msg').textContent = d.detail || 'Could not save.'; $('mk-msg').className='msg err'; return; }
+  $('mk-msg').textContent = 'Marketing accounts saved.'; $('mk-msg').className='msg ok';
+  Object.keys(MK_LABELS).forEach(p=>{ $('mk-'+p+'-token').value=''; });
+  loadMarketing();
 }
 async function makeCode(){
   $('code-msg').textContent = '';

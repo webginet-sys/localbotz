@@ -252,9 +252,20 @@ sign-in page, plan page, then WhatsApp.
    link to the bot's number with a prefilled "Hi LocalBotz, I'm
    <workspace>" message. Until a real WhatsApp Business number is set,
    the page honestly says chat isn't set up yet and offers **Skip,
-   download the app instead** (→ the GitHub repo). A webhook that
-   answers WhatsApp messages is not built yet — that is the next step
-   once the number exists.
+   download the app instead** (→ the GitHub repo).
+4. **Hosted WhatsApp agent:** the agent also runs here, on the gateway
+   — `GET /whatsapp/webhook?workspace=<ws_id>` (Meta verification) and
+   `POST /whatsapp/webhook?workspace=<ws_id>` (incoming messages, HMAC
+   signature check when the workspace has an app secret). Each workspace
+   connects its own WhatsApp Business number + Meta tokens from the user
+   panel (WhatsApp page), and approves or dismisses each message there —
+   nothing is sent until approved, and it works even when the user's
+   computer is off. Admins see every workspace's WhatsApp and Marketing
+   status in the admin panel (WhatsApp / Marketing tabs). Tokens are
+   masked everywhere, never logged. Full detail:
+   `docs/panels-whatsapp.md`. `WHATSAPP_MOCK=1` makes Approve record
+   "sent (mock)" without calling the network — testing only, never on
+   the live VPS.
 
 ## User panel (like the Munder Difflin account page)
 

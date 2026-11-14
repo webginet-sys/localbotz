@@ -77,6 +77,8 @@
       <button data-sec="usage" onclick="showSec('usage')">📜 Usage log</button>
       <button data-sec="pricing" onclick="showSec('pricing')">💲 Pricing</button>
       <button data-sec="revenue" onclick="showSec('revenue')">💰 Revenue</button>
+      <button data-sec="whatsapp" onclick="showSec('whatsapp')">💬 WhatsApp</button>
+      <button data-sec="marketing" onclick="showSec('marketing')">📣 Marketing</button>
     </nav>
     <div class="foot">
       <button class="ghost" onclick="loadAll()">↻ Refresh</button>
@@ -134,6 +136,19 @@
       <h2>Last 14 days</h2>
       <div id="rev-days"></div>
     </section>
+
+    <section class="section" id="sec-whatsapp">
+      <h1>WhatsApp — hosted agent</h1>
+      <p class="sub">The WhatsApp sales agent running on this server, per workspace. Customers message a workspace's WhatsApp Business number; the message lands in that workspace's inbox in their account panel, and nothing is sent until they approve it there. This works even when their computer is off.</p>
+      <p class="note" id="wa-gateway"></p>
+      <table><thead><tr><th>Workspace</th><th>Business</th><th>Number</th><th>Configured</th><th>Enabled</th><th>Waiting</th><th>Sent</th><th>Last message</th><th></th></tr></thead><tbody id="wa-rows"></tbody></table>
+    </section>
+
+    <section class="section" id="sec-marketing">
+      <h1>Marketing — connected accounts</h1>
+      <p class="sub">Which social accounts each workspace has connected, from their account panel. Posting happens in the LocalBotz app — this page only shows the connection status. Token values are never shown here.</p>
+      <table><thead><tr><th>Workspace</th><th>Telegram</th><th>Facebook</th><th>LinkedIn</th><th>X</th><th>Instagram</th></tr></thead><tbody id="mk-rows"></tbody></table>
+    </section>
   </main>
 </div>
 
@@ -165,9 +180,10 @@ async function login(){
 function logout(){ localStorage.removeItem('lb-admin-token'); TOKEN=''; location.reload(); }
 async function loadAll(){
   try{
-    const [s, users, installs, usage, pricing, rev] = await Promise.all([
+    const [s, users, installs, usage, pricing, rev, wa, mk] = await Promise.all([
       api('/admin/stats'), api('/admin/users'), api('/admin/installs'),
-      api('/admin/usage?limit=100'), api('/admin/pricing'), api('/admin/revenue')]);
+      api('/admin/usage?limit=100'), api('/admin/pricing'), api('/admin/revenue'),
+      api('/admin/whatsapp'), api('/admin/marketing')]);
     document.getElementById('reg-note').textContent =
       'Registration is ' + (s.registration_open ? 'OPEN — anyone can sign up at /register.' : 'CLOSED — only tokens you issue by hand work.') +
       ' Premium models: ' + (s.premium_models||[]).join(', ') + '.';
@@ -211,7 +227,18 @@ async function loadAll(){
       `<tr><td><code>${esc(m)}</code></td><td>${v.requests}</td><td>${money(v.cost_usd)}</td></tr>`).join('')}</table>` : '<p class="note">No revenue yet.</p>';
     document.getElementById('rev-days').innerHTML = Object.keys(rev.per_day||{}).length ? `<table><tr><th>Day</th><th>Requests</th><th>Cost</th></tr>${Object.entries(rev.per_day).map(([d,v])=>
       `<tr><td>${esc(d)}</td><td>${v.requests}</td><td>${money(v.cost_usd)}</td></tr>`).join('')}</table>` : '<p class="note">No revenue yet.</p>';
+    document.getElementById('wa-gateway').textContent = 'This server\'s own WhatsApp number (WHATSAPP_BOT_NUMBER): ' + (wa.gateway_bot_number || 'not set') + '. Workspaces below use their own business numbers.';
+    document.getElementById('wa-rows').innerHTML = (wa.workspaces||[]).length ? wa.workspaces.map(w=>
+      `<tr><td><code>${esc(w.workspace_id)}</code><br>${esc(w.name||'')} ${esc(w.email||'')}</td><td>${esc(w.business_name||'—')}</td><td>${esc(w.bot_number||'—')}</td><td>${w.configured?'Yes':'No'}</td><td>${w.enabled?'Yes':'No'}</td><td>${w.awaiting_count}</td><td>${w.sent_count}</td><td>${fmtTs(w.last_message_at)}</td><td><button class="small" onclick="toggleWhatsApp('${esc(w.workspace_id)}', ${w.enabled?'false':'true'})">${w.enabled?'Disable':'Enable'}</button></td></tr>`).join('')
+      : '<tr><td colspan="9" class="muted">No workspaces have set up WhatsApp yet.</td></tr>';
+    document.getElementById('mk-rows').innerHTML = (mk.workspaces||[]).length ? mk.workspaces.map(w=>
+      `<tr><td><code>${esc(w.workspace_id)}</code><br>${esc(w.name||'')} ${esc(w.email||'')}</td>` + ['telegram','facebook','linkedin','x','instagram'].map(p=>`<td>${esc((w.platforms[p]||{}).status||'Not connected')}</td>`).join('') + '</tr>').join('')
+      : '<tr><td colspan="6" class="muted">No workspaces yet.</td></tr>';
   }catch(e){ alert(e.message); }
+}
+async function toggleWhatsApp(ws, enabled){
+  await api('/admin/whatsapp/'+encodeURIComponent(ws)+'/toggle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({enabled})});
+  loadAll();
 }
 async function setUser(ws, action){
   if(!confirm(action==='disable' ? 'Disable this workspace? Its premium token stops working.' : 'Enable this workspace again?')) return;

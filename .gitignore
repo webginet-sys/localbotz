@@ -20,6 +20,10 @@ data/*
 # the Windows installer workflow; ~65 MB of binaries — never commit)
 vendor/
 
+# Gateway runtime data — users, sessions, WhatsApp configs (with Meta
+# tokens in full) and inboxes live here. Never commit.
+server/data/
+
 # Playwright browsers (large, downloaded by `playwright install chromium`)
 # Uncomment if you want to keep browser binaries out of a shared cache:
 # .cache/ms-playwright/

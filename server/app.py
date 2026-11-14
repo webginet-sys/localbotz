@@ -39,6 +39,7 @@ Run:
     python app.py          # or: uvicorn app:app --host 127.0.0.1 --port 8001
 """
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -1041,6 +1042,396 @@ async def chat_completions(request: Request):
     _log_usage(token, model, provider, result.get("usage"), workspace_id,
                ip=(request.client.host if request.client else ""))
     return JSONResponse(result)
+
+# ---------- hosted WhatsApp agent + marketing connections -------------
+# The WhatsApp sales agent also runs here, on the gateway, so approvals
+# work even when the user's computer is off. The LocalBotz app on the
+# user's computer keeps its own WhatsApp agent too (client app.py) — the
+# two are separate: each has its own config, its own inbox and its own
+# webhook. Nothing is ever sent automatically: every incoming message
+# becomes an inbox item with a suggested draft reply, and a person must
+# approve it before anything goes out.
+#
+# Tokens are stored server-side only, in server/data/whatsapp.json and
+# server/data/marketing.json. API responses return MASKED values only
+# (first 3 + last 4 characters); tokens are never returned in full and
+# never written to logs. A user can only read/write their OWN workspace;
+# admin endpoints need the admin token.
+WHATSAPP_MOCK = (os.getenv("WHATSAPP_MOCK", "0") or "0").strip() in ("1", "true", "yes", "on")
+PUBLIC_HOST = (os.getenv("PUBLIC_HOST") or "api.localbotz.io").strip()
+WHATSAPP_FILE = BASE_DIR / "data" / "whatsapp.json"
+WHATSAPP_INBOX_FILE = BASE_DIR / "data" / "whatsapp_inbox.json"
+MARKETING_FILE = BASE_DIR / "data" / "marketing.json"
+MARKETING_PLATFORMS = ("telegram", "facebook", "linkedin", "x", "instagram")
+
+def _mask_secret(v):
+    v = (v or "").strip()
+    if not v:
+        return ""
+    if len(v) <= 8:
+        return "****"
+    return v[:3] + "..." + v[-4:]
+
+def _load_wa_configs():
+    try:
+        d = json.loads(WHATSAPP_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+def _save_wa_configs(cfgs):
+    WHATSAPP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    WHATSAPP_FILE.write_text(json.dumps(cfgs, indent=2), encoding="utf-8")
+
+def _wa_config(ws):
+    return _load_wa_configs().get(ws) or {}
+
+def _load_wa_inbox():
+    try:
+        d = json.loads(WHATSAPP_INBOX_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except Exception:
+        return []
+
+def _save_wa_inbox(items):
+    WHATSAPP_INBOX_FILE.parent.mkdir(parents=True, exist_ok=True)
+    WHATSAPP_INBOX_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+def _wa_counts(ws):
+    items = [i for i in _load_wa_inbox() if i.get("workspace_id") == ws]
+    return {"awaiting_count": sum(1 for i in items if i.get("status") == "awaiting_approval"),
+            "sent_count": sum(1 for i in items if i.get("status") == "sent"),
+            "inbox_count": len(items)}
+
+def _wa_public(cfg, ws):
+    return {"business_name": cfg.get("business_name", ""),
+            "bot_number": cfg.get("bot_number", ""),
+            "phone_number_id": cfg.get("phone_number_id", ""),
+            "access_token": _mask_secret(cfg.get("access_token")),
+            "verify_token": _mask_secret(cfg.get("verify_token")),
+            "app_secret": _mask_secret(cfg.get("app_secret")),
+            "has_access_token": bool(cfg.get("access_token")),
+            "has_phone_number_id": bool(cfg.get("phone_number_id")),
+            "has_verify_token": bool(cfg.get("verify_token")),
+            "has_app_secret": bool(cfg.get("app_secret")),
+            "enabled": cfg.get("enabled", True),
+            "updated_at": cfg.get("updated_at", ""),
+            "configured": bool(cfg.get("phone_number_id") and cfg.get("access_token")),
+            **_wa_counts(ws),
+            "webhook_url": f"https://{PUBLIC_HOST}/whatsapp/webhook?workspace={ws}",
+            "gateway_bot_number": WHATSAPP_BOT_NUMBER}
+
+def _cheapest_configured_model():
+    """First model in the cheap-first preference list that is both in
+    PREMIUM_MODELS and has its provider key set on this server."""
+    preference = ["gpt-4o-mini", "deepseek-chat", "gemini-2.5-flash", "gpt-4o",
+                  "gemini-2.5-pro", "claude-sonnet-4-5", "claude-opus-4-1",
+                  "grok-4", "kimi-k2", "glm-4.5", "deepseek-reasoner"]
+    for m in preference:
+        if m not in PREMIUM_MODELS:
+            continue
+        try:
+            _provider, _base, key_env = _route(m)
+        except Exception:
+            continue
+        if _provider_key(key_env):
+            return m
+    return None
+
+async def _wa_draft_reply(business_name, sender_text):
+    """Draft a reply with the cheapest configured premium model, using
+    the gateway's own chat helpers. Returns (draft, note)."""
+    model = _cheapest_configured_model()
+    if not model:
+        return "", ("No premium model key on the server yet — write the reply "
+                    "yourself in the panel. Ask the VPS owner to add a provider key.")
+    provider, base_url, key_env = _route(model)
+    key = _provider_key(key_env)
+    messages = [{"role": "system",
+                 "content": (f"You are the sales assistant for {business_name}. "
+                             "Reply briefly, plainly, helpfully, in the customer's "
+                             "language. Never invent a price, date or promise.")},
+                {"role": "user", "content": sender_text}]
+    try:
+        if provider == "anthropic":
+            result = await _chat_anthropic(model, messages, [], key)
+        else:
+            result = await _chat_openai_compatible(model, messages, [], base_url, key)
+        text = ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        return (text or "").strip(), f"Drafted with {model} — check it before you approve."
+    except Exception as e:
+        return "", f"Could not draft a reply ({e}). Write the reply yourself in the panel."
+
+@app.get("/api/account/whatsapp")
+def wa_status(request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    return _wa_public(_wa_config(ws), ws)
+
+@app.put("/api/account/whatsapp")
+async def wa_save(request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    cfgs = _load_wa_configs()
+    cfg = dict(cfgs.get(ws) or {})
+    phone = re.sub(r"[\s\-()]", "", (body.get("bot_number") or cfg.get("bot_number") or "").strip())
+    if phone and not re.match(r"^\+?[1-9]\d{6,14}$", phone):
+        raise HTTPException(400, "Enter your WhatsApp Business number with country code, e.g. +974 5555 1234.")
+    cfg["business_name"] = str(body.get("business_name") or cfg.get("business_name") or "")[:120]
+    cfg["bot_number"] = phone
+    cfg["phone_number_id"] = str(body.get("phone_number_id") or cfg.get("phone_number_id") or "")[:64]
+    for field in ("access_token", "verify_token", "app_secret"):
+        if (body.get(field) or "").strip():
+            cfg[field] = str(body[field]).strip()
+    if "enabled" in body:
+        cfg["enabled"] = bool(body.get("enabled"))
+    cfg["enabled"] = cfg.get("enabled", True)
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat()
+    cfgs[ws] = cfg
+    _save_wa_configs(cfgs)
+    return _wa_public(cfg, ws)
+
+@app.get("/api/account/whatsapp/inbox")
+def wa_inbox(request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    items = [i for i in _load_wa_inbox() if i.get("workspace_id") == ws]
+    items.sort(key=lambda i: int(i.get("created_at") or 0), reverse=True)
+    return items
+
+@app.post("/api/account/whatsapp/inbox/{item_id}/approve")
+async def wa_approve(item_id: str, request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    items = _load_wa_inbox()
+    item = next((i for i in items if i.get("id") == item_id and i.get("workspace_id") == ws), None)
+    if not item:
+        raise HTTPException(404, "No such inbox item in your workspace.")
+    if item.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This message is already {item.get('status')} — it cannot be approved again.")
+    draft = (item.get("draft_reply") or "").strip()
+    if not draft:
+        raise HTTPException(400, "There is no reply to send yet — write the reply in the panel first.")
+    cfg = _wa_config(ws)
+    if WHATSAPP_MOCK:
+        # Test mode only: record it as sent, never call the network.
+        item["status"] = "sent"
+        item["sent_at"] = int(time.time())
+        item["note"] = "[MOCK MODE] Recorded as sent — no real WhatsApp message was sent."
+        _save_wa_inbox(items)
+        return item
+    if not cfg.get("phone_number_id") or not cfg.get("access_token"):
+        raise HTTPException(400, "Your WhatsApp Business number and access token are not set in the panel yet.")
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post(f"https://graph.facebook.com/v21.0/{cfg['phone_number_id']}/messages",
+                         headers={"Authorization": f"Bearer {cfg['access_token']}",
+                                  "Content-Type": "application/json"},
+                         json={"messaging_product": "whatsapp", "to": item.get("sender"),
+                               "type": "text", "text": {"body": draft}})
+    if r.status_code >= 400:
+        try:
+            detail = (r.json().get("error") or {}).get("message") or r.text
+        except Exception:
+            detail = r.text
+        raise HTTPException(502, f"Meta refused the send (HTTP {r.status_code}): {detail}")
+    item["status"] = "sent"
+    item["sent_at"] = int(time.time())
+    item["note"] = "Sent via the WhatsApp Business API."
+    _save_wa_inbox(items)
+    return item
+
+@app.post("/api/account/whatsapp/inbox/{item_id}/dismiss")
+def wa_dismiss(item_id: str, request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    items = _load_wa_inbox()
+    item = next((i for i in items if i.get("id") == item_id and i.get("workspace_id") == ws), None)
+    if not item:
+        raise HTTPException(404, "No such inbox item in your workspace.")
+    if item.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This message is already {item.get('status')} — it cannot be dismissed again.")
+    item["status"] = "dismissed"
+    _save_wa_inbox(items)
+    return item
+
+@app.get("/whatsapp/webhook")
+def wa_webhook_verify(request: Request, workspace: str = ""):
+    """Meta's webhook verification: hub.mode=subscribe + hub.verify_token
+    must equal this workspace's verify token; returns hub.challenge."""
+    from fastapi.responses import PlainTextResponse
+    cfg = _wa_config(workspace)
+    if not workspace or not cfg:
+        raise HTTPException(403, "Unknown workspace.")
+    mode = request.query_params.get("hub.mode", "")
+    token = request.query_params.get("hub.verify_token", "")
+    challenge = request.query_params.get("hub.challenge", "")
+    if mode != "subscribe" or token != (cfg.get("verify_token") or "") or not challenge:
+        raise HTTPException(403, "Webhook verification failed.")
+    return PlainTextResponse(challenge)
+
+@app.post("/whatsapp/webhook")
+async def wa_webhook_receive(request: Request, workspace: str = ""):
+    """Meta posts incoming WhatsApp messages here. Text messages only;
+    statuses and other types are ignored. Nothing is ever sent — each
+    message becomes an inbox item with a suggested draft reply."""
+    cfg = _wa_config(workspace)
+    if not workspace or not cfg:
+        raise HTTPException(403, "Unknown workspace.")
+    raw = await request.body()
+    secret = (cfg.get("app_secret") or "").strip()
+    if secret:
+        sig = request.headers.get("x-hub-signature-256") or ""
+        expected = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            raise HTTPException(403, "Bad X-Hub-Signature-256.")
+    if not cfg.get("enabled", True):
+        return {"handled": 0, "ignored": "workspace disabled"}
+    if not cfg.get("phone_number_id") or not cfg.get("access_token"):
+        return {"handled": 0, "ignored": "whatsapp not configured"}
+    try:
+        payload = json.loads(raw or b"{}")
+    except Exception:
+        return {"handled": 0, "ignored": "not json"}
+    handled = 0
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            for msg in value.get("messages") or []:
+                if msg.get("type") != "text":
+                    continue
+                text = ((msg.get("text") or {}).get("body") or "").strip()
+                if not text:
+                    continue
+                sender = (msg.get("from") or "").strip()
+                sender_name = ""
+                for contact in value.get("contacts") or []:
+                    if contact.get("wa_id") == sender:
+                        sender_name = ((contact.get("profile") or {}).get("name") or "")
+                draft, note = await _wa_draft_reply(cfg.get("business_name") or "your business", text)
+                items = _load_wa_inbox()
+                items.append({"id": "wai_" + secrets.token_hex(6), "workspace_id": workspace,
+                              "sender": sender, "sender_name": sender_name or "WhatsApp customer",
+                              "text": text, "draft_reply": draft, "draft_note": note,
+                              "status": "awaiting_approval", "created_at": int(time.time())})
+                _save_wa_inbox(items)
+                handled += 1
+    return {"handled": handled}
+
+# ---------- marketing connections (per workspace) -----------------------
+# The user panel connects the accounts; posting itself happens in the
+# LocalBotz app (Marketing publisher) for now — this page only stores
+# the credentials, masked on read, and shows the status per platform.
+def _load_marketing():
+    try:
+        d = json.loads(MARKETING_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+def _save_marketing(all_m):
+    MARKETING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MARKETING_FILE.write_text(json.dumps(all_m, indent=2), encoding="utf-8")
+
+def _marketing_public(ws):
+    saved = _load_marketing().get(ws) or {}
+    out = {}
+    for p in MARKETING_PLATFORMS:
+        entry = saved.get(p) or {}
+        token = entry.get("token") or ""
+        out[p] = {"has_token": bool(token),
+                  "token": _mask_secret(token),
+                  "chat_id": entry.get("chat_id", "") if p == "telegram" else "",
+                  "status": "Saved, not checked" if token else "Not connected"}
+    return out
+
+@app.get("/api/account/marketing")
+def marketing_status(request: Request):
+    user = _require_session(request)
+    return _marketing_public(user.get("workspace_id", ""))
+
+@app.put("/api/account/marketing")
+async def marketing_save(request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id", "")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    all_m = _load_marketing()
+    saved = dict(all_m.get(ws) or {})
+    for p in MARKETING_PLATFORMS:
+        entry = dict(saved.get(p) or {})
+        incoming = body.get(p) or {}
+        if not isinstance(incoming, dict):
+            continue
+        if (incoming.get("token") or "").strip():
+            entry["token"] = str(incoming["token"]).strip()
+        if p == "telegram" and "chat_id" in incoming:
+            entry["chat_id"] = str(incoming.get("chat_id") or "")[:64]
+        saved[p] = entry
+    all_m[ws] = saved
+    _save_marketing(all_m)
+    return _marketing_public(ws)
+
+@app.get("/admin/whatsapp")
+def admin_whatsapp(request: Request):
+    _require_admin(request)
+    users = {u.get("workspace_id"): u for u in _load_users()}
+    cfgs = _load_wa_configs()
+    inbox = _load_wa_inbox()
+    rows = []
+    for ws_id, u in users.items():
+        cfg = cfgs.get(ws_id) or {}
+        items = [i for i in inbox if i.get("workspace_id") == ws_id]
+        last = max((int(i.get("created_at") or 0) for i in items), default=0)
+        rows.append({"workspace_id": ws_id, "name": u.get("name", ""), "email": u.get("email", ""),
+                     "business_name": cfg.get("business_name", ""), "bot_number": cfg.get("bot_number", ""),
+                     "configured": bool(cfg.get("phone_number_id") and cfg.get("access_token")),
+                     "enabled": cfg.get("enabled", True),
+                     "awaiting_count": sum(1 for i in items if i.get("status") == "awaiting_approval"),
+                     "sent_count": sum(1 for i in items if i.get("status") == "sent"),
+                     "last_message_at": last})
+    rows.sort(key=lambda r: r["last_message_at"], reverse=True)
+    return {"gateway_bot_number": WHATSAPP_BOT_NUMBER, "workspaces": rows}
+
+@app.post("/admin/whatsapp/{workspace_id}/toggle")
+async def admin_whatsapp_toggle(workspace_id: str, request: Request):
+    _require_admin(request)
+    if not any(u.get("workspace_id") == workspace_id for u in _load_users()):
+        raise HTTPException(404, "No such workspace.")
+    cfgs = _load_wa_configs()
+    cfg = dict(cfgs.get(workspace_id) or {})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if "enabled" in body:
+        cfg["enabled"] = bool(body.get("enabled"))
+    else:
+        cfg["enabled"] = not cfg.get("enabled", True)
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat()
+    cfgs[workspace_id] = cfg
+    _save_wa_configs(cfgs)
+    return {"workspace_id": workspace_id, "enabled": cfg["enabled"]}
+
+@app.get("/admin/marketing")
+def admin_marketing(request: Request):
+    _require_admin(request)
+    users = _load_users()
+    all_m = _load_marketing()
+    rows = []
+    for u in users:
+        ws = u.get("workspace_id")
+        saved = all_m.get(ws) or {}
+        rows.append({"workspace_id": ws, "name": u.get("name", ""), "email": u.get("email", ""),
+                     "platforms": {p: {"status": ("Saved, not checked" if (saved.get(p) or {}).get("token")
+                                        else "Not connected")}
+                                   for p in MARKETING_PLATFORMS}})
+    return {"workspaces": rows}
 
 if __name__ == "__main__":
     import uvicorn
