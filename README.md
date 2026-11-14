@@ -1,4 +1,5 @@
-![LocalBotz](assets/logo.png)
+![LocalBotz — animated logo](assets/logo-animated.gif)
+<!-- Static logo: assets/logo.png. Short video version: assets/logo-animated.mp4 -->
 
 # LocalBotz — a simpler, fully local clone of AbacusAI Bot
 
@@ -567,7 +568,12 @@ LM Studio (or the configured provider) is reachable.
 app.py                 FastAPI app + agent tool loop + LLM client (pathlib, cross-platform)
 static/index.html      Single-page UI: chat, Make a Bot, Library, Settings (no build step)
 static/logo.png        LocalBotz logo (also in assets/logo.png)
+static/logo-animated.svg  Animated logo used in the app header (robot blinks, letters rise in)
+static/logo-animated.gif  Animated logo (pulse, shimmer, dot bounce, blink)
 assets/logo.png        LocalBotz logo for the GitHub repo / README
+assets/logo-animated.svg  Animated wordmark (SVG, standalone in a browser)
+assets/logo-animated.gif  Animated logo for the README top
+assets/logo-animated.mp4  Animated logo, 4 s video (also .webm) for social / README
 templates.json         15 shipped bot templates (copied to data/templates.json)
 start.bat              Windows starter (venv + core deps, browser optional + run)
 start.sh               macOS/Linux starter (venv + core deps, browser optional + run)

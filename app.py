@@ -2712,6 +2712,29 @@ def logo():
     # LocalBotz brand logo (also in assets/logo.png for the GitHub repo).
     return FileResponse(STATIC_DIR / "logo.png", media_type="image/png")
 
+
+@app.get("/logo-animated.svg")
+def logo_animated_svg():
+    # Animated LocalBotz wordmark (blinking robot, rising letters, shimmer).
+    return FileResponse(STATIC_DIR / "logo-animated.svg", media_type="image/svg+xml")
+
+
+@app.get("/logo-animated.gif")
+def logo_animated_gif():
+    # Animated LocalBotz logo as a GIF (pulse, shimmer, dot bounce, blink).
+    return FileResponse(STATIC_DIR / "logo-animated.gif", media_type="image/gif")
+
+
+@app.get("/logo-animated.mp4")
+def logo_animated_mp4():
+    # Animated LocalBotz logo as a 4 s video (also assets/logo-animated.webm).
+    return FileResponse(STATIC_DIR / "logo-animated.mp4", media_type="video/mp4")
+
+
+@app.get("/logo-animated.webm")
+def logo_animated_webm():
+    return FileResponse(STATIC_DIR / "logo-animated.webm", media_type="video/webm")
+
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
