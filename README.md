@@ -302,17 +302,17 @@ Click **＋ Make a bot** in the sidebar:
 
 - **Avatar picker** — 8 choices (🤖 👔 🔬 🌅 📰 📝 💬 👀), stored per bot.
 - **Name your bot** + **Describe the job** — the job becomes part of the bot's instructions when you create it from scratch.
-- **Template tabs** — Featured, Personal Assistant, Productivity, Research, More (More shows all 15 templates).
+- **Template tabs** — Featured, Personal Assistant, Productivity, Research, More (More shows all 30 templates).
 - **Template cards** — each has an icon, name and short description. Clicking one pre-fills name, instructions, avatar, provider/model (default LM Studio / Qwen3.5), enabled tools and schedule — all still editable before you press Create bot.
 
 Templates (in `templates.json`, copied to `data/templates.json` on first run):
 
 | Tab | Templates |
 |---|---|
-| Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher |
-| Personal Assistant | Chief of Staff, Email Drafting, Morning Brief, Meeting Prep, Follow-Up Tracker, WhatsApp Agent |
-| Productivity | Task Planner, Meeting Notes, Research Scout, Inbox Triage |
-| Featured | Deep Researcher, News Radar, Chief of Staff, Morning Brief, Task Planner, Research Scout |
+| Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher, VC Due Diligence, Journalist, Earnings Call Analyst, HN Briefing, Release Radar, Legal Researcher |
+| Personal Assistant | Chief of Staff, Email Drafting, Morning Brief, Meeting Prep, Follow-Up Tracker, WhatsApp Agent, Travel Planner, Health & Fitness Coach, Financial Coach, Business Consultant, Teacher |
+| Productivity | Task Planner, Meeting Notes, Research Scout, Inbox Triage, Data Analyst, System Architect, Sales Intelligence, Doc Q&A |
+| Featured | Deep Researcher, News Radar, Chief of Staff, Morning Brief, Task Planner, Research Scout, Data Analyst, Travel Planner, HN Briefing |
 
 Each template stores its full instructions, default tools and a schedule (e.g. `daily 07:00`, `on_demand`). The schedule is stored per bot and shown in the sidebar; scheduled *running* of bots is not built yet in v1 — bots run when you chat with them.
 
@@ -323,7 +323,7 @@ The **Library** section in the sidebar has 5 pages, sharing the same data files 
 - **Connectors** — all model providers (LM Studio, Ollama, Claude, OpenAI, Gemini, OpenRouter, Groq, Mistral, Cerebras) plus 25 popular service connectors, grouped by category: Email & productivity (Gmail, Google Drive, Google Calendar, Outlook, Dropbox), Chat (Slack, Telegram, Discord, WhatsApp, Microsoft Teams), Work (Notion, Trello, Asana, Jira, Linear, Airtable, Google Sheets), Dev (GitHub, GitLab), CRM & sales (HubSpot, Salesforce), Payments (Stripe), Video & meetings (Zoom), Social & publishing (X, LinkedIn). Enable/disable, Test connection, status **Not connected / Saved, not checked / Connected / Failed**. Test is real for token-based connectors — it calls the service's own "who am I" endpoint with your saved token. OAuth-only connectors are config + setup instructions in v1, with status **Not connected** — never faked. Full list: `docs/connectors.md`.
 - **Messaging** — WhatsApp, Telegram, Discord. Same data as Settings > Messaging channels: config, inbound-replies toggle (off by default), approved senders, status **Not connected** in v1.
 - **MCP servers** — add/remove a server by name + command or URL (and env), enable/disable, Test. The test really runs the server (stdio JSON-RPC or HTTP `tools/list`) and lists its tools when it answers; if it cannot be reached, the error is shown. Stored in `data/mcp_servers.json`.
-- **Skills** — built-in skills (Research, File help, Browser help, Coding help, Email drafting, Morning Brief) plus custom skills you add (name + instructions + optional source folder/file). Enable/disable per bot, delete custom ones. Stored in `data/skills.json`. Enabled skills are added to the bot's system prompt.
+- **Skills** — built-in skills (Research, File help, Browser help, Coding help, Email drafting, Morning Brief, Project Graveyard, First Reader, Scope Creep Detector, Commit Archaeologist, Dependency Doctor, Self-Improving Skill) plus custom skills you add (name + instructions + optional source folder/file). Enable/disable per bot, delete custom ones. Stored in `data/skills.json`. Enabled skills are added to the bot's system prompt.
 - **Tools** — the full built-in tool list (`browser_open`, `browser_read`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_search`, `web_search`, `list_files`, `read_file`, `write_file`, `run_command`) with descriptions, global enable/disable, per-bot toggles, and which bots use each. Toggles are enforced in the agent loop.
 
 ## How LocalBotz runs
@@ -367,12 +367,20 @@ See `docs/hermes.md`.
 Sidebar → **Office**. Modelled on Munder Difflin
 (HarnessMD/munder-difflin): an office of agents running locally.
 Create your office, hire an AI team with roles (Researcher, Writer,
-Developer, Analyst, Assistant), and give the team a job. One boss
+Developer, Analyst, Assistant, Sales, Finance, Legal, Recruiter,
+Teacher), and give the team a job. One boss
 agent (the Office Manager) plans the work and assigns it — you only
 brief the boss. The team shares one office memory (`memory.md`) that
 survives sessions, passes work to each other on a blackboard, and
 writes every finished job into the memory. Runs on the local model
 by default. See `docs/office.md`.
+
+15 of the templates, 5 office roles and 6 skills come from
+[awesome-llm-apps](https://github.com/shubhamsaboo/awesome-llm-apps)
+(100+ open-source AI agents, Apache-2.0) — rebuilt as LocalBotz-native
+templates, roles and skills. See `docs/awesome-llm-apps.md` for the full
+mapping, and what we deliberately did not take (voice, image/video
+generation, game agents, fine-tuning).
 
 ## Settings
 

@@ -770,6 +770,18 @@ BUILTIN_SKILLS = [
      "instructions": "Email drafting skill: draft clear, polite emails in the user's voice, with a subject line; never claim to have sent anything."},
     {"id": "morning-brief", "name": "Morning Brief", "builtin": True, "enabled": True,
      "instructions": "Morning Brief skill: prepare a short briefing - today, top 3 priorities, and anything new that matters, under 300 words."},
+    {"id": "project-graveyard", "name": "Project Graveyard", "builtin": True, "enabled": True,
+     "instructions": "Project Graveyard skill: find the user's abandoned side projects in the workspace, work out why each one died, and help them finish the one worth going back to."},
+    {"id": "first-reader", "name": "First Reader", "builtin": True, "enabled": True,
+     "instructions": "First Reader skill: read a draft the way a real reader would, and report where they lose interest, where they stop reading, and what they remember afterwards — without rewriting a word."},
+    {"id": "scope-creep", "name": "Scope Creep Detector", "builtin": True, "enabled": True,
+     "instructions": "Scope Creep Detector skill: check whether a change grew beyond its stated intent, and recommend what to keep, split, or justify."},
+    {"id": "commit-archaeologist", "name": "Commit Archaeologist", "builtin": True, "enabled": True,
+     "instructions": "Commit Archaeologist skill: reconstruct why a file or code region exists from its history — the commit that introduced it, later edits, and co-changes — and explain the intent."},
+    {"id": "dependency-doctor", "name": "Dependency Doctor", "builtin": True, "enabled": True,
+     "instructions": "Dependency Doctor skill: check a dependency manifest for unpinned entries, obsolete backports, duplicate constraints and yanked releases, and say what to fix first."},
+    {"id": "self-improving", "name": "Self-Improving Skill", "builtin": True, "enabled": True,
+     "instructions": "Self-Improving skill: after a task, note what worked and what did not, and rewrite your own approach for next time — keep what helped, drop what wasted effort."},
 ]
 MESSAGING_CHANNELS = {
     "whatsapp": {"label": "WhatsApp", "token_env": "WHATSAPP_ACCESS_TOKEN",
@@ -789,13 +801,28 @@ PRICE_USD_PER_1M = {
 }
 
 def load_templates_list():
-    for src in (TEMPLATES_FILE, SHIPPED_TEMPLATES_FILE):
-        try:
-            data = json.loads(src.read_text(encoding="utf-8"))
-            if isinstance(data, list) and data:
-                return data
-        except Exception:
-            continue
+    shipped = []
+    try:
+        data = json.loads(SHIPPED_TEMPLATES_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, list) and data:
+            shipped = data
+    except Exception:
+        pass
+    # Merge: a stored list from an older install keeps the user's edits,
+    # but new shipped templates are added (otherwise an upgrade would
+    # never show them).
+    try:
+        data = json.loads(TEMPLATES_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, list) and data:
+            have = {x.get("id") for x in data}
+            missing = [x for x in shipped if x.get("id") not in have]
+            if missing:
+                data = data + missing
+            return data
+    except Exception:
+        pass
+    if shipped:
+        return shipped
     return [{"id": k, "name": v["name"], "category": "personal_assistant",
              "description": "", "instructions": v["instructions"], "icon": "🤖", "avatar": "🤖",
              "provider": DEFAULT_PROVIDER, "model": DEFAULT_MODEL,
@@ -857,6 +884,14 @@ def load_skills():
     skills = _load_json(SKILLS_FILE, None)
     if skills is None:
         skills = [dict(x) for x in BUILTIN_SKILLS]
+        _save_json(SKILLS_FILE, skills)
+        return skills
+    # Merge: new built-in skills from an upgrade are added to a stored
+    # list from an older install (custom skills and edits are kept).
+    have = {s.get("id") for s in skills}
+    missing = [dict(x) for x in BUILTIN_SKILLS if x["id"] not in have]
+    if missing:
+        skills = skills + missing
         _save_json(SKILLS_FILE, skills)
     return skills
 
@@ -2174,10 +2209,20 @@ OFFICE_ROLES = {
                "instructions": "You are {name}, the Analyst on this office's AI team. You check numbers, review the team's work for errors and gaps, and give a clear verdict with what to fix. You are the last step before the work goes back to the boss."},
     "assistant": {"label": "Assistant", "avatar": "🤖",
                  "instructions": "You are {name}, the Assistant on this office's AI team. You handle follow-ups, organise notes, draft replies, and keep the office memory tidy."},
+    "sales": {"label": "Sales", "avatar": "💰",
+              "instructions": "You are {name}, the Sales member on this office's AI team. You research competitors and customers, and build battle cards: what the other side sells, their weak spots, and how to win. You cite sources and keep it to one page."},
+    "finance": {"label": "Finance", "avatar": "💲",
+                "instructions": "You are {name}, the Finance member on this office's AI team. You check the numbers: budgets, costs, prices and forecasts. You show your working, never invent figures, and flag what is missing before the team decides."},
+    "legal": {"label": "Legal", "avatar": "⚖️",
+              "instructions": "You are {name}, the Legal member on this office's AI team. You research a legal question and explain contracts in plain language: what a clause means and what the risks are. You are not a lawyer and this is not legal advice — you say so, and you never present a guess as settled law."},
+    "recruiter": {"label": "Recruiter", "avatar": "💼",
+                  "instructions": "You are {name}, the Recruiter on this office's AI team. You screen candidates against the job: skills, experience and fit, in a short scorecard, and draft the interview questions that would settle the open doubts. You stay fair and never judge a person on anything but the job."},
+    "teacher": {"label": "Teacher", "avatar": "👨‍🏫",
+                "instructions": "You are {name}, the Teacher on this office's AI team. You turn what the team learned into a clear lesson: the big ideas in order, a short explanation for each, and a small exercise. You keep it short and check understanding with a question."},
 }
 # The order a team job runs in: research first, build/write second,
 # review last. Roles not listed here run in hire order after these.
-ROLE_ORDER = ["researcher", "developer", "writer", "assistant", "analyst"]
+ROLE_ORDER = ["researcher", "developer", "writer", "sales", "finance", "legal", "recruiter", "teacher", "assistant", "analyst"]
 
 def load_offices():
     return _load_json(OFFICES_FILE, [])
