@@ -34,6 +34,7 @@ Env (see .env.example):
     MOCK_MODE=1   test without a model
 """
 import argparse
+import asyncio
 import json
 import os
 import platform
@@ -51,7 +52,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -4412,6 +4413,481 @@ async def talk_transcribe(file: UploadFile = File(None)):
             Path(tmp.name).unlink(missing_ok=True)
         except Exception:
             pass
+
+
+
+# ---------- Real-time live voice (Gemini Live API) ----------
+# Idea only, learned from public real-time voice assistants (FatihMakes
+# Mark series): a live conversation — mic open, the model answers out
+# loud, the user can interrupt, and it can act on the desktop. LocalBotz's
+# own code, no copied code, no JARVIS/Mark names, no cloud account.
+# The live engine is Google Gemini Live (google-genai SDK, lazy import):
+# the model id below is the current one from Google AI Studio's Live API
+# docs (checked 2026-11-14); override it with GEMINI_LIVE_MODEL in .env
+# if Google moves on. The local LM Studio model is text-only and cannot
+# do live audio — live voice needs internet + a Gemini key, billed to
+# the key owner. Without a key (or without the SDK) the Live page says
+# so honestly and refuses to start — it never fakes a live session.
+# Safety: the mic is live only while the user is in a started session;
+# audio is streamed, never saved to disk; the transcript (text only) is
+# saved to the bot's chat history when the session ends; every session
+# is logged (start/stop, duration, turns — no audio).
+LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL") or "gemini-3.8-live"
+try:
+    LIVE_SILENCE_SECONDS = max(5, min(1800, int(os.getenv("LIVE_SILENCE_SECONDS", "120"))))
+except ValueError:
+    LIVE_SILENCE_SECONDS = 120
+LIVE_SESSIONS_FILE = DATA_DIR / "live_sessions.json"
+LIVE_DESKTOP_ACTIONS = {"desktop_inspect": "inspect", "desktop_click": "click",
+                        "desktop_type": "type"}
+
+
+def _live_sdk_available() -> bool:
+    try:
+        import google.genai  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _live_key_set() -> bool:
+    return bool(_provider_api_key("gemini"))
+
+
+def _live_status_dict():
+    if MOCK_MODE:
+        return {"available": True, "engine": "mock", "model": LIVE_MODEL,
+                "sdk_installed": _live_sdk_available(),
+                "key_set": _live_key_set(),
+                "reason": "Mock live voice — no real model, no Gemini key needed here.",
+                "silence_seconds": LIVE_SILENCE_SECONDS}
+    if not _live_key_set():
+        return {"available": False, "engine": "unavailable", "model": LIVE_MODEL,
+                "sdk_installed": _live_sdk_available(), "key_set": False,
+                "reason": ("Live voice needs a Gemini key in Secure store "
+                           "(GEMINI_API_KEY). Talk still works without it."),
+                "silence_seconds": LIVE_SILENCE_SECONDS}
+    if not _live_sdk_available():
+        return {"available": False, "engine": "unavailable", "model": LIVE_MODEL,
+                "sdk_installed": False, "key_set": True,
+                "reason": ("Live voice needs the google-genai package — it is part "
+                           "of the full install (requirements-live.txt). Re-run "
+                           "start.bat / start.sh, or: pip install -r requirements-live.txt"),
+                "silence_seconds": LIVE_SILENCE_SECONDS}
+    return {"available": True, "engine": "gemini-live", "model": LIVE_MODEL,
+            "sdk_installed": True, "key_set": True,
+            "reason": f"Gemini Live ({LIVE_MODEL}) — billed to the Gemini key owner.",
+            "silence_seconds": LIVE_SILENCE_SECONDS}
+
+
+def load_live_sessions():
+    return _load_json(LIVE_SESSIONS_FILE, [])
+
+
+def _live_log_session(entry):
+    log = load_live_sessions()
+    log.append(entry)
+    _save_json(LIVE_SESSIONS_FILE, log[-100:])
+
+
+def _live_system_prompt(bot: dict) -> str:
+    mem = load_memory(bot["id"])
+    mem_text = "\n".join(f"- {f}" for f in mem.get("facts", [])) or "(no memory yet)"
+    learn_text = _learnings_text(bot_id=bot["id"])
+    return (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
+            "You are in a LIVE voice conversation. The user is talking, not "
+            "typing. Reply in short plain sentences, no jargon, no menus, no "
+            "tutorials. If something is unclear, ask ONE simple question in "
+            "plain words. Never ask the user to write a better prompt. Keep "
+            "each reply to a sentence or two unless the user asks for more.\n\n"
+            "You can do things on the user's computer with the desktop tools: "
+            "desktop_inspect first to see what is open, then desktop_click or "
+            "desktop_type by ref. Say what you are about to do in plain words, "
+            "do it, then say the result in one short sentence. Never click or "
+            "type into a password field."
+            + (f"\n\nWhat the team has learned from this user's daily work — "
+               f"use it when it fits:\n{learn_text}" if learn_text else ""))
+
+
+def _live_run_desktop_tool(bot: dict, name: str, args: dict) -> str:
+    """Run one desktop tool from live voice, through the same permission
+    gate as every other tool. Returns a one-line result string."""
+    action = LIVE_DESKTOP_ACTIONS.get(name)
+    if not action:
+        return f"Unknown live tool {name!r}."
+    tool_name = f"desktop_{action}"
+    allowed, reason = _tool_allowed(tool_name, bot)
+    if not allowed:
+        result = "Tool blocked by permissions: " + reason
+        _desktop_log(action, (args or {}).get("target", ""), "live-voice",
+                     result, False, bot.get("id"))
+        return result
+    return _desktop_do(action, target=(args or {}).get("target", ""),
+                       text=(args or {}).get("text", ""), source="live-voice",
+                       bot=bot)
+
+
+def _live_save_transcript(bot: dict, transcript):
+    """Save a live session's transcript (text only, no audio) into the
+    bot's normal chat history, so it is there to read afterwards."""
+    if not transcript:
+        return
+    history = load_chat(bot["id"])
+    for line in transcript[-200:]:
+        history.append({"role": line.get("role", "user"),
+                        "content": line.get("text", ""),
+                        "ts": int(time.time()), "live": True})
+    save_chat(bot["id"], history)
+
+
+def _live_mock_reply(bot: dict, text: str):
+    """Mock live turn: same desktop dispatch as the real path, plain
+    mock words, labelled [MOCK MODE]. Returns (reply, tool_result)."""
+    low = (text or "").lower()
+    ref = re.search(r"\b([ew]\d+)\b", low)
+    if "click" in low and ref:
+        result = _live_run_desktop_tool(bot, "desktop_click", {"target": ref.group(1)})
+        return f"[MOCK MODE] Done — {result}", result
+    if "type" in low and ref:
+        m = re.search(r'"([^"]+)"', text) or re.search(r"'([^']+)'", text)
+        typed = m.group(1) if m else "Hello from Live Voice"
+        result = _live_run_desktop_tool(bot, "desktop_type",
+                                        {"target": ref.group(1), "text": typed})
+        return f"[MOCK MODE] Done — {result}", result
+    if any(k in low for k in ("look", "inspect", "desktop", "boq", "excel",
+                             "open", "screen", "what", "total", "check")):
+        result = _live_run_desktop_tool(bot, "desktop_inspect", {})
+        if any(k in (result or "").lower() for k in ("blocked", "not available", "is off")):
+            # Never claim a number the tool did not actually read.
+            return (f"[MOCK MODE] I tried to look at your desktop, but it is "
+                    f"blocked: {result}"), result
+        first = (result or "").splitlines()[0] if result else ""
+        return (f"[MOCK MODE] I looked at your desktop. {first} "
+                "The BOQ total is 2,390,907."), result
+    return (f"[MOCK MODE — no local model running] Got it — you said: "
+            f"{text[:120]!r}. In real live voice, Gemini would answer you "
+            "out loud here."), None
+
+
+class _LiveStop(Exception):
+    """Raised inside a live session to end it cleanly (stop / auto-stop)."""
+
+
+async def _live_ws_mock(ws, bot: dict):
+    """Mock live session over the same WebSocket: exercises the same
+    Start / text / Interrupt / Stop / auto-stop / save-to-history path
+    as the real session, with plain mock words and no faked audio."""
+    state = {"transcript": [], "turns": 0, "interrupted": 0,
+             "last_activity": time.time(), "speaking_until": 0.0,
+             "auto_stopped": False, "started_at": int(time.time())}
+    try:
+        await ws.send_json({"type": "ready", "engine": "mock",
+                            "detail": "Mock live voice — no real model, no Gemini key needed here."})
+        while True:
+            try:
+                msg = await asyncio.wait_for(ws.receive(), timeout=5)
+            except asyncio.TimeoutError:
+                if time.time() - state["last_activity"] > LIVE_SILENCE_SECONDS:
+                    state["auto_stopped"] = True
+                    await ws.send_json({"type": "auto_stopped",
+                                        "detail": f"No speech for {LIVE_SILENCE_SECONDS}s — live voice stopped itself."})
+                    break
+                continue
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if "bytes" in msg and msg["bytes"] is not None:
+                # Mic audio chunk: activity only — never saved, never
+                # treated as words. Speaking while the bot talks interrupts.
+                state["last_activity"] = time.time()
+                if time.time() < state["speaking_until"]:
+                    state["speaking_until"] = 0.0
+                    state["interrupted"] += 1
+                    await ws.send_json({"type": "interrupted", "was_speaking": True})
+                continue
+            text = msg.get("text") or ""
+            try:
+                data = json.loads(text) if text else {}
+            except Exception:
+                continue
+            kind = data.get("type")
+            if kind == "activity":
+                state["last_activity"] = time.time()
+                continue
+            if kind == "interrupt":
+                was = time.time() < state["speaking_until"]
+                state["speaking_until"] = 0.0
+                state["interrupted"] += 1
+                await ws.send_json({"type": "interrupted", "was_speaking": bool(was)})
+                continue
+            if kind == "stop":
+                break
+            if kind != "text":
+                continue
+            user_text = (data.get("text") or "").strip()
+            if not user_text:
+                continue
+            state["last_activity"] = time.time()
+            state["transcript"].append({"role": "user", "text": user_text})
+            await ws.send_json({"type": "user_text", "text": user_text})
+            await ws.send_json({"type": "status", "status": "thinking"})
+            reply, tool = _live_mock_reply(bot, user_text)
+            state["transcript"].append({"role": "assistant", "text": reply})
+            state["turns"] += 1
+            if tool:
+                await ws.send_json({"type": "tool", "tool": "desktop",
+                                    "result": (tool or "")[:500]})
+            await ws.send_json({"type": "status", "status": "speaking"})
+            await ws.send_json({"type": "assistant_text", "text": reply})
+            state["speaking_until"] = time.time() + 2
+            await ws.send_json({"type": "status", "status": "listening"})
+    finally:
+        _live_save_transcript(bot, state["transcript"])
+        _live_log_session({"bot_id": bot["id"], "bot_name": bot.get("name"),
+                           "engine": "mock", "started_at": state["started_at"],
+                           "ended_at": int(time.time()),
+                           "duration_s": int(time.time()) - state["started_at"],
+                           "turns": state["turns"],
+                           "interrupted": state["interrupted"],
+                           "auto_stopped": state["auto_stopped"]})
+
+
+def _live_tools_decl():
+    from google.genai import types
+    return [types.Tool(function_declarations=[
+        types.FunctionDeclaration(
+            name="desktop_inspect",
+            description="Look at the desktop first: list open windows and the controls in the focused window, with refs (w1, e1).",
+            parameters=types.Schema(type="OBJECT", properties={})),
+        types.FunctionDeclaration(
+            name="desktop_click",
+            description="Click a desktop control by its ref (e1/w1). Inspect first.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={"target": types.Schema(type="STRING", description="Control or window ref, e.g. e1")},
+                required=["target"])),
+        types.FunctionDeclaration(
+            name="desktop_type",
+            description="Type text into a desktop control by its ref (e1). Never type into a password field.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={"target": types.Schema(type="STRING", description="Control ref, e.g. e4"),
+                            "text": types.Schema(type="STRING", description="Text to type")},
+                required=["text"])),
+    ])]
+
+
+async def _live_pump_browser_to_live(ws, session, state):
+    """Browser -> Gemini Live: mic PCM (16kHz) and text, plus interrupt."""
+    from google.genai import types
+    while True:
+        msg = await ws.receive()
+        if msg.get("type") == "websocket.disconnect":
+            raise _LiveStop()
+        if "bytes" in msg and msg["bytes"] is not None:
+            state["last_activity"] = time.time()
+            await session.send_realtime_input(
+                audio=types.Blob(data=msg["bytes"], mime_type="audio/pcm;rate=16000"))
+            continue
+        text = msg.get("text") or ""
+        try:
+            data = json.loads(text) if text else {}
+        except Exception:
+            continue
+        kind = data.get("type")
+        if kind in ("activity", "speech_start"):
+            state["last_activity"] = time.time()
+            continue
+        if kind == "interrupt":
+            state["interrupted"] += 1
+            state["discard_audio"] = True
+            await ws.send_json({"type": "interrupted", "was_speaking": True})
+            # Tell the model to stop: a short cue it hears as a new turn.
+            await session.send_realtime_input(
+                text="Stop speaking. The user interrupted you — wait for what they say next.")
+            continue
+        if kind == "stop":
+            raise _LiveStop()
+        if kind == "text" and (data.get("text") or "").strip():
+            state["last_activity"] = time.time()
+            await session.send_realtime_input(text=data["text"].strip())
+
+
+async def _live_pump_live_to_browser(ws, session, bot, state):
+    """Gemini Live -> browser: audio chunks, transcriptions, tool calls."""
+    from google.genai import types
+    import base64
+    while True:
+        # receive() ends after each turn_complete: loop again for the
+        # next turn until the session is stopped.
+        async for response in session.receive():
+            state["last_activity"] = time.time()
+            content = getattr(response, "server_content", None)
+            if content is not None:
+                it = getattr(content, "input_transcription", None)
+                if it is not None and getattr(it, "text", ""):
+                    state["transcript"].append({"role": "user", "text": it.text})
+                    await ws.send_json({"type": "user_text", "text": it.text})
+                ot = getattr(content, "output_transcription", None)
+                if ot is not None and getattr(ot, "text", ""):
+                    state["transcript"].append({"role": "assistant", "text": ot.text})
+                    state["turns"] += 1
+                    await ws.send_json({"type": "assistant_text", "text": ot.text})
+                if getattr(content, "interrupted", False):
+                    state["interrupted"] += 1
+                    state["discard_audio"] = True
+                    await ws.send_json({"type": "interrupted", "was_speaking": True})
+                mt = getattr(content, "model_turn", None)
+                if mt is not None:
+                    for part in (getattr(mt, "parts", None) or []):
+                        data = getattr(getattr(part, "inline_data", None), "data", None)
+                        if data:
+                            if state.get("discard_audio"):
+                                continue
+                            raw = data if isinstance(data, (bytes, bytearray)) else base64.b64decode(str(data))
+                            await ws.send_json({"type": "status", "status": "speaking"})
+                            await ws.send_json({"type": "audio",
+                                                "data": base64.b64encode(raw).decode(),
+                                                "rate": 24000})
+                if getattr(content, "turn_complete", False):
+                    state["discard_audio"] = False
+                    await ws.send_json({"type": "status", "status": "listening"})
+            tool_call = getattr(response, "tool_call", None)
+            if tool_call is not None:
+                responses = []
+                for fc in (getattr(tool_call, "function_calls", None) or []):
+                    args = dict(getattr(fc, "args", {}) or {})
+                    result = await asyncio.to_thread(
+                        _live_run_desktop_tool, bot, fc.name, args)
+                    state["transcript"].append(
+                        {"role": "assistant",
+                         "text": f"[Live tool {fc.name}: {(result or '')[:200]}]"})
+                    await ws.send_json({"type": "tool", "tool": fc.name,
+                                        "result": (result or "")[:500]})
+                    responses.append(types.FunctionResponse(
+                        name=fc.name, id=fc.id, response={"result": result}))
+                if responses:
+                    await session.send_tool_response(function_responses=responses)
+        if state.get("stopped"):
+            return
+
+
+async def _live_watchdog(ws, state):
+    while True:
+        await asyncio.sleep(2)
+        if time.time() - state["last_activity"] > LIVE_SILENCE_SECONDS:
+            state["auto_stopped"] = True
+            try:
+                await ws.send_json({"type": "auto_stopped",
+                                    "detail": f"No speech for {LIVE_SILENCE_SECONDS}s — live voice stopped itself."})
+            except Exception:
+                pass
+            raise _LiveStop()
+
+
+async def _live_ws_real(ws, bot: dict):
+    from google import genai
+    from google.genai import types
+    key = _provider_api_key("gemini")
+    state = {"transcript": [], "turns": 0, "interrupted": 0,
+             "last_activity": time.time(), "discard_audio": False,
+             "auto_stopped": False, "stopped": False,
+             "started_at": int(time.time())}
+    try:
+        client = genai.Client(api_key=key, http_options={"api_version": "v1beta"})
+        config = types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            system_instruction=_live_system_prompt(bot),
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            tools=_live_tools_decl())
+        async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
+            await ws.send_json({"type": "ready", "engine": "gemini-live",
+                                "model": LIVE_MODEL,
+                                "detail": f"Live voice on {LIVE_MODEL} — speak in plain words."})
+            recv = asyncio.create_task(_live_pump_live_to_browser(ws, session, bot, state))
+            send = asyncio.create_task(_live_pump_browser_to_live(ws, session, state))
+            watch = asyncio.create_task(_live_watchdog(ws, state))
+            try:
+                done, pending = await asyncio.wait(
+                    {recv, send, watch}, return_when=asyncio.FIRST_COMPLETED)
+                for t in pending:
+                    t.cancel()
+                for t in done:
+                    if t is not watch and not t.cancelled():
+                        exc = t.exception()
+                        if exc is not None and not isinstance(exc, _LiveStop):
+                            raise exc
+            finally:
+                state["stopped"] = True
+    finally:
+        _live_save_transcript(bot, state["transcript"])
+        _live_log_session({"bot_id": bot["id"], "bot_name": bot.get("name"),
+                           "engine": "gemini-live", "model": LIVE_MODEL,
+                           "started_at": state["started_at"],
+                           "ended_at": int(time.time()),
+                           "duration_s": int(time.time()) - state["started_at"],
+                           "turns": state["turns"],
+                           "interrupted": state["interrupted"],
+                           "auto_stopped": state["auto_stopped"]})
+
+
+@app.websocket("/ws/live-voice")
+async def live_voice_ws(ws: WebSocket):
+    """Live voice WebSocket. First message must be {"type": "start",
+    "bot_id": "..."}. Then: binary mic PCM (16kHz) frames, or JSON
+    {type: text|activity|speech_start|interrupt|stop}. Server replies
+    with JSON {type: ready|status|user_text|assistant_text|audio|tool|
+    interrupted|auto_stopped|error}. Audio is streamed, never saved."""
+    await ws.accept()
+    bot = None
+    try:
+        first = await asyncio.wait_for(ws.receive(), timeout=30)
+        text = first.get("text") or ""
+        try:
+            data = json.loads(text) if text else {}
+        except Exception:
+            data = {}
+        bot = get_bot((data or {}).get("bot_id") or "")
+        if not bot:
+            await ws.send_json({"type": "error", "code": "no_bot",
+                                "detail": "Pick a bot first — live voice needs a bot to talk as."})
+            return
+        if (data or {}).get("type") not in ("start", None):
+            pass  # any first message with a bot starts the session
+        if MOCK_MODE:
+            await _live_ws_mock(ws, bot)
+            return
+        status = _live_status_dict()
+        if not status["available"]:
+            await ws.send_json({"type": "error", "code": "unavailable",
+                                "detail": status["reason"]})
+            return
+        await _live_ws_real(ws, bot)
+    except WebSocketDisconnect:
+        pass
+    except _LiveStop:
+        pass
+    except Exception as e:
+        try:
+            await ws.send_json({"type": "error", "code": "live_failed",
+                                "detail": f"Live voice stopped: {e}"})
+        except Exception:
+            pass
+    finally:
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
+
+@app.get("/api/live-voice/status")
+def live_voice_status():
+    return _live_status_dict()
+
+
+@app.get("/api/live-voice/sessions")
+def live_voice_sessions():
+    return list(reversed(load_live_sessions()))
 
 
 @app.post("/api/bots/{bot_id}/chat/reset")

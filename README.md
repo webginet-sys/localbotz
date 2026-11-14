@@ -500,6 +500,19 @@ recognition needs Chrome/Edge and internet for its speech
 service; show-me-how screenshots need the desktop/browser to be
 available; in mock mode steps are labelled [MOCK MODE].
 
+## Live Voice — real-time conversation
+
+Sidebar → 🔴 Live Voice. Tap **Start live voice** and talk in plain
+words — the bot answers out loud while you speak, and you can
+interrupt it any time. It can also do things on the desktop when you
+ask ("look at the BOQ"). The mic is live only while the page is open
+and you tapped Start; it stops itself after 2 minutes of silence,
+and the words (text only, no audio) are saved into the bot's chat
+history. It runs on Google Gemini Live (`gemini-3.8-live`), so it
+needs internet and a Gemini key in Secure store — live usage is
+billed to the key owner. Without a key the page says so honestly and
+refuses to start. Full details: `docs/live-voice.md`.
+
 ## Clients & Deals — deal workflows
 
 A small local CRM for sales work. A **deal** is a client, a value,

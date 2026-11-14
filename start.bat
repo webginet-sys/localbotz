@@ -19,7 +19,9 @@ REM      bot can use the desktop apps on this computer.
 REM      There is no light / optional install: if the user needs to run
 REM      browser automation or use the desktop, whatever they need is
 REM      installed before, in the installation. Nothing is left to
-REM      install later.
+REM      install later. Live voice (Gemini Live) is installed
+REM      best-effort in the same step — if it fails, the app still
+REM      starts and Talk still works.
 REM
 REM First run needs internet and takes a while (Python ~30 MB,
 REM LM Studio several hundred MB, Qwen3.5 model ~6 GB, Chromium ~150 MB).
@@ -201,6 +203,12 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+REM ---------- Live voice — best-effort, never a hard stop ----------
+echo [LocalBotz] Installing live voice support (Gemini Live + WebSocket)...
+echo [LocalBotz] Best-effort only: if this fails, LocalBotz still starts,
+echo [LocalBotz] and Talk still works — the Live Voice page will say so.
+".venv\Scripts\python.exe" -m pip install -q -r requirements-live.txt
+if errorlevel 1 echo [LocalBotz] NOTE: live voice install did not work. Chat and Talk still work; live voice needs a Gemini key and this package.
 echo [LocalBotz] Verifying the full install (Python, packages, Chromium)...
 ".venv\Scripts\python.exe" scripts\check_install.py
 if errorlevel 1 (

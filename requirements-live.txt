@@ -1,0 +1,13 @@
+# LocalBotz — real-time live voice. Installed best-effort, upfront,
+# as part of the full install (install.bat / start.bat / start.sh).
+# Live voice is NOT in requirements.txt: the app, chat, Talk and the
+# desktop all work without it. If this install fails, the installer
+# says so and carries on — the app still starts, Talk still works,
+# and the Live Voice page honestly says what is missing.
+# Install with: pip install -r requirements-live.txt
+#   google-genai — Gemini Live API (real-time voice). Needs a Gemini
+#                  key (GEMINI_API_KEY in Secure store) + internet.
+#                  Live usage is billed to the key owner.
+#   websockets   — the WebSocket transport for /ws/live-voice.
+google-genai>=1.0
+websockets>=0.14

@@ -77,6 +77,19 @@ def main():
             check("Desktop control: pywinauto (Windows only — skipped)", True, "not needed on this OS")
     except Exception as e:  # noqa: BLE001
         check("Desktop control: pywinauto (Windows accessibility tree)", False, str(e))
+    # Live voice — Gemini Live + WebSocket. Best-effort: the app, chat,
+    # Talk and the desktop all work without it; the Live Voice page
+    # says honestly what is missing.
+    for pkg in ("websockets", "google.genai"):
+        try:
+            __import__(pkg)
+            check(f"Live voice: {pkg}", True)
+        except Exception as e:  # noqa: BLE001
+            check(f"Live voice: {pkg}", False, str(e))
+    _key = _os.environ.get("GEMINI_API_KEY", "")
+    check("Live voice: Gemini key (GEMINI_API_KEY)", bool(_key),
+          "Saved, not checked" if _key else "Not connected — add it in Secure store to use live voice (Talk still works)")
+
     if not _os.environ.get("DISPLAY") and sys.platform.startswith("linux"):
         check("Desktop: no display here (headless)", True, "import-only check — a real desktop is checked on the user's computer")
 
@@ -94,7 +107,7 @@ def main():
     # LM Studio not being up yet is not a failure of the install itself.
     # Desktop import failures are not either: the app checks the desktop
     # itself and says so on the Desktop page (e.g. headless servers).
-    hard_fail = [n for n in failed if "LM Studio" not in n and "Desktop" not in n]
+    hard_fail = [n for n in failed if "LM Studio" not in n and "Desktop" not in n and "Live voice" not in n]
     if hard_fail:
         print("RESULT: FAIL — missing: " + ", ".join(hard_fail))
         return 1

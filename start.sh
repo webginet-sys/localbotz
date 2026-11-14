@@ -114,6 +114,10 @@ echo "[LocalBotz] Installing desktop control (mouse/keyboard/window tools)..."
 echo "[LocalBotz] This is part of the full install, so a bot can use the"
 echo "[LocalBotz] desktop apps on this computer — with nothing to install later."
 .venv/bin/python -m pip install -q -r requirements-desktop.txt
+# Live voice — best-effort only: if this fails, the app still starts
+# and Talk still works; the Live Voice page says what is missing.
+echo "[LocalBotz] Installing live voice support (Gemini Live + WebSocket)..."
+.venv/bin/python -m pip install -q -r requirements-live.txt || echo "[LocalBotz] NOTE: live voice install did not work. Chat and Talk still work; live voice needs a Gemini key and this package."
 echo "[LocalBotz] Verifying the full install (Python, packages, Chromium)..."
 .venv/bin/python scripts/check_install.py || echo "[LocalBotz] Install check reported a problem above — browser automation may not work yet. The app will still start."
 

@@ -85,6 +85,7 @@
     <button class="navbtn" data-view="deals">💼 Deals — clients & workflows</button>
     <button class="navbtn" data-view="runs">📋 Runs — what the team did</button>
     <button class="navbtn" data-view="desktop">🖥️ Desktop — use the computer</button>
+    <button class="navbtn" data-view="live">🔴 Live Voice — talk in real time</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -206,8 +207,10 @@ function showView(name){
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
   $('view-wizard').classList.toggle('hidden', name!=='wizard');
-  $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-') && name!=='admin' && name!=='office');
-  if(name.startsWith('lib-')||name.startsWith('set-')||name==='admin'||name==='office') renderPage(name);
+  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live'].includes(name);
+  if(name!=='live' && typeof stopLive==='function') stopLive('You left the Live Voice page — the mic is off.');
+  $('view-page').classList.toggle('hidden', !_isPage);
+  if(_isPage) renderPage(name);
 }
 async function loadStatus(){
   try{const s=await api('/api/status'+(current?('?provider='+encodeURIComponent(current.provider||'lmstudio')):''));
@@ -414,6 +417,118 @@ if($('speak-toggle')) $('speak-toggle').onclick=()=>{ speakOn=!speakOn; localSto
 if($('showhow-toggle')) $('showhow-toggle').onclick=async()=>{ showHowOn=!showHowOn; syncTalkButtons(); if(current){ try{ await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({show_me_how:showHowOn?'on':'off'})}); await loadBots(); current=bots.find(b=>b.id===current.id); }catch(e){ /* toggle still works for this chat */ } } };
 syncTalkButtons();
 
+// ---------- Live Voice (real-time) ----------
+// Mic open, model answers out loud, interrupt any time. Audio is
+// streamed as raw 16kHz PCM (what Gemini Live needs) — never saved.
+// The mic is live only while a session is started on this page.
+let liveState=null;
+function liveWsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/live-voice'; }
+function liveSetStatus(t){ const el=$('live-status'); if(el) el.textContent=t; }
+function liveAddLine(who, text){ const el=$('live-transcript'); if(!el) return; el.textContent+=(who?who+': ':'')+text+'\n'; el.scrollTop=el.scrollHeight; }
+function liveStopPlayback(){ if(!liveState) return; liveState.playQueue=[]; (liveState.sources||[]).forEach(s=>{ try{s.stop();}catch(e){} }); liveState.sources=[]; liveState.nextPlay=0; }
+function liveInterrupt(){ if(!liveState||!liveState.ws) return; liveStopPlayback(); liveSetStatus('Interrupted — your turn'); try{ liveState.ws.send(JSON.stringify({type:'interrupt'})); }catch(e){} }
+function stopLive(reason){
+  if(!liveState) return;
+  const st=liveState; liveState=null;
+  try{ if(st.ws && st.ws.readyState===1) st.ws.send(JSON.stringify({type:'stop'})); }catch(e){}
+  try{ if(st.ws) st.ws.close(); }catch(e){}
+  try{ if(st.levelTimer) clearInterval(st.levelTimer); }catch(e){}
+  try{ if(st.stream) st.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ if(st.audioCtx) st.audioCtx.close(); }catch(e){}
+  liveSetStatus('Stopped');
+  if(reason) liveAddLine('', reason);
+  const b1=$('live-start'); if(b1) b1.disabled=false;
+  const b2=$('live-stop'); if(b2) b2.disabled=true;
+  const b3=$('live-interrupt'); if(b3) b3.disabled=true;
+  const lv=$('live-level'); if(lv) lv.style.width='0%';
+}
+async function startLive(){
+  if(liveState){ stopLive(); return; }
+  const botId=($('live-bot')||{}).value||(current&&current.id)||(bots[0]&&bots[0].id);
+  if(!botId){ alert('Make a bot first — live voice needs a bot to talk as.'); return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ alert('Live voice needs a browser with a microphone — Chrome or Edge on this computer.'); return; }
+  let st={available:false,reason:''};
+  try{ st=await api('/api/live-voice/status'); }catch(e){}
+  if(!st.available){ alert('Live voice is not ready — '+(st.reason||'check the Live Voice page.')); return; }
+  let stream;
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
+  catch(e){ alert('Could not open the microphone: '+e.message+' — check the browser mic permission.'); return; }
+  const ws=new WebSocket(liveWsUrl());
+  const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const state={ws, stream, audioCtx, playQueue:[], sources:[], nextPlay:0, botId, levelTimer:null, lastActivitySent:0};
+  liveState=state;
+  liveSetStatus('Connecting…');
+  const b1=$('live-start'); if(b1) b1.disabled=true;
+  const b2=$('live-stop'); if(b2) b2.disabled=false;
+  const b3=$('live-interrupt'); if(b3) b3.disabled=false;
+  ws.onopen=()=>{ try{ ws.send(JSON.stringify({type:'start', bot_id:botId})); }catch(e){} liveSetStatus('Listening…'); };
+  ws.onmessage=ev=>{
+    let d; try{ d=JSON.parse(ev.data); }catch(e){ return; }
+    if(d.type==='ready'){ liveSetStatus('Live — speak in plain words'); liveAddLine('', d.detail||'Live voice started.'); }
+    else if(d.type==='status'){ liveSetStatus(d.status==='speaking'?'Speaking…':d.status==='thinking'?'Thinking…':'Listening…'); }
+    else if(d.type==='user_text'){ liveAddLine('You', d.text); }
+    else if(d.type==='assistant_text'){ liveAddLine('Bot', d.text); }
+    else if(d.type==='tool'){ liveAddLine('', '🖥️ Live tool: '+(d.result||'').slice(0,200)); }
+    else if(d.type==='audio'){ livePlayPcm(d.data, d.rate||24000); }
+    else if(d.type==='interrupted'){ liveStopPlayback(); liveSetStatus('Interrupted — your turn'); }
+    else if(d.type==='auto_stopped'){ liveAddLine('', d.detail||'Live voice stopped itself after silence.'); stopLive(); }
+    else if(d.type==='error'){ liveAddLine('', 'Live voice stopped: '+(d.detail||'unknown error')); stopLive(); }
+  };
+  ws.onclose=()=>{ if(liveState===state) stopLive('Live voice ended. The words are saved in the bot\'s chat history.'); };
+  ws.onerror=()=>{ liveAddLine('', 'Live voice connection failed — check the server is running and try again.'); };
+  // Mic capture: AudioWorklet downsamples to 16kHz Int16 PCM. Falls
+  // back to ScriptProcessor if worklets are unavailable.
+  const src=audioCtx.createMediaStreamSource(stream);
+  const analyser=audioCtx.createAnalyser(); analyser.fftSize=512; src.connect(analyser);
+  const levelBuf=new Uint8Array(analyser.frequencyBinCount);
+  state.levelTimer=setInterval(()=>{
+    if(liveState!==state) return;
+    analyser.getByteTimeDomainData(levelBuf);
+    let sum=0; for(let i=0;i<levelBuf.length;i++){ const v=(levelBuf[i]-128)/128; sum+=v*v; }
+    const level=Math.min(1, Math.sqrt(sum/levelBuf.length)*4);
+    const lv=$('live-level'); if(lv) lv.style.width=Math.round(level*100)+'%';
+    const now=Date.now();
+    if(level>0.02 && now-state.lastActivitySent>2000){ state.lastActivitySent=now; try{ ws.send(JSON.stringify({type:'activity'})); }catch(e){} }
+    if(level>0.05 && state.playQueue.length){ liveInterrupt(); }
+  },200);
+  const sendPcm=buf=>{ if(liveState!==state||!ws||ws.readyState!==1) return; try{ ws.send(buf); }catch(e){} };
+  try{
+    const code=`class P extends AudioWorkletProcessor{ process(inputs){ const inp=inputs[0][0]; if(!inp) return true; const ratio=sampleRate/16000; const out=new Int16Array(Math.ceil(inp.length/ratio)); let o=0, acc=0, n=0; for(let i=0;i<inp.length;i++){ acc+=inp[i]; n++; if(n>=ratio){ const v=Math.max(-1,Math.min(1,acc/n)); out[o++]=v<0?v*32768:v*32767; acc=0; n=0; } } if(o) this.port.postMessage(out.slice(0,o).buffer,[out.slice(0,o).buffer]); return true; } } registerProcessor('pcm16',P);`;
+    await audioCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
+    const node=new AudioWorkletNode(audioCtx,'pcm16');
+    node.port.onmessage=e=>sendPcm(e.data);
+    src.connect(node);
+    state.worklet=node;
+  }catch(e){
+    const proc=audioCtx.createScriptProcessor(4096,1,1);
+    proc.onaudioprocess=ev=>{
+      const inp=ev.inputBuffer.getChannelData(0); const ratio=ev.inputBuffer.sampleRate/16000;
+      const out=new Int16Array(Math.ceil(inp.length/ratio)); let o=0, acc=0, n=0;
+      for(let i=0;i<inp.length;i++){ acc+=inp[i]; n++; if(n>=ratio){ const v=Math.max(-1,Math.min(1,acc/n)); out[o++]=v<0?v*32768:v*32767; acc=0; n=0; } }
+      if(o) sendPcm(out.slice(0,o).buffer);
+    };
+    src.connect(proc); proc.connect(audioCtx.destination);
+    state.proc=proc;
+  }
+}
+function livePlayPcm(b64, rate){
+  if(!liveState) return;
+  try{
+    const raw=Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+    const pcm=new Int16Array(raw.buffer);
+    const ctx=liveState.audioCtx;
+    const buf=ctx.createBuffer(1, pcm.length, rate);
+    const ch=buf.getChannelData(0);
+    for(let i=0;i<pcm.length;i++) ch[i]=pcm[i]/32768;
+    const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination);
+    liveState.sources.push(src);
+    const when=Math.max(ctx.currentTime, liveState.nextPlay||0);
+    src.start(when);
+    liveState.nextPlay=when+buf.duration;
+    src.onended=()=>{ liveState.sources=liveState.sources.filter(x=>x!==src); };
+  }catch(e){ /* a bad audio chunk never breaks the session */ }
+}
+
 // ---------- Workspaces + operating mode (Super Admin) ----------
 let EFFECTIVE=null;
 function currentWorkspace(){ return ($('ws-select')&&$('ws-select').value) || localStorage.getItem('localbotz-ws') || 'default'; }
@@ -565,6 +680,7 @@ async function renderPage(name){
     else if(name==='deals') el.innerHTML=await dealsHtml();
     else if(name==='runs') el.innerHTML=await runsHtml();
     else if(name==='desktop') el.innerHTML=await desktopHtml();
+    else if(name==='live') el.innerHTML=await liveHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -683,6 +799,24 @@ async function desktopHtml(){
   <div id="desk-result"></div>
   <h3>Desktop log — every action, verified or not</h3>
   ${logRows?`<table><tr><th>When</th><th>Action</th><th>Target</th><th>From</th><th>Verified</th><th>Result</th></tr>${logRows}</table>`:'<p class="note">Nothing on the desktop yet. Inspect it above, or let a bot or a workflow do something.</p>'}
+  <div id="page-msg"></div>`;
+}
+async function liveHtml(){
+  let st={available:false,reason:'Could not check live voice.'};
+  try{ st=await api('/api/live-voice/status'); }catch(e){}
+  let sessions=[];
+  try{ sessions=await api('/api/live-voice/sessions'); }catch(e){}
+  const botOpts=(bots||[]).map(b=>`<option value="${esc(b.id)}" ${current&&current.id===b.id?'selected':''}>${esc(b.name)}</option>`).join('');
+  const sessRows=(sessions||[]).slice(0,5).map(x=>`<tr><td>${new Date(x.started_at*1000).toLocaleString()}</td><td>${esc(x.bot_name||x.bot_id||'')}</td><td>${esc(x.engine||'')}</td><td>${x.duration_s||0}s</td><td>${x.turns||0} turns</td><td>${x.interrupted||0} interrupted</td><td>${x.auto_stopped?'auto-stopped':''}</td></tr>`).join('');
+  return `<h2>🔴 Live Voice — talk in real time</h2>
+  <p class="note">A live conversation, not turn-by-turn: tap <b>Start live voice</b>, talk in plain words, and the bot answers out loud while you speak — interrupt it any time. It can also do things on the desktop when you ask ("look at the BOQ", "click the total"). The mic is live <b>only</b> while this page is open and you tapped Start. It stops itself after ${st.silence_seconds||120} seconds of silence, and the words (text only, no audio) are saved into the bot's chat history when you stop.</p>
+  <p>${st.available?`✅ Live voice is ready — ${esc(st.engine)}${st.model?` (${esc(st.model)})`:''}. ${esc(st.reason||'')}`:`❌ Live voice is not ready — ${esc(st.reason||'')}`}</p>
+  <div class="row"><div><label>Talk as</label><select id="live-bot">${botOpts}</select></div></div>
+  <div style="margin:12px 0"><button id="live-start" ${st.available?'':'disabled'}>🔴 Start live voice</button> <button id="live-stop" disabled>■ Stop</button> <button id="live-interrupt" disabled>✋ Interrupt</button></div>
+  <p>Status: <b id="live-status">Stopped</b></p>
+  <p class="note">Mic level</p><div style="height:10px;background:#eee;border-radius:5px;overflow:hidden"><div id="live-level" style="height:100%;width:0%;background:#0ea5a4"></div></div>
+  <h3>Live transcript</h3><div id="live-transcript" style="min-height:120px;border:1px solid #ddd;border-radius:8px;padding:10px;white-space:pre-wrap"></div>
+  <h3>Recent live sessions</h3>${sessRows?`<table><tr><th>When</th><th>Bot</th><th>Engine</th><th>Length</th><th>Turns</th><th>Interrupted</th><th></th></tr>${sessRows}</table>`:'<p class="note">No live sessions yet.</p>'}
   <div id="page-msg"></div>`;
 }
 async function runsHtml(){
@@ -1013,6 +1147,7 @@ async function devicesHtml(){
 }
 function bindPage(name){
   const msg=t=>{const m=$('page-msg'); if(m) m.textContent=t;};
+  if(name==='live'){ const ls=$('live-start'); if(ls) ls.onclick=startLive; const lt=$('live-stop'); if(lt) lt.onclick=()=>stopLive('Stopped. The words are saved in the bot\'s chat history.'); const li=$('live-interrupt'); if(li) li.onclick=()=>liveInterrupt(); }
   document.querySelectorAll('[data-conn]').forEach(el=>el.onchange=async()=>{const [kind,id]=el.dataset.conn.split(':'); await api(`/api/connectors/${kind}/${id}/toggle`,{method:'POST',body:JSON.stringify({enabled:el.checked})}); msg('Saved.');});
   document.querySelectorAll('[data-test]').forEach(el=>el.onclick=async()=>{const [kind,id]=el.dataset.test.split(':'); const r=await api(`/api/connectors/${kind}/${id}/test`,{method:'POST'}); msg(`${id}: ${r.status} — ${r.detail||''}`); renderPage(name);});
   document.querySelectorAll('[data-tool]').forEach(el=>el.onclick=async()=>{await api(`/api/tools/${el.dataset.tool}`,{method:'POST',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
