@@ -507,6 +507,7 @@ the bot. It doesn't link your WhatsApp account.</p>
 <button type="submit">Start WhatsApp chat</button></form>
 <div id="out"></div>
 <p style="margin-top:16px">Next, you send one message in WhatsApp. That's it.</p>
+<p style="margin-top:16px">Running the LocalBotz app on your own computer? Its WhatsApp sales agent (Settings &gt; Messaging channels) answers approved senders from WhatsApp itself — every reply waits for your approval before it is sent.</p>
 <a class="skip" href="https://github.com/webginet-sys/localbotz">Skip, download the app instead</a>
 <script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();
 const r=await fetch('/api/whatsapp/start',{method:'POST',headers:{'content-type':'application/json'},

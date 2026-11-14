@@ -2009,8 +2009,10 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
     eff_lang = _effective_language(bot, override=language)
     lang_rule = _language_rule(eff_lang)
     steps = []  # Show-me-how steps, filled in as tools run (mock + real).
+    profile_text = _business_profile_text()
     system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
-              "You have tools for web search, browser automation, workspace files, "
+              + (f"About this business:\n{profile_text}\n\n" if profile_text else "")
+              + "You have tools for web search, browser automation, workspace files, "
               "safe shell commands, and desktop control (desktop_inspect first, "
               "then act by ref and check the verified result). Use them when needed, "
               "then answer in plain text."
@@ -3477,8 +3479,10 @@ def run_office_job(office_id: str, body: dict):
         bot = get_bot(member["bot_id"])
         if not bot:
             continue
+        _profile_text = _business_profile_text()
         prompt = (f"Office: {office['name']}\nJob: {title}\nBrief: {brief}\n\n"
-                  f"Shared office memory:\n{memory}\n\n"
+                  + (f"About this business:\n{_profile_text}\n\n" if _profile_text else "")
+                  + f"Shared office memory:\n{memory}\n\n"
                   + (f"What the team has learned from this user's daily work:\n{office_learn}\n\n"
                      if office_learn else "")
                   + f"Work done so far by the team:\n{previous or '(nothing yet — you are first)'}\n\n"
@@ -5085,6 +5089,14 @@ def _persistent_worker():
                             and run["resume_at"] <= now):
                         _resume_chain_run(run)
                         break  # one chain per loop, then re-check
+            if not ran:
+                # Always-on monitors (a deal gone quiet) and due
+                # scheduled posts — one per loop, then re-check.
+                if _check_monitors():
+                    ran = True
+            if not ran:
+                if _check_due_posts():
+                    ran = True
         except Exception:
             time.sleep(30)
 
@@ -5679,7 +5691,8 @@ def _render_deal_text(template, deal):
         .replace("{client}", deal.get("client", "")) \
         .replace("{value}", value_text) \
         .replace("{currency}", deal.get("currency", "")) \
-        .replace("{stage}", _stage_label(_deal_department(deal), deal.get("stage", "")))
+        .replace("{stage}", _stage_label(_deal_department(deal), deal.get("stage", ""))) \
+        .replace("{company}", load_business_profile().get("company_name", ""))
 
 
 CHAIN_RUNS_FILE = DATA_DIR / "chain_runs.json"
@@ -6233,6 +6246,1053 @@ def delete_deal_workflow(rule_id: str):
     rules = [x for x in load_deal_workflows() if x["id"] != rule_id]
     save_deal_workflows(rules)
     return {"deleted": rule_id}
+
+
+# ---------- Business profile — one Knowledge Base for the whole business ----------
+# Enter the business once (company, services, tone, FAQs) and every bot,
+# office job, deal draft and proposal uses it — instead of the user
+# re-explaining the business to every bot. Nothing is invented: when
+# no profile is set, the block is simply skipped.
+BUSINESS_PROFILE_FILE = DATA_DIR / "business_profile.json"
+
+
+def load_business_profile():
+    d = _load_json(BUSINESS_PROFILE_FILE, None)
+    return d if isinstance(d, dict) else {}
+
+
+def save_business_profile(d):
+    d["updated_at"] = int(time.time())
+    _save_json(BUSINESS_PROFILE_FILE, d)
+    return d
+
+
+def _as_text(value):
+    """Coerce a JSON value to text — numbers become "123", None becomes
+    "". Never raises on a wrong type (a 500 for a mistyped field would
+    be a poor answer to a non-technical user)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _business_profile_text():
+    """Plain-text block for prompts, or '' when no profile is set."""
+    p = load_business_profile()
+    if not p.get("company_name"):
+        return ""
+    lines = [f"Company: {p['company_name']}"]
+    if p.get("contact_name"):
+        lines.append(f"Contact: {p['contact_name']}")
+    if p.get("phone"):
+        lines.append(f"Phone: {p['phone']}")
+    if p.get("email"):
+        lines.append(f"Email: {p['email']}")
+    if p.get("website"):
+        lines.append(f"Website: {p['website']}")
+    if p.get("area"):
+        lines.append(f"Area: {p['area']}")
+    services = [s for s in (p.get("services") or []) if str(s).strip()]
+    if services:
+        lines.append("Services: " + "; ".join(str(s).strip() for s in services))
+    sectors = [s for s in (p.get("sectors") or []) if str(s).strip()]
+    if sectors:
+        lines.append("Sectors: " + ", ".join(str(s).strip() for s in sectors))
+    if p.get("brand_tone"):
+        lines.append(f"Brand tone: {p['brand_tone']}")
+    faqs = [f for f in (p.get("faqs") or [])
+            if isinstance(f, dict) and (f.get("q") or "").strip()]
+    if faqs:
+        lines.append("FAQs:")
+        for f in faqs:
+            lines.append(f"  Q: {f['q'].strip()}")
+            if (f.get("a") or "").strip():
+                lines.append(f"  A: {f['a'].strip()}")
+    if p.get("quotation_notes"):
+        lines.append(f"Quotation notes: {p['quotation_notes']}")
+    return "\n".join(lines)
+
+
+@app.get("/api/business-profile")
+def get_business_profile():
+    return load_business_profile()
+
+
+@app.put("/api/business-profile")
+def put_business_profile(body: dict):
+    p = load_business_profile()
+    for key in ("company_name", "contact_name", "phone", "email", "website",
+                "area", "brand_tone", "quotation_notes"):
+        if key in body:
+            p[key] = _as_text(body.get(key))
+    for key in ("services", "sectors"):
+        if key in body:
+            val = body.get(key)
+            if isinstance(val, str):
+                val = [x.strip() for x in val.splitlines() if x.strip()]
+            p[key] = [str(x).strip() for x in (val or []) if str(x).strip()][:50]
+    if "faqs" in body:
+        faqs = []
+        for f in (body.get("faqs") or [])[:30]:
+            if isinstance(f, dict) and (f.get("q") or "").strip():
+                faqs.append({"q": (f.get("q") or "").strip(),
+                             "a": (f.get("a") or "").strip()})
+        p["faqs"] = faqs
+    if not p.get("company_name"):
+        raise HTTPException(400, "Give the company a name — that is the one required field.")
+    p.setdefault("created_at", int(time.time()))
+    return save_business_profile(p)
+
+
+# ---------- Lead hunting — find new clients, sort them, turn them into deals ----------
+# Leads come from public web search + the pages themselves, with a
+# source URL for every fact. No Google Maps scraping (against its
+# terms) and nothing invented: a phone or website is only recorded
+# when the page actually showed it. Tiers: hot = contactable + a
+# visible need (tender, project, expansion, hiring); warm =
+# contactable but no clear need yet; cold = no usable contact.
+LEADS_FILE = DATA_DIR / "leads.json"
+LEAD_TIERS = ("hot", "warm", "cold")
+LEAD_STATUSES = ("new", "contacted", "deal", "dismissed")
+_MOCK_LEADS = [
+    {"business_name": "Al Noor Contracting", "area": "Doha", "sector": "Construction",
+     "website": "https://alnoor-contracting.example.qa", "phone": "+974 4412 3300",
+     "email": "info@alnoor-contracting.example.qa",
+     "source_url": "https://example.qa/directory/construction",
+     "source_name": "[MOCK MODE] public business directory",
+     "notes": "New tower project announced — looking for MEP and fit-out quotes.",
+     "evidence": ["New tower project announced — looking for MEP and fit-out quotes."]},
+    {"business_name": "Gulf MEP Services", "area": "Doha", "sector": "MEP",
+     "website": "https://gulfmep.example.qa", "phone": "+974 4420 1180", "email": "",
+     "source_url": "https://example.qa/directory/mep",
+     "source_name": "[MOCK MODE] public business directory",
+     "notes": "Lists HVAC and plumbing services; contact page shows a phone number.",
+     "evidence": ["Contact page shows a phone number."]},
+    {"business_name": "Qatar Electrical Works", "area": "Doha", "sector": "Electrical Engineering",
+     "website": "https://qew.example.qa", "phone": "", "email": "sales@qew.example.qa",
+     "source_url": "https://example.qa/directory/electrical",
+     "source_name": "[MOCK MODE] public business directory",
+     "notes": "Email only — no phone found on the pages checked.",
+     "evidence": ["Email only — no phone found on the pages checked."]},
+    {"business_name": "Doha IT Solutions", "area": "Doha", "sector": "IT Services",
+     "website": "", "phone": "", "email": "",
+     "source_url": "https://example.qa/directory/it",
+     "source_name": "[MOCK MODE] public business directory",
+     "notes": "Listed in the directory with no website, phone or email found.",
+     "evidence": ["Listed in the directory with no website, phone or email found."]},
+]
+_NEED_WORDS = ("tender", "project", "hiring", "expand", "expansion", "new office",
+                "looking for", "quote", "quotation", "procurement", "contractor wanted")
+
+
+def load_leads():
+    leads = _load_json(LEADS_FILE, None)
+    return leads if isinstance(leads, list) else []
+
+
+def save_leads(leads):
+    _save_json(LEADS_FILE, leads)
+    return leads
+
+
+def _classify_lead(lead):
+    """hot / warm / cold from what was actually found — never guessed."""
+    has_contact = bool((lead.get("website") or "").strip()
+                       or (lead.get("phone") or "").strip()
+                       or (lead.get("email") or "").strip())
+    if not has_contact:
+        return "cold"
+    hay = " ".join([(lead.get("notes") or "")] + list(lead.get("evidence") or [])).lower()
+    if any(w in hay for w in _NEED_WORDS):
+        return "hot"
+    return "warm"
+
+
+def _lead_dedupe_key(lead):
+    site = (lead.get("website") or "").strip().lower().rstrip("/")
+    if site:
+        return "site:" + re.sub(r"^https?://(www\.)?", "", site)
+    phone = re.sub(r"\D", "", lead.get("phone") or "")
+    if phone:
+        return "phone:" + phone
+    return "name:" + (lead.get("business_name") or "").strip().lower()
+
+
+def _extract_contact(text):
+    """Phone + email from page text. Returns (phone, email) — '' when absent."""
+    phone = ""
+    for m in re.finditer(r"\+?\d[\d\s().\-]{6,}\d", text or ""):
+        digits = re.sub(r"\D", "", m.group(0))
+        if 8 <= len(digits) <= 15:
+            phone = m.group(0).strip()
+            break
+    email = ""
+    m = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text or "")
+    if m:
+        email = m.group(0)
+    return phone, email
+
+
+def _hunt_leads(area, sector, limit):
+    """Real hunt: public web search, then read each result's own page.
+    Returns (leads, errors). In mock mode: deterministic mock leads."""
+    if MOCK_MODE:
+        out = []
+        for item in _MOCK_LEADS:
+            if sector and sector.lower() not in ("all", "general") and \
+                    item["sector"].lower() != sector.lower():
+                continue
+            lead = dict(item)
+            lead["area"] = area
+            lead["tier"] = _classify_lead(lead)
+            out.append(lead)
+        return out[:limit], []
+    found, errors = [], []
+    try:
+        results_text = tool_web_search(f"{sector} companies in {area}")
+    except Exception as e:
+        return [], [f"Search failed: {e}"]
+    candidates = []
+    for line in (results_text or "").splitlines():
+        m = re.match(r"\s*\d+\.\s+(.*?)\s+[—\-]\s+(https?://\S+)", line)
+        if m:
+            candidates.append((m.group(1).strip(), m.group(2).strip()))
+    for title, url in candidates[:limit]:
+        try:
+            page = _get_page()
+            page.goto(url, timeout=20000, wait_until="domcontentloaded")
+            page.wait_for_timeout(1500)
+            text = page.inner_text("body")[:8000]
+        except Exception as e:
+            errors.append(f"Could not open {url}: {e}")
+            text = ""
+        phone, email = _extract_contact(text)
+        name = re.sub(r"\s*[-|–—].*$", "", title).strip()[:120] or url
+        evidence = [f"Found in public web search for '{sector} companies in {area}'."]
+        if phone:
+            evidence.append(f"Phone {phone} shown on the business page.")
+        if email:
+            evidence.append(f"Email {email} shown on the business page.")
+        lead = {"business_name": name, "area": area, "sector": sector,
+                "website": url, "phone": phone, "email": email,
+                "source_url": url, "source_name": "public web search",
+                "notes": (text[:300].replace("\n", " ").strip()
+                          if text else "Page could not be read — name and website only."),
+                "evidence": evidence}
+        lead["tier"] = _classify_lead(lead)
+        found.append(lead)
+    return found, errors
+
+
+@app.get("/api/leads")
+def list_leads():
+    return sorted(load_leads(), key=lambda l: l.get("created_at", 0), reverse=True)
+
+
+@app.post("/api/leads", status_code=201)
+def create_lead(body: dict):
+    name = (body.get("business_name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Give the lead a business name.")
+    lead = {"id": uuid.uuid4().hex[:8], "business_name": name,
+            "area": _as_text(body.get("area")),
+            "sector": _as_text(body.get("sector")),
+            "website": _as_text(body.get("website")),
+            "phone": _as_text(body.get("phone")),
+            "email": _as_text(body.get("email")),
+            "source_url": _as_text(body.get("source_url")),
+            "source_name": _as_text(body.get("source_name")) or "added by hand",
+            "tier": _as_text(body.get("tier")).lower(),
+            "notes": _as_text(body.get("notes")),
+            "evidence": [str(x) for x in (body.get("evidence") or [])][:10],
+            "status": "new", "created_at": int(time.time())}
+    if lead["tier"] not in LEAD_TIERS:
+        lead["tier"] = _classify_lead(lead)
+    leads = load_leads()
+    leads.append(lead)
+    save_leads(leads)
+    return lead
+
+
+@app.get("/api/leads/{lead_id}")
+def get_lead(lead_id: str):
+    lead = next((x for x in load_leads() if x["id"] == lead_id), None)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    return lead
+
+
+@app.patch("/api/leads/{lead_id}")
+def update_lead(lead_id: str, body: dict):
+    leads = load_leads()
+    lead = next((x for x in leads if x["id"] == lead_id), None)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    for key in ("business_name", "area", "sector", "website", "phone",
+                "email", "source_url", "source_name", "notes"):
+        if key in body:
+            lead[key] = _as_text(body.get(key))
+    if body.get("tier") in LEAD_TIERS:
+        lead["tier"] = body["tier"]
+    if body.get("status") in LEAD_STATUSES:
+        lead["status"] = body["status"]
+    save_leads(leads)
+    return lead
+
+
+@app.delete("/api/leads/{lead_id}")
+def delete_lead(lead_id: str):
+    save_leads([x for x in load_leads() if x["id"] != lead_id])
+    return {"deleted": lead_id}
+
+
+@app.post("/api/leads/hunt")
+def hunt_leads(body: dict):
+    area = (body.get("area") or "").strip()
+    sector = (body.get("sector") or "General").strip()
+    if not area:
+        raise HTTPException(400, "Give an area to hunt in, e.g. Doha.")
+    try:
+        limit = int(body.get("limit") or 10)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Limit must be a number.")
+    limit = max(1, min(20, limit))
+    found, errors = _hunt_leads(area, sector, limit)
+    leads = load_leads()
+    have = {_lead_dedupe_key(x) for x in leads}
+    added = []
+    for item in found:
+        if _lead_dedupe_key(item) in have:
+            continue
+        item["id"] = uuid.uuid4().hex[:8]
+        item["status"] = "new"
+        item["created_at"] = int(time.time())
+        leads.append(item)
+        have.add(_lead_dedupe_key(item))
+        added.append(item)
+    save_leads(leads)
+    return {"area": area, "sector": sector, "found": len(found),
+            "added": len(added), "leads": added, "errors": errors,
+            "mock": bool(MOCK_MODE)}
+
+
+@app.post("/api/leads/{lead_id}/to-deal")
+def lead_to_deal(lead_id: str):
+    leads = load_leads()
+    lead = next((x for x in leads if x["id"] == lead_id), None)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if lead.get("status") == "deal":
+        raise HTTPException(400, "This lead is already a deal.")
+    now = int(time.time())
+    deal = {"id": uuid.uuid4().hex[:8],
+            "title": f"{lead['business_name']} — {lead.get('sector') or 'new business'}",
+            "client": lead["business_name"],
+            "contact": ", ".join(x for x in [lead.get("phone") or "",
+                                             lead.get("email") or ""] if x),
+            "value": None, "currency": "QAR", "department": "general",
+            "stage": "new", "events": [], "drafts": [],
+            "created_at": now, "updated_at": now}
+    deal["events"].append({"at": now, "kind": "stage",
+                           "text": f"Created from lead: {lead['business_name']} (tier {lead.get('tier')})."})
+    if lead.get("source_url"):
+        deal["events"].append({"at": now, "kind": "note",
+                               "text": f"Lead source: {lead['source_url']}"})
+    deals = load_deals()
+    deals.append(deal)
+    save_deals(deals)
+    lead["status"] = "deal"
+    save_leads(leads)
+    deal["department_label"] = "General"
+    deal["stage_label"] = "New"
+    return deal
+
+
+@app.post("/api/leads/{lead_id}/proposal")
+def lead_proposal(lead_id: str):
+    """Proposal pack for a lead: a Word proposal + an Excel tracker
+    row, built with the same document libraries as Office exports.
+    Uses the business profile when set. Files live under
+    data/documents/leads/<lead id>/ and download from /api/documents."""
+    lead = next((x for x in load_leads() if x["id"] == lead_id), None)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    profile = load_business_profile()
+    company = profile.get("company_name") or "LocalBotz"
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", lead["business_name"]).strip("-").lower() or "lead"
+    out_dir = DOCUMENTS_DIR / "leads" / lead_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files = []
+    try:
+        Document = _document_libs("docx")
+        doc = Document()
+        doc.add_heading(f"Proposal — {lead['business_name']}", level=0)
+        doc.add_paragraph(f"From: {company}" +
+                          (f"  •  {profile.get('phone')}" if profile.get("phone") else "") +
+                          (f"  •  {profile.get('email')}" if profile.get("email") else "") +
+                          (f"  •  {profile.get('website')}" if profile.get("website") else ""))
+        doc.add_paragraph(f"Date: {datetime.date.today().isoformat()}  •  Area: {lead.get('area') or '—'}  •  Sector: {lead.get('sector') or '—'}  •  Lead tier: {lead.get('tier')}")
+        doc.add_heading("What we can do for you", level=1)
+        services = [s for s in (profile.get("services") or []) if str(s).strip()]
+        if services:
+            for s in services:
+                doc.add_paragraph(str(s).strip(), style="List Bullet")
+        else:
+            doc.add_paragraph("Tell us what you need — we will quote it plainly, with no hidden costs.")
+        if profile.get("brand_tone"):
+            doc.add_paragraph(f"How we work: {profile['brand_tone']}")
+        doc.add_heading("Next steps", level=1)
+        doc.add_paragraph("1. A short call to confirm what you need.\n2. A written quotation with a clear price and date.\n3. We start when you approve it — nothing is charged before that.")
+        if lead.get("evidence"):
+            doc.add_heading("Why we are writing to you", level=1)
+            for ev in lead["evidence"]:
+                doc.add_paragraph(ev, style="List Bullet")
+            doc.add_paragraph(f"Source: {lead.get('source_url') or lead.get('source_name') or '—'}")
+        if profile.get("quotation_notes"):
+            doc.add_paragraph(f"Note: {profile['quotation_notes']}")
+        name = f"{slug}-proposal.docx"
+        doc.save(str(out_dir / name))
+        files.append({"format": "docx", "filename": name,
+                      "url": f"/api/documents/leads/{lead_id}/{name}",
+                      "size_bytes": (out_dir / name).stat().st_size})
+    except Exception as e:
+        raise HTTPException(500, f"Could not build the Word proposal: {e}")
+    try:
+        openpyxl = _document_libs("xlsx")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Tracker"
+        ws.append(["Business", "Area", "Sector", "Tier", "Website", "Phone",
+                   "Email", "Source", "Status", "Date"])
+        for c in ws["1"]:
+            c.font = openpyxl.styles.Font(bold=True)
+        ws.append([lead["business_name"], lead.get("area"), lead.get("sector"),
+                   lead.get("tier"), lead.get("website"), lead.get("phone"),
+                   lead.get("email"), lead.get("source_url"), lead.get("status"),
+                   datetime.date.today().isoformat()])
+        for col in range(1, ws.max_column + 1):
+            width = max((len(str(ws.cell(row=r, column=col).value or ""))
+                         for r in range(1, ws.max_row + 1)), default=10)
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max(width + 2, 12), 50)
+        name = f"{slug}-tracker.xlsx"
+        wb.save(str(out_dir / name))
+        files.append({"format": "xlsx", "filename": name,
+                      "url": f"/api/documents/leads/{lead_id}/{name}",
+                      "size_bytes": (out_dir / name).stat().st_size})
+    except Exception as e:
+        raise HTTPException(500, f"Could not build the Excel tracker: {e}")
+    return {"lead_id": lead_id, "files": files}
+
+
+# ---------- WhatsApp sales agent — official Business API / webhook only ----------
+# No QR pairing (unofficial pairing risks the number being banned).
+# Inbound messages arrive on Meta's official webhook; the bot drafts
+# a reply and NOTHING is sent until a human approves it in the inbox
+# (the same approve-before-it-goes-out rule as the Auditor). Senders
+# not on the allowlist get nothing — they are logged as blocked.
+# Without a WhatsApp Business number + Meta app + tokens, the status
+# endpoint says so honestly and nothing is sent.
+WHATSAPP_INBOX_FILE = DATA_DIR / "whatsapp_inbox.json"
+WHATSAPP_ALLOWLIST_FILE = DATA_DIR / "whatsapp_allowlist.json"
+WHATSAPP_BLOCKLIST_FILE = DATA_DIR / "whatsapp_blocklist.json"
+
+
+def _norm_phone(value):
+    return re.sub(r"\D", "", value or "")
+
+
+def load_whatsapp_inbox():
+    items = _load_json(WHATSAPP_INBOX_FILE, None)
+    return items if isinstance(items, list) else []
+
+
+def save_whatsapp_inbox(items):
+    _save_json(WHATSAPP_INBOX_FILE, items)
+    return items
+
+
+def _whatsapp_allowlist():
+    """Approved senders: Messaging channels (WhatsApp) approved
+    senders, plus data/whatsapp_allowlist.json — one list, either
+    place can add a number. Blocked numbers always win."""
+    allowed = set()
+    try:
+        for s in (load_messaging().get("whatsapp") or {}).get("approved_senders") or []:
+            if _norm_phone(s):
+                allowed.add(_norm_phone(s))
+    except Exception:
+        pass
+    for s in (_load_json(WHATSAPP_ALLOWLIST_FILE, None) or []):
+        if isinstance(s, str) and _norm_phone(s):
+            allowed.add(_norm_phone(s))
+    blocked = {_norm_phone(s) for s in
+               (_load_json(WHATSAPP_BLOCKLIST_FILE, None) or [])
+               if isinstance(s, str) and _norm_phone(s)}
+    return allowed - blocked, blocked
+
+
+def _whatsapp_bot():
+    """Which bot answers WhatsApp: the one picked in Messaging
+    channels, else the first bot."""
+    try:
+        bot_id = (load_messaging().get("whatsapp") or {}).get("bot_id")
+        if bot_id and get_bot(bot_id):
+            return get_bot(bot_id)
+    except Exception:
+        pass
+    bots = load_bots()
+    return bots[0] if bots else None
+
+
+def _whatsapp_status():
+    allowed, _blocked = _whatsapp_allowlist()
+    inbox = load_whatsapp_inbox()
+    return {"configured": bool(os.getenv("WHATSAPP_ACCESS_TOKEN")
+                               and os.getenv("WHATSAPP_PHONE_NUMBER_ID")),
+            "has_token": bool(os.getenv("WHATSAPP_ACCESS_TOKEN")),
+            "has_phone_number_id": bool(os.getenv("WHATSAPP_PHONE_NUMBER_ID")),
+            "has_verify_token": bool(os.getenv("WHATSAPP_VERIFY_TOKEN")),
+            "has_app_secret": bool(os.getenv("WHATSAPP_APP_SECRET")),
+            "bot_number": os.getenv("WHATSAPP_BOT_NUMBER") or "",
+            "allowlist_count": len(allowed),
+            "awaiting_count": sum(1 for x in inbox if x.get("status") == "awaiting_approval"),
+            "inbox_count": len(inbox),
+            "bot_id": (_whatsapp_bot() or {}).get("id") or "",
+            "note": ("Set WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, "
+                     "WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET in Secure "
+                     "store, add approved senders in Messaging channels, and "
+                     "point Meta's webhook at /api/whatsapp/webhook. Until "
+                     "then, nothing is sent and the inbox stays empty.")}
+
+
+@app.get("/api/whatsapp/status")
+def whatsapp_status():
+    return _whatsapp_status()
+
+
+@app.get("/api/whatsapp/inbox")
+def whatsapp_inbox():
+    return sorted(load_whatsapp_inbox(),
+                  key=lambda x: x.get("created_at", 0), reverse=True)
+
+
+@app.get("/api/whatsapp/webhook")
+def whatsapp_webhook_verify(request: Request):
+    """Meta's webhook check: GET with hub.mode=subscribe and the
+    verify token must match WHATSAPP_VERIFY_TOKEN, then echo the
+    challenge back as plain text."""
+    q = request.query_params
+    if q.get("hub.mode") == "subscribe" and q.get("hub.verify_token") \
+            and q.get("hub.verify_token") == os.getenv("WHATSAPP_VERIFY_TOKEN"):
+        return Response(content=q.get("hub.challenge", ""), media_type="text/plain")
+    raise HTTPException(403, "Webhook verification failed — the verify token does not match.")
+
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    """Inbound WhatsApp messages (official Business API). The
+    signature is checked when WHATSAPP_APP_SECRET is set. Each text
+    message gets a drafted reply from the WhatsApp bot — held for
+    approval, never sent automatically."""
+    body = await request.body()
+    secret = os.getenv("WHATSAPP_APP_SECRET") or ""
+    if secret:
+        import hashlib
+        import hmac as _hmac
+        sig = request.headers.get("X-Hub-Signature-256") or ""
+        expected = "sha256=" + _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        if not sig or not _hmac.compare_digest(sig, expected):
+            raise HTTPException(403, "Bad webhook signature.")
+    try:
+        payload = json.loads(body.decode("utf-8") or "{}")
+    except Exception:
+        raise HTTPException(400, "Webhook body is not JSON.")
+    allowed, blocked = _whatsapp_allowlist()
+    bot = _whatsapp_bot()
+    handled = 0
+    for entry in (payload.get("entry") or []):
+        for change in (entry.get("changes") or []):
+            value = change.get("value") or {}
+            for msg in (value.get("messages") or []):
+                if (msg.get("type") or "") != "text":
+                    continue
+                sender = _norm_phone(msg.get("from") or "")
+                text = ((msg.get("text") or {}).get("body") or "").strip()
+                if not sender or not text:
+                    continue
+                name = ((value.get("contacts") or [{}])[0].get("profile") or {}).get("name") or ""
+                inbox = load_whatsapp_inbox()
+                if sender in blocked or sender not in allowed:
+                    inbox.append({"id": uuid.uuid4().hex[:8], "sender": sender,
+                                  "sender_name": name, "text": text,
+                                  "draft_reply": "",
+                                  "status": "blocked",
+                                  "created_at": int(time.time()),
+                                  "note": "Sender is not on the allowlist — no reply drafted."})
+                    save_whatsapp_inbox(inbox)
+                    handled += 1
+                    continue
+                if not bot:
+                    raise HTTPException(500, "No bot exists to answer WhatsApp yet.")
+                profile_text = _business_profile_text()
+                prompt = (f"WhatsApp message from {name or sender}: {text}\n\n"
+                          "Reply as the business, briefly and in plain words. "
+                          "If they ask about a price, a date or a delivery, say "
+                          "you will check and get back to them — never invent one."
+                          + (f"\n\nAbout this business:\n{profile_text}" if profile_text else ""))
+                try:
+                    reply, _trace, _extra = run_agent(bot, prompt)
+                except Exception as e:
+                    reply = f"[Draft failed: {e}]"
+                inbox.append({"id": uuid.uuid4().hex[:8], "sender": sender,
+                              "sender_name": name, "text": text,
+                              "draft_reply": (reply or "")[:2000],
+                              "status": "awaiting_approval",
+                              "created_at": int(time.time())})
+                save_whatsapp_inbox(inbox)
+                handled += 1
+    return {"handled": handled}
+
+
+@app.post("/api/whatsapp/inbox/{item_id}/approve")
+def whatsapp_approve(item_id: str):
+    """Send an approved draft reply via the official Graph API.
+    In mock mode it is recorded as sent (mock) and no network call
+    is made. A failed send is a 502 with the provider's own error."""
+    inbox = load_whatsapp_inbox()
+    item = next((x for x in inbox if x["id"] == item_id), None)
+    if not item:
+        raise HTTPException(404, "Inbox item not found")
+    if item.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This message is {item.get('status')} — only awaiting_approval can be sent.")
+    draft = (item.get("draft_reply") or "").strip()
+    if not draft:
+        raise HTTPException(400, "There is no draft reply to send.")
+    if MOCK_MODE:
+        item["status"] = "sent"
+        item["sent_at"] = int(time.time())
+        item["note"] = "[MOCK MODE] Recorded as sent — no real WhatsApp message was sent."
+        save_whatsapp_inbox(inbox)
+        return item
+    token = os.getenv("WHATSAPP_ACCESS_TOKEN") or ""
+    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID") or ""
+    if not token or not phone_id:
+        raise HTTPException(502, "WhatsApp is not set up yet — add WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in Secure store.")
+    try:
+        with _http_client(timeout=20, external=True) as c:
+            r = c.post(f"https://graph.facebook.com/v21.0/{phone_id}/messages",
+                       headers={"Authorization": f"Bearer {token}"},
+                       json={"messaging_product": "whatsapp", "to": item["sender"],
+                             "type": "text", "text": {"body": draft}})
+        if r.status_code >= 400:
+            raise HTTPException(502, f"WhatsApp send failed ({r.status_code}): {r.text[:300]}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"WhatsApp send failed: {e}")
+    item["status"] = "sent"
+    item["sent_at"] = int(time.time())
+    save_whatsapp_inbox(inbox)
+    return item
+
+
+@app.post("/api/whatsapp/inbox/{item_id}/dismiss")
+def whatsapp_dismiss(item_id: str):
+    inbox = load_whatsapp_inbox()
+    item = next((x for x in inbox if x["id"] == item_id), None)
+    if not item:
+        raise HTTPException(404, "Inbox item not found")
+    if item.get("status") != "awaiting_approval":
+        raise HTTPException(400, f"This message is {item.get('status')} — only awaiting_approval can be dismissed.")
+    item["status"] = "dismissed"
+    save_whatsapp_inbox(inbox)
+    return item
+
+
+@app.post("/api/whatsapp/allowlist")
+def whatsapp_allowlist_add(body: dict):
+    phone = _norm_phone(body.get("phone") or "")
+    if not phone:
+        raise HTTPException(400, "Give a phone number, with country code.")
+    current = _load_json(WHATSAPP_ALLOWLIST_FILE, None) or []
+    if phone not in current:
+        current.append(phone)
+        _save_json(WHATSAPP_ALLOWLIST_FILE, current)
+    return {"allowlist": current}
+
+
+# ---------- Always-on monitors — watch deals that go quiet ----------
+# A chain only fires when a deal's stage CHANGES. A monitor fires
+# when time passes and nothing changes: a deal sitting Quoted for
+# N days gets a chase draft + a task, once per deal per monitor.
+# Checked by the same 30s worker as routines and chains.
+MONITORS_FILE = DATA_DIR / "monitors.json"
+MONITOR_KINDS = ("stalled_deal", "no_reply_after_quote")
+
+
+def load_monitors():
+    if not MONITORS_FILE.exists():
+        return _seed_monitors()
+    monitors = _load_json(MONITORS_FILE, None)
+    return monitors if isinstance(monitors, list) else []
+
+
+def save_monitors(monitors):
+    _save_json(MONITORS_FILE, monitors)
+    return monitors
+
+
+def _seed_monitors():
+    now = int(time.time())
+    monitors = [
+        {"id": uuid.uuid4().hex[:8], "name": "Quoted 3 days with no reply — chase",
+         "kind": "no_reply_after_quote", "department": None, "days": 3,
+         "enabled": True, "last_run": None, "fired": {}, "runs": [],
+         "created_at": now},
+        {"id": uuid.uuid4().hex[:8], "name": "Negotiation 7 days with no movement — nudge",
+         "kind": "stalled_deal", "department": None, "days": 7,
+         "enabled": True, "last_run": None, "fired": {}, "runs": [],
+         "created_at": now},
+    ]
+    return save_monitors(monitors)
+
+
+def _deal_last_activity(deal):
+    last = deal.get("updated_at") or deal.get("created_at") or 0
+    for e in (deal.get("events") or []):
+        last = max(last, e.get("at") or 0)
+    return last
+
+
+def _check_monitors():
+    """One firing per call at most. Returns True if a monitor fired."""
+    now = int(time.time())
+    monitors = load_monitors()
+    deals = load_deals()
+    bots = load_bots()
+    for monitor in monitors:
+        if not monitor.get("enabled"):
+            continue
+        days = monitor.get("days") or 3
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            continue
+        days = max(1, min(30, days))
+        kind = monitor.get("kind") or "stalled_deal"
+        dept = monitor.get("department") or None
+        for deal in deals:
+            if dept and _deal_department(deal) != dept:
+                continue
+            stage = deal.get("stage") or ""
+            if kind == "no_reply_after_quote" and stage != "quoted":
+                continue
+            if kind == "stalled_deal" and stage not in ("quoted", "negotiation"):
+                continue
+            if now - _deal_last_activity(deal) < days * 86400:
+                continue
+            fired = monitor.setdefault("fired", {})
+            if deal["id"] in fired:
+                continue
+            # Fire once for this deal on this monitor.
+            text = _render_deal_text(
+                "Hi {client}, following up on the {deal} quotation ({value} {currency}) — "
+                "it's been {days} days since we quoted. Have you had a chance to look at "
+                "it? Happy to walk through it or adjust anything.", deal)
+            text = text.replace("{days}", str(days))
+            deal.setdefault("drafts", []).append(
+                {"id": uuid.uuid4().hex[:8], "text": text,
+                 "status": "draft", "created_at": now})
+            deal.setdefault("events", []).append(
+                {"at": now, "kind": "monitor",
+                 "text": f"Monitor '{monitor['name']}' fired — chase draft written (no reply for {days} days)."})
+            deal["updated_at"] = now
+            if bots:
+                tasks = load_tasks()
+                tasks.append({"id": uuid.uuid4().hex[:8], "bot_id": bots[0]["id"],
+                              "goal": f"Follow up {deal.get('client')}: the {deal.get('title')} deal has had no reply for {days} days. Check the chase draft on the deal and call or message them.",
+                              "status": "pending", "steps": [], "result": "",
+                              "created_at": now, "finished_at": None})
+                save_tasks(tasks)
+            fired[deal["id"]] = datetime.date.fromtimestamp(now).isoformat()
+            monitor.setdefault("runs", []).append(
+                {"at": now, "deal_id": deal["id"], "deal_title": deal.get("title"),
+                 "status": "fired"})
+            monitor["runs"] = monitor["runs"][-20:]
+            monitor["last_run"] = now
+            save_deals(deals)
+            save_monitors(monitors)
+            return True
+    return False
+
+
+@app.get("/api/monitors")
+def list_monitors():
+    return load_monitors()
+
+
+@app.post("/api/monitors", status_code=201)
+def create_monitor(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Give the monitor a name.")
+    kind = (body.get("kind") or "stalled_deal").strip()
+    if kind not in MONITOR_KINDS:
+        raise HTTPException(400, "Kind must be stalled_deal or no_reply_after_quote.")
+    try:
+        days = int(body.get("days") or 3)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Days must be a number.")
+    if not 1 <= days <= 30:
+        raise HTTPException(400, "Days must be between 1 and 30.")
+    dept = (body.get("department") or "").strip().lower() or None
+    if dept and dept not in DEPARTMENT_PIPELINES:
+        raise HTTPException(400, "Unknown department.")
+    monitor = {"id": uuid.uuid4().hex[:8], "name": name, "kind": kind,
+               "department": dept, "days": days, "enabled": True,
+               "last_run": None, "fired": {}, "runs": [],
+               "created_at": int(time.time())}
+    monitors = load_monitors()
+    monitors.append(monitor)
+    save_monitors(monitors)
+    return monitor
+
+
+@app.patch("/api/monitors/{monitor_id}")
+def update_monitor(monitor_id: str, body: dict):
+    monitors = load_monitors()
+    monitor = next((x for x in monitors if x["id"] == monitor_id), None)
+    if not monitor:
+        raise HTTPException(404, "Monitor not found")
+    if "name" in body and (body.get("name") or "").strip():
+        monitor["name"] = (body.get("name") or "").strip()
+    if "enabled" in body:
+        monitor["enabled"] = bool(body.get("enabled"))
+    if "days" in body:
+        try:
+            days = int(body.get("days"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Days must be a number.")
+        if not 1 <= days <= 30:
+            raise HTTPException(400, "Days must be between 1 and 30.")
+        monitor["days"] = days
+    save_monitors(monitors)
+    return monitor
+
+
+@app.delete("/api/monitors/{monitor_id}")
+def delete_monitor(monitor_id: str):
+    save_monitors([x for x in load_monitors() if x["id"] != monitor_id])
+    return {"deleted": monitor_id}
+
+
+@app.post("/api/monitors/{monitor_id}/run")
+def run_monitor_now(monitor_id: str):
+    monitors = load_monitors()
+    monitor = next((x for x in monitors if x["id"] == monitor_id), None)
+    if not monitor:
+        raise HTTPException(404, "Monitor not found")
+    fired = _check_monitors()
+    return {"monitor": monitor_id, "fired": fired}
+
+
+# ---------- Marketing publisher — compose, approve, schedule, post ----------
+# Nothing is ever posted without approval. A post is a draft until
+# approved; approved posts are posted now or on schedule by the same
+# 30s worker. Telegram posts for real (Bot API); Facebook, LinkedIn,
+# X and Instagram are honest about their state: without a token they
+# report "not connected", and with a token they report that live
+# posting is not wired up yet — a post is never faked as posted.
+POSTS_FILE = DATA_DIR / "posts.json"
+POST_PLATFORMS = ("facebook", "linkedin", "x", "telegram", "instagram")
+POST_PLATFORM_LABELS = {"facebook": "Facebook", "linkedin": "LinkedIn",
+                        "x": "X", "telegram": "Telegram", "instagram": "Instagram"}
+POST_PLATFORM_TOKENS = {"facebook": "FACEBOOK_PAGE_ACCESS_TOKEN",
+                        "linkedin": "LINKEDIN_ACCESS_TOKEN",
+                        "x": "X_BEARER_TOKEN",
+                        "telegram": "TELEGRAM_BOT_TOKEN",
+                        "instagram": "INSTAGRAM_ACCESS_TOKEN"}
+POST_STATUSES = ("draft", "approved", "scheduled", "posted", "partial", "failed")
+
+
+def load_posts():
+    posts = _load_json(POSTS_FILE, None)
+    return posts if isinstance(posts, list) else []
+
+
+def save_posts(posts):
+    _save_json(POSTS_FILE, posts)
+    return posts
+
+
+def _post_to_platform(post, platform):
+    """(ok, detail) for one platform. Never claims a post went out
+    when it did not."""
+    label = POST_PLATFORM_LABELS.get(platform, platform)
+    token_env = POST_PLATFORM_TOKENS.get(platform, "")
+    token = os.getenv(token_env) or ""
+    if platform == "telegram":
+        chat_id = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("TELEGRAM_CHANNEL_ID") or ""
+        if not token or not chat_id:
+            return False, (f"{label} is not connected — add TELEGRAM_BOT_TOKEN and "
+                           "TELEGRAM_CHAT_ID in Secure store. Status: Saved, not checked.")
+        try:
+            with _http_client(timeout=15, external=True) as c:
+                r = c.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                           json={"chat_id": chat_id, "text": post.get("text") or ""})
+            if r.status_code >= 400:
+                return False, f"{label} refused the post ({r.status_code}): {r.text[:200]}"
+            return True, f"{label}: posted."
+        except Exception as e:
+            return False, f"{label} post failed: {e}"
+    if not token:
+        return False, (f"{label} is not connected — add {token_env} in Secure store. "
+                       "Status: Saved, not checked.")
+    return False, (f"{label} posting is not wired up yet — the token is saved, "
+                   f"but LocalBotz does not post to {label} in this version. "
+                   "The post was not sent.")
+
+
+def _post_now(post):
+    """Post an approved/scheduled post to its platforms. Returns the post."""
+    results = {}
+    ok_count = 0
+    for platform in (post.get("platforms") or []):
+        ok, detail = _post_to_platform(post, platform)
+        results[platform] = {"status": "posted" if ok else "failed", "detail": detail}
+        ok_count += 1 if ok else 0
+    total = len(results)
+    post["results"] = results
+    post["posted_at"] = int(time.time())
+    if total and ok_count == total:
+        post["status"] = "posted"
+    elif ok_count:
+        post["status"] = "partial"
+    else:
+        post["status"] = "failed"
+    return post
+
+
+def _check_due_posts():
+    """Post the first due scheduled post. Returns True if one posted."""
+    now = int(time.time())
+    posts = load_posts()
+    for post in posts:
+        if post.get("status") == "scheduled" and post.get("scheduled_at") \
+                and post["scheduled_at"] <= now:
+            _post_now(post)
+            save_posts(posts)
+            return True
+    return False
+
+
+@app.get("/api/posts")
+def list_posts():
+    return sorted(load_posts(), key=lambda p: p.get("created_at", 0), reverse=True)
+
+
+@app.post("/api/posts", status_code=201)
+def create_post(body: dict):
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Write the post first.")
+    platforms = [p for p in (body.get("platforms") or []) if p in POST_PLATFORMS]
+    if not platforms:
+        raise HTTPException(400, "Pick at least one platform to post to.")
+    post = {"id": uuid.uuid4().hex[:8], "text": text, "platforms": platforms,
+            "status": "draft", "scheduled_at": None,
+            "created_by_bot": (body.get("created_by_bot") or "").strip() or None,
+            "created_at": int(time.time()), "posted_at": None, "results": {}}
+    posts = load_posts()
+    posts.append(post)
+    save_posts(posts)
+    return post
+
+
+@app.get("/api/posts/{post_id}")
+def get_post(post_id: str):
+    post = next((x for x in load_posts() if x["id"] == post_id), None)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    return post
+
+
+@app.patch("/api/posts/{post_id}")
+def update_post(post_id: str, body: dict):
+    posts = load_posts()
+    post = next((x for x in posts if x["id"] == post_id), None)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("status") not in ("draft", "approved"):
+        raise HTTPException(400, f"A {post.get('status')} post can no longer be edited.")
+    if "text" in body and (body.get("text") or "").strip():
+        post["text"] = (body.get("text") or "").strip()
+    if "platforms" in body:
+        platforms = [p for p in (body.get("platforms") or []) if p in POST_PLATFORMS]
+        if platforms:
+            post["platforms"] = platforms
+    save_posts(posts)
+    return post
+
+
+@app.delete("/api/posts/{post_id}")
+def delete_post(post_id: str):
+    save_posts([x for x in load_posts() if x["id"] != post_id])
+    return {"deleted": post_id}
+
+
+@app.post("/api/posts/{post_id}/approve")
+def approve_post(post_id: str):
+    posts = load_posts()
+    post = next((x for x in posts if x["id"] == post_id), None)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("status") != "draft":
+        raise HTTPException(400, f"Only a draft can be approved — this post is {post.get('status')}.")
+    post["status"] = "approved"
+    save_posts(posts)
+    return post
+
+
+@app.post("/api/posts/{post_id}/schedule")
+def schedule_post(post_id: str, body: dict):
+    posts = load_posts()
+    post = next((x for x in posts if x["id"] == post_id), None)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("status") not in ("draft", "approved"):
+        raise HTTPException(400, f"A {post.get('status')} post cannot be scheduled.")
+    when = body.get("scheduled_at")
+    try:
+        if isinstance(when, (int, float)):
+            ts = int(when)
+        elif isinstance(when, str) and when.strip():
+            ts = int(datetime.datetime.fromisoformat(when.strip()).timestamp())
+        else:
+            raise ValueError("no time given")
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Give a schedule time — an epoch time or YYYY-MM-DD HH:MM.")
+    if ts <= int(time.time()):
+        raise HTTPException(400, "Schedule a time in the future.")
+    post["scheduled_at"] = ts
+    post["status"] = "scheduled"
+    save_posts(posts)
+    return post
+
+
+@app.post("/api/posts/{post_id}/post")
+def post_post_now(post_id: str):
+    posts = load_posts()
+    post = next((x for x in posts if x["id"] == post_id), None)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("status") not in ("approved", "scheduled"):
+        raise HTTPException(400, "Approve the post first — nothing is posted without approval.")
+    _post_now(post)
+    save_posts(posts)
+    return post
 
 
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------

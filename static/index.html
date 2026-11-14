@@ -83,7 +83,9 @@
     <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
     <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
     <button class="navbtn" data-view="deals">💼 Deals — clients & workflows</button>
+    <button class="navbtn" data-view="leads">🎯 Leads — find new clients</button>
     <button class="navbtn" data-view="runs">📋 Runs — what the team did</button>
+    <button class="navbtn" data-view="marketing">📣 Marketing — write, approve, post</button>
     <button class="navbtn" data-view="desktop">🖥️ Desktop — use the computer</button>
     <button class="navbtn" data-view="live">🔴 Live Voice — talk in real time</button>
     <button class="navbtn" data-view="languages">🌍 Languages — every country, every language</button>
@@ -700,6 +702,8 @@ async function renderPage(name){
     else if(name==='workroom') el.innerHTML=await workroomHtml();
     else if(name==='routines') el.innerHTML=await routinesHtml();
     else if(name==='deals') el.innerHTML=await dealsHtml();
+    else if(name==='leads') el.innerHTML=await leadsHtml();
+    else if(name==='marketing') el.innerHTML=await marketingHtml();
     else if(name==='runs') el.innerHTML=await runsHtml();
     else if(name==='desktop') el.innerHTML=await desktopHtml();
     else if(name==='live') el.innerHTML=await liveHtml();
@@ -754,6 +758,7 @@ async function routinesHtml(){
 
 let currentDeal=null;
 let dealDeptFilter='all';
+let leadTierFilter='all';
 let dealPipelines={};
 let wfSteps=[{type:'note',text:''}];
 let wfBots=[], wfOffices=[];
@@ -842,6 +847,45 @@ async function liveHtml(){
   <h3>Recent live sessions</h3>${sessRows?`<table><tr><th>When</th><th>Bot</th><th>Engine</th><th>Length</th><th>Turns</th><th>Interrupted</th><th></th></tr>${sessRows}</table>`:'<p class="note">No live sessions yet.</p>'}
   <div id="page-msg"></div>`;
 }
+async function leadsHtml(){
+  const leads=await api('/api/leads');
+  const shown=leadTierFilter==='all'?leads:leads.filter(l=>l.tier===leadTierFilter);
+  const rows=shown.map(l=>`<tr><td><b>${esc(l.business_name)}</b><br><span class="note">${esc(l.area||'')} · ${esc(l.sector||'')}</span></td><td>${l.tier==='hot'?'🔥 Hot':l.tier==='warm'?'🟡 Warm':'❄️ Cold'}</td><td>${l.website?`<a href="${esc(l.website)}" target="_blank">${esc(l.website)}</a><br>`:''}${l.phone?esc(l.phone)+'<br>':''}${l.email?esc(l.email):''}${l.whatsapp?'<br>WhatsApp: '+esc(l.whatsapp):''}</td><td><ul>${(l.evidence||[]).map(e=>`<li>${esc(e)}</li>`).join('')}</ul>${l.source_url?`<a href="${esc(l.source_url)}" target="_blank">${esc(l.source_name||'Source')}</a>`:''}</td><td>${esc(l.status)}</td><td><button class="small" data-lead-deal="${l.id}">→ Deal</button> <button class="small" data-lead-proposal="${l.id}">Proposal pack</button> <button class="small" data-lead-del="${l.id}">Dismiss</button></td></tr>`).join('');
+  return `<h2>🎯 Leads — find new clients</h2>
+  <p class="note">Hunting finds businesses in an area and a sector from public directories and search results, and sorts them into Hot, Warm and Cold — Hot means they have a website and a way to reach them and look ready to buy (a new project, a tender, an expansion). Every lead shows its evidence and its source, so you can check it. A phone number or website is only shown when the page actually showed it — never invented. Turn a lead into a deal, or build it a proposal pack.</p>
+  <h3>Hunt for leads</h3>
+  <div class="row"><div><label>Area</label><input id="ld-area" type="text" placeholder="e.g. Doha, Qatar"></div><div><label>Sector</label><input id="ld-sector" type="text" placeholder="e.g. Construction"></div><div><label>How many</label><input id="ld-limit" type="number" value="5" min="1" max="20"></div></div>
+  <div style="margin:8px 0"><button id="ld-hunt">Hunt for leads</button></div>
+  <h3>Leads</h3>
+  <label>Show tier</label><select id="ld-tier"><option value="all">All tiers</option><option value="hot">🔥 Hot</option><option value="warm">🟡 Warm</option><option value="cold">❄️ Cold</option></select>
+  ${shown.length?`<table><tr><th>Business</th><th>Tier</th><th>Contact</th><th>Why this tier — evidence</th><th>Status</th><th></th></tr>${rows}</table>`:'<p class="note">No leads yet. Hunt above, or wait — hunted leads appear here.</p>'}
+  <div id="page-msg"></div>`;
+}
+async function marketingHtml(){
+  const posts=await api('/api/posts');
+  const rows=posts.map(x=>`<tr><td style="white-space:pre-wrap">${esc(x.text)}</td><td>${(x.platforms||[]).map(p=>esc(p)).join(', ')}</td><td>${esc(x.status)}</td><td>${x.scheduled_at?new Date(x.scheduled_at*1000).toLocaleString():'—'}</td><td>${Object.entries(x.results||{}).map(([pl,r])=>`<b>${esc(pl)}</b>: ${esc(r.detail||r.status)}`).join('<br>')||'—'}</td><td>${x.status==='draft'?`<button class="small" data-post-approve="${x.id}">✓ Approve</button> `:''}${(x.status==='approved'||x.status==='draft')?`<button class="small" data-post-schedule="${x.id}">Schedule…</button> `:''}${(x.status==='approved'||x.status==='scheduled')?`<button class="small" data-post-now="${x.id}">Post now</button> `:''}<button class="small" data-post-del="${x.id}">Delete</button></td></tr>`).join('');
+  return `<h2>📣 Marketing — write, approve, post</h2>
+  <p class="note">Write a post once, pick where it goes, and it is only posted after you approve it. Approved posts go out now, or on the schedule you set. Telegram posts for real when its bot token and chat are saved. Facebook, LinkedIn, X and Instagram need their tokens saved in Secure store, and until live posting is wired up for them the result says so honestly — a post is never shown as posted when it was not.</p>
+  <h3>Compose</h3>
+  <label>Post text</label><textarea id="mk-text" rows="3" placeholder="e.g. We just delivered the MEP package for Marina Tower — on time, on budget."></textarea>
+  <div style="margin:8px 0"><label style="display:inline"><input type="checkbox" class="mk-plat" value="telegram" checked> Telegram</label> <label style="display:inline"><input type="checkbox" class="mk-plat" value="facebook"> Facebook</label> <label style="display:inline"><input type="checkbox" class="mk-plat" value="linkedin"> LinkedIn</label> <label style="display:inline"><input type="checkbox" class="mk-plat" value="x"> X</label> <label style="display:inline"><input type="checkbox" class="mk-plat" value="instagram"> Instagram</label></div>
+  <div style="margin:8px 0"><button id="mk-create">Save as draft</button></div>
+  <h3>Posts</h3>
+  ${posts.length?`<table><tr><th>Post</th><th>Platforms</th><th>Status</th><th>Scheduled</th><th>Result</th><th></th></tr>${rows}</table>`:'<p class="note">No posts yet.</p>'}
+  <div id="page-msg"></div>`;
+}
+async function waAgentHtml(){
+  const st=await api('/api/whatsapp/status').catch(()=>({}));
+  const inbox=await api('/api/whatsapp/inbox').catch(()=>[]);
+  const rows=inbox.map(x=>`<tr><td>${esc(x.sender_name||x.sender)}<br><span class="note">${esc(x.sender)}</span></td><td style="white-space:pre-wrap">${esc(x.text)}</td><td style="white-space:pre-wrap">${esc(x.draft_reply||x.note||'')}</td><td>${esc(x.status)}</td><td>${x.status==='awaiting_approval'?`<button class="small" data-wa-approve="${x.id}">✓ Approve &amp; send</button> <button class="small" data-wa-dismiss="${x.id}">Dismiss</button>`:''}</td></tr>`).join('');
+  return `<h3 style="margin-top:28px">WhatsApp sales agent — official Business API</h3>
+  <p class="note">Customers message your WhatsApp Business number; the bot drafts a reply and <b>nothing is sent until you approve it here</b>. Only senders on the allowlist (below, or in the WhatsApp channel above) get a reply — everyone else is logged as blocked and gets nothing. This uses Meta's official WhatsApp Business API and webhook. Never pair WhatsApp by QR code — that can get the number banned.</p>
+  <p><b>Status:</b> ${st.configured?'🟢 configured':'⚪ not set up yet'} · Token: ${st.has_token?'saved':'not set'} · Phone number ID: ${st.has_phone_number_id?'saved':'not set'} · Verify token: ${st.has_verify_token?'saved':'not set'} · App secret: ${st.has_app_secret?'saved':'not set'} · Business number: ${st.bot_number?esc(st.bot_number):'not set'} · Approved senders: ${st.allowlist_count||0} · Waiting for approval: ${st.awaiting_count||0}</p>
+  <p class="note">To set it up: in Meta for Developers create a WhatsApp app, add WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET in Secure store, add WHATSAPP_BOT_NUMBER (your business number), and point the app's webhook at <code>/api/whatsapp/webhook</code>. ${st.note?esc(st.note):''}</p>
+  <label>Add an approved sender (phone, with country code)</label><input id="wa-phone-add" type="text" placeholder="e.g. +974 5555 1234"> <button id="wa-allow-add">Add sender</button>
+  <h3>Inbox — replies waiting for approval</h3>
+  ${inbox.length?`<table><tr><th>From</th><th>Their message</th><th>Draft reply</th><th>Status</th><th></th></tr>${rows}</table>`:'<p class="note">No WhatsApp messages yet. When a customer writes to your business number, their message and the draft reply appear here for approval.</p>'}`;
+}
 async function runsHtml(){
   const runs=await api('/api/chain-runs');
   const routines=await api('/api/routines');
@@ -870,6 +914,7 @@ async function dealsHtml(){
     const stepSummary=r=>(r.steps||[{type:r.action,text:r.text,bot_id:r.bot_id,office_id:r.office_id}]).map(s=>s.type==='wait'?`⏳ wait ${s.minutes||60}m`:s.type==='if'?`🔀 if ${esc(s.condition||'')}`:s.type.startsWith('desktop_')?`🖥️ ${s.type.replace('desktop_','')}${s.target?` ${esc(s.target)}`:''}`:s.type).join(' → ');
     const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${r.department?esc(dealPipelines[r.department]?.label||r.department):'Any department'}</td><td>When a deal moves to <b>${esc(pipeStageLabel(r.department||'general',r.stage))}</b></td><td>${esc(stepSummary(r))}<br><span class="note">${esc(((r.steps||[])[0]?.text||r.text||'').slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
     const runs=await api('/api/chain-runs');
+    const monitors=await api('/api/monitors');
     const waiting=runs.filter(r=>r.status==='waiting');
     const recent=runs.filter(r=>r.status!=='waiting').slice(0,10);
     const runRows=runs.slice(0,10).map(r=>`<tr><td>${esc(r.rule_name||'')}</td><td>${esc(r.deal_title||'')}</td><td>${esc(r.status)}</td><td>${r.status==='waiting'&&r.resume_at?`resumes ${new Date(r.resume_at*1000).toLocaleString()}`:r.finished_at?new Date(r.finished_at*1000).toLocaleString():'—'}</td><td>${r.status==='waiting'?`<button class="small" data-run-cancel="${r.id}">Cancel</button>`:''}</td></tr>`).join('');
@@ -900,6 +945,12 @@ async function dealsHtml(){
     ${rules.length?`<table><tr><th>Workflow</th><th>Department</th><th>Trigger</th><th>Steps</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
     <h3>Chains running now</h3>
     ${runs.length?`<table><tr><th>Workflow</th><th>Deal</th><th>Status</th><th>When</th><th></th></tr>${runRows}</table><p class="note">${waiting.length} waiting — they resume on their own when the wait ends. A finished chain's steps are on the deal's timeline.</p>`:'<p class="note">No chains yet. A chain appears here when a workflow hits a wait step.</p>'}
+    <h3>Monitors — always-on watchers</h3>
+    <p class="note">A workflow fires when a deal moves stage. A monitor fires when time passes and nothing moves — a deal sitting Quoted for days gets a chase draft and a task, once per deal per monitor. They are checked while the app is open.</p>
+    <label>Name</label><input id="mon-name" type="text" placeholder="e.g. Quoted 3 days with no reply — chase">
+    <div class="row"><div><label>Kind</label><select id="mon-kind"><option value="no_reply_after_quote">No reply after a quote</option><option value="stalled_deal">Deal stalled (Quoted or Negotiation)</option></select></div><div><label>Department</label><select id="mon-dept"><option value="">Any department</option>${deptOpts}</select></div><div><label>Days quiet</label><input id="mon-days" type="number" value="3" min="1" max="30"></div></div>
+    <div style="margin:8px 0"><button id="mon-create">Create monitor</button></div>
+    ${monitors.length?`<table><tr><th>Monitor</th><th>Kind</th><th>Department</th><th>Days</th><th>Status</th><th>Last run</th><th></th></tr>${monitors.map(m=>`<tr><td><b>${esc(m.name)}</b>${(m.runs||[]).length?`<br><span class="note">Last firing: ${esc(m.runs[m.runs.length-1].deal_title||'')} — ${new Date(m.runs[m.runs.length-1].at*1000).toLocaleString()}</span>`:''}</td><td>${esc(m.kind)}</td><td>${m.department?esc(dealPipelines[m.department]?.label||m.department):'Any'}</td><td>${m.days}</td><td>${m.enabled?'✅ On':'⏸ Off'}</td><td>${m.last_run?new Date(m.last_run*1000).toLocaleString():'—'}</td><td><button class="small" data-mon-toggle="${m.id}" data-on="${!m.enabled}">${m.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-mon-run="${m.id}">Run now</button> <button class="small" data-mon-del="${m.id}">Delete</button></td></tr>`).join('')}</table>`:'<p class="note">No monitors yet.</p>'}
     <div id="page-msg"></div>`;
   }
   const d=await api('/api/deals/'+currentDeal);
@@ -1072,7 +1123,7 @@ async function messagingHtml(){
   const d=await api('/api/messaging');
   const tg=await api('/api/messaging/telegram/status');
   const botOpts=bots.map(b=>`<option value="${b.id}" ${d.telegram&&d.telegram.bot_id===b.id?'selected':''}>${esc(b.name)}</option>`).join('');
-  return `<h2>💬 Messaging channels</h2><p class="note"><b>Telegram is live:</b> LocalBotz polls Telegram every few seconds and answers approved senders — no webhook or public URL needed. WhatsApp and Discord are configuration only for now (WhatsApp needs a public webhook URL, Discord needs a websocket gateway) — inbound replies stay <b>off by default</b> and only approved senders would ever be answered.</p>
+  return `<h2>💬 Messaging channels</h2><p class="note"><b>Telegram is live:</b> LocalBotz polls Telegram every few seconds and answers approved senders — no webhook or public URL needed. WhatsApp has its own sales agent below (official Business API — replies wait for your approval). Discord is configuration only for now (it needs a websocket gateway) — inbound replies stay <b>off by default</b> and only approved senders would ever be answered.</p>
   <p><b>Telegram listener:</b> ${tg.listening?'🟢 listening':tg.has_token?'⚪ ready — enable the channel and inbound replies below':'⚪ no token saved yet'} · Messages answered: ${tg.messages_handled}${tg.last_error?` · Last error: ${esc(tg.last_error)}`:''}</p>`+
   Object.entries(d).map(([id,c])=>`<h3>${esc(c.label)}</h3><p>Status: ${statusTag(c.status)} · Token: ${c.has_token?'stored (masked)':'not set'} · Inbound replies: ${c.inbound_replies?'ON':'off'}</p>
   ${id==='telegram'?`<label>Which bot answers on Telegram</label><select data-msg="telegram:bot_id">${botOpts}</select>`:''}
@@ -1080,7 +1131,7 @@ async function messagingHtml(){
   <label>Approved senders (one per line)</label><textarea data-msg="${id}:senders" rows="3">${esc((c.approved_senders||[]).join('\n'))}</textarea>
   <label>Bot token (stored in Secure store, never shown)</label><input type="password" data-msg="${id}:token" placeholder="Leave blank to keep the current token">
   <div style="margin:8px 0"><label style="display:inline"><input type="checkbox" data-msg="${id}:enabled" ${c.enabled?'checked':''}> Channel enabled</label> &nbsp; <label style="display:inline"><input type="checkbox" data-msg="${id}:inbound" ${c.inbound_replies?'checked':''}> Enable inbound replies</label> <button class="small" data-msgsave="${id}">Save</button></div>
-  <p style="color:#666;font-size:14px">${esc(c.setup)}</p>`).join('')+`<div id="page-msg"></div>`;
+  <p style="color:#666;font-size:14px">${esc(c.setup)}</p>`).join('') + await waAgentHtml() + `<div id="page-msg"></div>`;
 }
 async function mcpHtml(){
   const list=await api('/api/mcp-servers');
@@ -1126,6 +1177,7 @@ async function languagesHtml(){
 }
 async function generalHtml(){
   settings=await api('/api/settings');
+  const prof=await api('/api/business-profile').catch(()=>({}));
   await loadLanguages();
   const langOpts=langOptions(settings.default_language||'auto');
   const provOpts=providers.map(p=>`<option value="${p.id}" ${p.id===settings.default_provider?'selected':''}>${esc(p.label)}</option>`).join('');
@@ -1140,6 +1192,18 @@ async function generalHtml(){
   <p class="note">Runs LocalBotz in the background when you sign in, so routines, jobs and workflows keep working while the computer is on. ${settings.autostart_path?`Startup entry: <code>${esc(settings.autostart_path)}</code>`:''}</p>
   <p>Data location: <code>${esc(settings.data_location||'')}</code><br>Workspace: <code>${esc(settings.workspace_absolute||'')}</code><br>App version: <b>${esc(settings.app_version||'')}</b></p>
   <button id="set-save">Save settings</button> <button id="set-reset" class="ghost">Reset settings</button>
+  <h3 style="margin-top:28px">Business profile — your company, once</h3>
+  <p class="note">Write this once and every bot, office job, deal draft and proposal uses it — your company name, what you do, and how you speak to clients. Leave it empty and nothing is added; LocalBotz never invents company facts.</p>
+  <label>Company name</label><input id="bp-company" type="text" value="${esc(prof.company_name||'')}" placeholder="e.g. Al Rayyan Trading &amp; Contracting">
+  <label>Contact name</label><input id="bp-contact" type="text" value="${esc(prof.contact_name||'')}">
+  <div class="row"><div><label>Phone</label><input id="bp-phone" type="text" value="${esc(prof.phone||'')}"></div><div><label>Email</label><input id="bp-email" type="text" value="${esc(prof.email||'')}"></div></div>
+  <div class="row"><div><label>Website</label><input id="bp-website" type="text" value="${esc(prof.website||'')}"></div><div><label>Area</label><input id="bp-area" type="text" value="${esc(prof.area||'')}" placeholder="e.g. Doha, Qatar"></div></div>
+  <label>Services — one per line</label><textarea id="bp-services" rows="3" placeholder="MEP installation&#10;Electrical fit-out&#10;Annual maintenance">${esc((prof.services||[]).join('\n'))}</textarea>
+  <label>Sectors — one per line</label><textarea id="bp-sectors" rows="2" placeholder="Construction&#10;MEP">${esc((prof.sectors||[]).join('\n'))}</textarea>
+  <label>How we speak to clients (tone)</label><input id="bp-tone" type="text" value="${esc(prof.brand_tone||'')}" placeholder="e.g. plain, professional, short">
+  <label>FAQs — one per line, question || answer</label><textarea id="bp-faqs" rows="3" placeholder="Do you work in Doha? || Yes — Doha and Lusail.">${esc((prof.faqs||[]).map(f=>f.q+' || '+f.a).join('\n'))}</textarea>
+  <label>Quotation notes</label><textarea id="bp-notes" rows="2" placeholder="e.g. Prices exclude VAT. Valid 30 days.">${esc(prof.quotation_notes||'')}</textarea>
+  <div style="margin:8px 0"><button id="bp-save">Save business profile</button></div>
   <h3 style="margin-top:28px">How LocalBotz runs</h3>
   <p>Use the subscriptions you already pay for to run agents in your personal office. Works with Claude, ChatGPT, Grok, Gemini and more. Give your agents your computer — or rent one from us.</p>
   <table><tr><th>How it runs</th><th>What it means</th><th></th></tr>
@@ -1329,6 +1393,29 @@ function bindPage(name){
   if(q('wr-ask')) q('wr-ask').onclick=async()=>{const b=q('wr-ask'); b.disabled=true; b.textContent='Asking…'; try{await api(`/api/workrooms/${currentWorkroom}/ask`,{method:'POST',body:JSON.stringify({question:q('wr-question').value})}); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Ask the workroom';}};
   if(q('wr-note-add')) q('wr-note-add').onclick=async()=>{try{await api(`/api/workrooms/${currentWorkroom}/notes`,{method:'POST',body:JSON.stringify({text:q('wr-note-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
   if(q('wr-save')) q('wr-save').onclick=async()=>{try{await api('/api/workrooms/'+currentWorkroom,{method:'PATCH',body:JSON.stringify({provider:q('wr-provider').value,model:q('wr-model').value,redact_terms:q('wr-terms-edit').value.split(',').map(s=>s.trim()).filter(Boolean)})}); msg('Workroom settings saved.'); renderPage(name);}catch(e){msg(e.message);}};
+  // Business profile
+  if(q('bp-save')) q('bp-save').onclick=async()=>{try{await api('/api/business-profile',{method:'PUT',body:JSON.stringify({company_name:q('bp-company').value,contact_name:q('bp-contact').value,phone:q('bp-phone').value,email:q('bp-email').value,website:q('bp-website').value,area:q('bp-area').value,services:q('bp-services').value.split('\n').map(x=>x.trim()).filter(Boolean),sectors:q('bp-sectors').value.split('\n').map(x=>x.trim()).filter(Boolean),brand_tone:q('bp-tone').value,faqs:q('bp-faqs').value.split('\n').map(x=>x.trim()).filter(Boolean).map(l=>{const [qq,...aa]=l.split('||'); return {q:(qq||'').trim(),a:aa.join('||').trim()};}).filter(f=>f.q&&f.a),quotation_notes:q('bp-notes').value})}); msg('Business profile saved — bots, office jobs, deal drafts and proposals will use it.');}catch(e){msg(e.message);}};
+  // Leads
+  if(q('ld-hunt')) q('ld-hunt').onclick=async()=>{const b=q('ld-hunt'); b.disabled=true; b.textContent='Hunting…'; try{const r=await api('/api/leads/hunt',{method:'POST',body:JSON.stringify({area:q('ld-area').value,sector:q('ld-sector').value,limit:parseInt(q('ld-limit').value)||5})}); msg(`Hunt finished — ${r.created||0} new lead(s) found (${r.leads?r.leads.length:0} returned).`); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Hunt for leads';}};
+  if(q('ld-tier')){q('ld-tier').value=leadTierFilter; q('ld-tier').onchange=()=>{leadTierFilter=q('ld-tier').value; renderPage(name);};}
+  document.querySelectorAll('[data-lead-deal]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/leads/${el.dataset.leadDeal}/to-deal`,{method:'POST'}); msg(`Deal created for ${d.client}.`); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-lead-proposal]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/leads/${el.dataset.leadProposal}/proposal`,{method:'POST'}); msg(`Proposal pack ready — ${(r.files||[]).map(f=>f.filename).join(', ')}.`); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-lead-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Dismiss this lead?')) return; await api(`/api/leads/${el.dataset.leadDel}`,{method:'DELETE'}); renderPage(name);});
+  // Monitors
+  if(q('mon-create')) q('mon-create').onclick=async()=>{try{await api('/api/monitors',{method:'POST',body:JSON.stringify({name:q('mon-name').value,kind:q('mon-kind').value,department:q('mon-dept').value,days:parseInt(q('mon-days').value)||3})}); msg('Monitor created — it watches while the app is open.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-mon-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/monitors/${el.dataset.monToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
+  document.querySelectorAll('[data-mon-run]').forEach(el=>el.onclick=async()=>{const r=await api(`/api/monitors/${el.dataset.monRun}/run`,{method:'POST'}); msg(r.fired?'Monitor fired — a chase draft and task were created.':'Monitor checked — nothing to chase right now.'); renderPage(name);});
+  document.querySelectorAll('[data-mon-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this monitor?')) return; await api(`/api/monitors/${el.dataset.monDel}`,{method:'DELETE'}); renderPage(name);});
+  // WhatsApp sales agent
+  if(q('wa-allow-add')) q('wa-allow-add').onclick=async()=>{try{await api('/api/whatsapp/allowlist',{method:'POST',body:JSON.stringify({phone:q('wa-phone-add').value})}); msg('Sender added to the allowlist.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-wa-approve]').forEach(el=>el.onclick=async()=>{try{await api(`/api/whatsapp/inbox/${el.dataset.waApprove}/approve`,{method:'POST'}); msg('Reply sent.'); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-wa-dismiss]').forEach(el=>el.onclick=async()=>{await api(`/api/whatsapp/inbox/${el.dataset.waDismiss}/dismiss`,{method:'POST'}); renderPage(name);});
+  // Marketing publisher
+  if(q('mk-create')) q('mk-create').onclick=async()=>{try{const plats=[...document.querySelectorAll('.mk-plat:checked')].map(c=>c.value); await api('/api/posts',{method:'POST',body:JSON.stringify({text:q('mk-text').value,platforms:plats})}); msg('Draft saved — approve it before it can be posted.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-post-approve]').forEach(el=>el.onclick=async()=>{try{await api(`/api/posts/${el.dataset.postApprove}/approve`,{method:'POST'}); msg('Post approved — post it now or schedule it.'); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-post-schedule]').forEach(el=>el.onclick=async()=>{const when=prompt('Schedule for when? (YYYY-MM-DD HH:MM)'); if(!when) return; try{await api(`/api/posts/${el.dataset.postSchedule}/schedule`,{method:'POST',body:JSON.stringify({scheduled_at:when})}); msg('Post scheduled.'); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-post-now]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/posts/${el.dataset.postNow}/post`,{method:'POST'}); msg(`Post finished — status: ${r.status}. Check the Result column.`); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-post-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this post?')) return; await api(`/api/posts/${el.dataset.postDel}`,{method:'DELETE'}); renderPage(name);});
 }
 // ---------- First-run wizard ----------
 let wizRunMode='computer';

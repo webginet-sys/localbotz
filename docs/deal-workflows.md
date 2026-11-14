@@ -168,3 +168,35 @@ chain runs in `data/chain_runs.json`.
 
 Deals live in `data/deals.json`, rules in `data/deal_workflows.json`.
 Pipelines live in `app.py` (`DEPARTMENT_PIPELINES`).
+
+## Always-on monitors — watch deals that go quiet
+
+A workflow fires when a deal **moves** stage. A monitor fires when time
+passes and **nothing** moves. A deal sitting in Quoted for days, with no
+reply, gets a chase draft and a task — once per deal per monitor, so you
+are not chased about the same deal twice.
+
+Two monitors are seeded on first run:
+
+- **"Quoted 3 days with no reply — chase"** — a deal in Quoted whose
+  stage has not changed for 3 days.
+- **"Negotiation 7 days with no movement — nudge"** — a deal in Quoted
+  or Negotiation quiet for 7 days.
+
+Each monitor has a kind (`stalled_deal` or `no_reply_after_quote`), an
+optional department (or any department), and a number of days (1–30).
+When one fires it:
+
+1. writes a chase draft on the deal (the same kind of draft a chain
+   writes — it stays a draft, nothing is sent),
+2. creates a task for your first bot to follow up,
+3. adds a timeline event on the deal: "Monitor '<name>' fired".
+
+Firings are recorded in the monitor itself (`fired` — deal id + date, so
+it never fires twice for the same deal) and in its `runs` list, shown on
+the Deals page under **Monitors — always-on watchers**. Monitors are
+checked by the same 30-second worker as routines and chains, one firing
+per tick, only while the app is open. You can also check one now with
+**Run now**.
+
+Monitors live in `data/monitors.json`.

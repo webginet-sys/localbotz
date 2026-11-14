@@ -553,6 +553,33 @@ every chain and routine that ran, with its steps — a finished chain
 can be re-run from step 1 on the same deal. See
 `docs/deal-workflows.md`.
 
+## Leads, business profile, WhatsApp agent, monitors, marketing
+
+Five more ways LocalBotz works for a business, all of them approval-first:
+
+- **🎯 Leads — find new clients.** Hunt for businesses by area and sector
+  (public sources only, never Google Maps scraping). Each lead shows its
+  tier — Hot, Warm or Cold — with the evidence and the source page, so you
+  can check it. Turn a lead into a deal, or build it a proposal pack
+  (`.docx` + `.xlsx`). See `docs/leads.md`.
+- **Business profile — your company, once.** Settings → General →
+  Business profile: company, services, sectors, tone, FAQs and quotation
+  notes. Bots, office jobs, deal drafts (`{company}`) and proposal packs
+  all use it; when it is empty, nothing is invented. See
+  `docs/business-profile.md`.
+- **WhatsApp sales agent.** Official WhatsApp Business API only — no QR
+  pairing. Customers message your business number, the bot drafts a reply,
+  and nothing is sent until you approve it in Messaging channels. Senders
+  not on the allowlist get nothing. See `docs/whatsapp-agent.md`.
+- **Always-on monitors.** A deal sitting Quoted for 3 days (or Negotiation
+  for 7) gets a chase draft and a task, once per deal. See the "Always-on
+  monitors" section of `docs/deal-workflows.md`.
+- **📣 Marketing — write, approve, post.** Compose a post, approve it,
+  post it now or on schedule. Telegram posts for real; Facebook, LinkedIn,
+  X and Instagram report honestly when they are not connected or not wired
+  up yet — a post is never shown as posted when it was not. See
+  `docs/marketing.md`.
+
 ## Document workroom — documents with proof
 
 Sidebar → **Workroom**. Modelled on the TeamOffice idea of a
