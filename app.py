@@ -3839,6 +3839,270 @@ def delete_learning(learning_id: str):
     return {"deleted": learning_id}
 
 
+# ---------- Clients & Deals + deal workflows ----------
+# A small local CRM, just enough for sales work: a deal is a client,
+# a value and a pipeline stage (New -> Quoted -> Negotiation -> Won /
+# Lost), with one activity timeline (stage moves, notes, drafts,
+# workflow runs). A workflow rule fires when a deal moves TO a stage:
+# it can create a task for a bot, run an office job with the team
+# (which goes through the Auditor + approval gate, like any job),
+# write a draft for the user to send themselves, or add a note.
+# Nothing is sent out by a workflow on its own: drafts stay drafts
+# until the user sends them, and office jobs wait for approval.
+# (Twenty's idea, LocalBotz-sized: plain local JSON, no new stack.)
+DEALS_FILE = DATA_DIR / "deals.json"
+DEAL_WORKFLOWS_FILE = DATA_DIR / "deal_workflows.json"
+DEAL_STAGES = ("new", "quoted", "negotiation", "won", "lost")
+DEAL_STAGE_LABELS = {"new": "New", "quoted": "Quoted",
+                     "negotiation": "Negotiation", "won": "Won", "lost": "Lost"}
+WORKFLOW_ACTIONS = ("create_task", "office_job", "draft", "note")
+
+
+def load_deals():
+    deals = _load_json(DEALS_FILE, None)
+    return deals if isinstance(deals, list) else []
+
+
+def save_deals(deals):
+    _save_json(DEALS_FILE, deals)
+    return deals
+
+
+def load_deal_workflows():
+    rules = _load_json(DEAL_WORKFLOWS_FILE, None)
+    return rules if isinstance(rules, list) else []
+
+
+def save_deal_workflows(rules):
+    _save_json(DEAL_WORKFLOWS_FILE, rules)
+    return rules
+
+
+def _render_deal_text(template, deal):
+    """Fill {deal} {client} {value} {currency} {stage} in a template.
+    Values read like money (4,850,000), never like 4.85e+06."""
+    value = deal.get("value")
+    if value is None:
+        value_text = ""
+    elif float(value) == int(float(value)):
+        value_text = f"{int(float(value)):,}"
+    else:
+        value_text = f"{float(value):,.2f}"
+    return (template or "").replace("{deal}", deal.get("title", "")) \
+        .replace("{client}", deal.get("client", "")) \
+        .replace("{value}", value_text) \
+        .replace("{currency}", deal.get("currency", "")) \
+        .replace("{stage}", DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage", "")))
+
+
+def _fire_deal_workflows(deal, old_stage, new_stage):
+    """Run every enabled rule that fires on a move TO new_stage.
+    Returns [{rule, action, result}]. One rule failing never stops
+    the others, and never stops the stage change itself."""
+    fired = []
+    for rule in load_deal_workflows():
+        if not rule.get("enabled") or rule.get("stage") != new_stage:
+            continue
+        action = rule.get("action")
+        text = _render_deal_text(rule.get("text") or "", deal)
+        result = ""
+        try:
+            if action == "create_task":
+                tasks = load_tasks()
+                task = {"id": uuid.uuid4().hex[:8], "bot_id": rule["bot_id"],
+                        "goal": text, "status": "pending",
+                        "steps": [], "result": "", "created_at": int(time.time()),
+                        "finished_at": None}
+                tasks.append(task)
+                save_tasks(tasks)
+                result = f"Task created for the bot ({task['id']}). Run it from the bot's tasks, or it runs on its own if the bot is persistent."
+            elif action == "office_job":
+                job = run_office_job(rule["office_id"],
+                                     {"title": f"Deal: {deal.get('title')}",
+                                      "brief": text})
+                result = (f"Office job started ({job['id']}) — {job.get('status')}"
+                          + (" — waiting for your approval." if job.get("status") == "awaiting_approval" else "."))
+            elif action == "draft":
+                deal.setdefault("drafts", []).append(
+                    {"id": uuid.uuid4().hex[:8], "text": text,
+                     "status": "draft", "created_at": int(time.time())})
+                result = "Draft written on the deal — send it yourself when ready."
+            elif action == "note":
+                result = text
+            else:
+                result = f"Unknown action '{action}' — skipped."
+        except Exception as e:
+            result = f"Workflow failed: {e}"
+        deal.setdefault("events", []).append(
+            {"at": int(time.time()), "kind": "workflow",
+             "text": f"Workflow '{rule.get('name')}' ran ({action}): {result}"})
+        fired.append({"rule": rule.get("name"), "action": action, "result": result})
+    return fired
+
+
+@app.get("/api/deals")
+def list_deals():
+    deals = sorted(load_deals(), key=lambda d: d.get("updated_at", 0), reverse=True)
+    for d in deals:
+        d["stage_label"] = DEAL_STAGE_LABELS.get(d.get("stage"), d.get("stage"))
+    return deals
+
+
+@app.post("/api/deals", status_code=201)
+def create_deal(body: dict):
+    title = (body.get("title") or "").strip()
+    client = (body.get("client") or "").strip()
+    if not title or not client:
+        raise HTTPException(400, "Give the deal a title and a client.")
+    value = body.get("value")
+    if value in ("", None):
+        value = None
+    else:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Value must be a number.")
+    deal = {"id": uuid.uuid4().hex[:8], "title": title, "client": client,
+            "contact": (body.get("contact") or "").strip(),
+            "value": value,
+            "currency": (body.get("currency") or "QAR").strip() or "QAR",
+            "stage": "new", "events": [], "drafts": [],
+            "created_at": int(time.time()), "updated_at": int(time.time())}
+    deal["events"].append({"at": int(time.time()), "kind": "stage",
+                           "text": "Deal created (New)."})
+    deals = load_deals()
+    deals.append(deal)
+    save_deals(deals)
+    deal["stage_label"] = "New"
+    return deal
+
+
+@app.get("/api/deals/{deal_id}")
+def get_deal(deal_id: str):
+    deal = next((x for x in load_deals() if x["id"] == deal_id), None)
+    if not deal:
+        raise HTTPException(404, "Deal not found")
+    deal["stage_label"] = DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage"))
+    return deal
+
+
+@app.patch("/api/deals/{deal_id}")
+def update_deal(deal_id: str, body: dict):
+    deals = load_deals()
+    deal = next((x for x in deals if x["id"] == deal_id), None)
+    if not deal:
+        raise HTTPException(404, "Deal not found")
+    fired = []
+    old_stage = deal.get("stage")
+    for key in ("title", "client", "contact", "currency"):
+        if key in body and (body.get(key) or "").strip():
+            deal[key] = (body.get(key) or "").strip()
+    if "value" in body:
+        if body.get("value") in ("", None):
+            deal["value"] = None
+        else:
+            try:
+                deal["value"] = float(body.get("value"))
+            except (TypeError, ValueError):
+                raise HTTPException(400, "Value must be a number.")
+    if "note" in body and (body.get("note") or "").strip():
+        deal.setdefault("events", []).append(
+            {"at": int(time.time()), "kind": "note",
+             "text": (body.get("note") or "").strip()})
+    if "stage" in body:
+        new_stage = (body.get("stage") or "").strip().lower()
+        if new_stage not in DEAL_STAGES:
+            raise HTTPException(400, "Stage must be new, quoted, negotiation, won or lost.")
+        if new_stage != old_stage:
+            deal["stage"] = new_stage
+            deal.setdefault("events", []).append(
+                {"at": int(time.time()), "kind": "stage",
+                 "text": f"Moved {DEAL_STAGE_LABELS.get(old_stage, old_stage)} → {DEAL_STAGE_LABELS.get(new_stage, new_stage)}."})
+            fired = _fire_deal_workflows(deal, old_stage, new_stage)
+    deal["updated_at"] = int(time.time())
+    save_deals(deals)
+    deal["stage_label"] = DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage"))
+    deal["workflows_fired"] = fired
+    return deal
+
+
+@app.delete("/api/deals/{deal_id}")
+def delete_deal(deal_id: str):
+    deals = [x for x in load_deals() if x["id"] != deal_id]
+    save_deals(deals)
+    return {"deleted": deal_id}
+
+
+@app.delete("/api/deals/{deal_id}/drafts/{draft_id}")
+def delete_deal_draft(deal_id: str, draft_id: str):
+    deals = load_deals()
+    deal = next((x for x in deals if x["id"] == deal_id), None)
+    if not deal:
+        raise HTTPException(404, "Deal not found")
+    deal["drafts"] = [d for d in deal.get("drafts", []) if d["id"] != draft_id]
+    save_deals(deals)
+    return {"deleted": draft_id}
+
+
+@app.get("/api/deal-workflows")
+def list_deal_workflows():
+    return load_deal_workflows()
+
+
+@app.post("/api/deal-workflows", status_code=201)
+def create_deal_workflow(body: dict):
+    name = (body.get("name") or "").strip()
+    stage = (body.get("stage") or "").strip().lower()
+    action = (body.get("action") or "").strip()
+    text = (body.get("text") or "").strip()
+    if not name:
+        raise HTTPException(400, "Give the workflow a name.")
+    if stage not in DEAL_STAGES:
+        raise HTTPException(400, "Stage must be new, quoted, negotiation, won or lost.")
+    if action not in WORKFLOW_ACTIONS:
+        raise HTTPException(400, "Action must be create_task, office_job, draft or note.")
+    if not text:
+        raise HTTPException(400, "Write what the workflow should do (the task, brief, draft or note).")
+    bot_id = (body.get("bot_id") or "").strip() or None
+    office_id = (body.get("office_id") or "").strip() or None
+    if action == "create_task":
+        if not bot_id or not get_bot(bot_id):
+            raise HTTPException(400, "Pick a bot for the task.")
+    if action == "office_job":
+        if not office_id or not get_office(office_id):
+            raise HTTPException(400, "Pick an office for the job.")
+    rule = {"id": uuid.uuid4().hex[:8], "name": name, "stage": stage,
+            "action": action, "bot_id": bot_id, "office_id": office_id,
+            "text": text, "enabled": True, "created_at": int(time.time())}
+    rules = load_deal_workflows()
+    rules.append(rule)
+    save_deal_workflows(rules)
+    return rule
+
+
+@app.patch("/api/deal-workflows/{rule_id}")
+def update_deal_workflow(rule_id: str, body: dict):
+    rules = load_deal_workflows()
+    rule = next((x for x in rules if x["id"] == rule_id), None)
+    if not rule:
+        raise HTTPException(404, "Workflow not found")
+    if "enabled" in body:
+        rule["enabled"] = bool(body.get("enabled"))
+    if "name" in body and (body.get("name") or "").strip():
+        rule["name"] = (body.get("name") or "").strip()
+    if "text" in body and (body.get("text") or "").strip():
+        rule["text"] = (body.get("text") or "").strip()
+    save_deal_workflows(rules)
+    return rule
+
+
+@app.delete("/api/deal-workflows/{rule_id}")
+def delete_deal_workflow(rule_id: str):
+    rules = [x for x in load_deal_workflows() if x["id"] != rule_id]
+    save_deal_workflows(rules)
+    return {"deleted": rule_id}
+
+
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------
 @app.get("/api/settings")
 def get_settings():

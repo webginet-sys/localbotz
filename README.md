@@ -423,6 +423,19 @@ it (e.g. your pricing when it drafts a quotation). You can also
 teach the team directly ("Always add 12% margin to Cisco quotes")
 and delete any learning that is wrong. See `docs/learnings.md`.
 
+## Clients & Deals — deal workflows
+
+A small local CRM for sales work. A **deal** is a client, a value
+and a pipeline stage — New → Quoted → Negotiation → Won / Lost —
+with one timeline per deal (stage moves, notes, drafts, workflow
+runs). A **workflow** fires when a deal moves stage: create a task
+for a bot, run an office job with the team (Auditor + approval gate
+applies), write a draft, or add a note. Write the action with
+`{deal}`, `{client}`, `{value}`, `{currency}`, `{stage}` and they
+are filled in from the deal. Nothing is sent out by a workflow on
+its own — drafts stay drafts until you send them. See
+`docs/deal-workflows.md`.
+
 ## Document workroom — documents with proof
 
 Sidebar → **Workroom**. Modelled on the TeamOffice idea of a

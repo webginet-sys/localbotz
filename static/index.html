@@ -82,6 +82,7 @@
     <button class="navbtn" data-view="office">🏢 Office — your AI team</button>
     <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
     <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
+    <button class="navbtn" data-view="deals">💼 Deals — clients & workflows</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -465,6 +466,7 @@ async function renderPage(name){
     else if(name==='office') el.innerHTML=await officeHtml();
     else if(name==='workroom') el.innerHTML=await workroomHtml();
     else if(name==='routines') el.innerHTML=await routinesHtml();
+    else if(name==='deals') el.innerHTML=await dealsHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -505,6 +507,55 @@ async function routinesHtml(){
   <label>For bot</label><select id="learn-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>
   <div style="margin:8px 0"><button id="learn-add">Teach it</button></div>
   ${runsHtml?`<h3>Recent runs</h3><ul>${runsHtml}</ul>`:''}`;
+}
+
+let currentDeal=null;
+async function dealsHtml(){
+  const deals=await api('/api/deals');
+  const rules=await api('/api/deal-workflows');
+  const bots=await api('/api/bots');
+  const offices=await api('/api/offices');
+  const stageNames={new:'New',quoted:'Quoted',negotiation:'Negotiation',won:'Won',lost:'Lost'};
+  if(!currentDeal){
+    const rows=deals.map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.client)}</td><td>${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'—'}</td><td>${esc(d.stage_label||d.stage)}</td><td><button class="small" data-deal-open="${d.id}">Open</button> <button class="small" data-deal-del="${d.id}">Delete</button></td></tr>`).join('');
+    const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>When a deal moves to <b>${esc(stageNames[r.stage]||r.stage)}</b></td><td>${esc(r.action)}${r.bot_id?` → ${esc((bots.find(b=>b.id===r.bot_id)||{}).name||'bot')}`:''}${r.office_id?` → ${esc((offices.find(o=>o.id===r.office_id)||{}).name||'office')}`:''}<br><span class="note">${esc(r.text.slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
+    return `<h2>💼 Deals — clients & workflows</h2>
+    <p class="note">A small local CRM for sales work. A deal is a client, a value and a stage: New → Quoted → Negotiation → Won / Lost. When a deal moves stage, your workflows run — a task for a bot, a job for the office team, a draft, or a note. Nothing is sent out by a workflow on its own: drafts stay drafts, and office jobs wait for your approval.</p>
+    <h3>New deal</h3>
+    <label>Deal title</label><input id="dl-title" type="text" placeholder="e.g. Marina Tower — MEP package">
+    <label>Client</label><input id="dl-client" type="text" placeholder="e.g. Al Rayyan Trading">
+    <label>Contact</label><input id="dl-contact" type="text" placeholder="e.g. Sara Ahmed — sara@example.ae">
+    <label>Value</label><input id="dl-value" type="number" placeholder="e.g. 4850000">
+    <label>Currency</label><input id="dl-currency" type="text" value="QAR">
+    <div style="margin:8px 0"><button id="dl-create">Create deal</button></div>
+    <h3>Your deals</h3>
+    ${deals.length?`<table><tr><th>Deal</th><th>Client</th><th>Value</th><th>Stage</th><th></th></tr>${rows}</table>`:'<p class="note">No deals yet. Create one above — for example, a quotation you are working on.</p>'}
+    <h3>Workflows — when a deal moves stage, the team acts</h3>
+    <p class="note">Write the text with {deal}, {client}, {value}, {currency} and {stage} — they are filled in from the deal that moved.</p>
+    <label>Name</label><input id="wf-name" type="text" placeholder="e.g. Won — start onboarding">
+    <label>When a deal moves to</label><select id="wf-stage"><option value="new">New</option><option value="quoted">Quoted</option><option value="negotiation">Negotiation</option><option value="won">Won</option><option value="lost">Lost</option></select>
+    <label>Then</label><select id="wf-action"><option value="create_task">Create a task for a bot</option><option value="office_job">Run an office job with the team</option><option value="draft">Write a draft on the deal</option><option value="note">Add a note to the timeline</option></select>
+    <div id="wf-bot-row"><label>Bot</label><select id="wf-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select></div>
+    <div id="wf-office-row" style="display:none"><label>Office</label><select id="wf-office">${offices.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')||'<option value="">(no office yet)</option>'}</select></div>
+    <label>What should happen</label><textarea id="wf-text" rows="3" placeholder="e.g. Follow up with {client} about the {deal} quotation ({value} {currency}) — ask if they have questions and offer a site visit."></textarea>
+    <div style="margin:8px 0"><button id="wf-create">Create workflow</button></div>
+    ${rules.length?`<table><tr><th>Workflow</th><th>Trigger</th><th>Action</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
+    <div id="page-msg"></div>`;
+  }
+  const d=await api('/api/deals/'+currentDeal);
+  const events=(d.events||[]).slice().reverse().map(e=>`<tr><td>${new Date(e.at*1000).toLocaleString()}</td><td>${esc(e.kind)}</td><td style="white-space:pre-wrap">${esc(e.text)}</td></tr>`).join('');
+  const drafts=(d.drafts||[]).map(x=>`<details><summary>Draft — ${new Date(x.created_at*1000).toLocaleString()}</summary><p style="white-space:pre-wrap">${esc(x.text)}</p><button class="small" data-draft-del="${x.id}">Delete draft</button></details>`).join('');
+  const stageBtns=Object.entries(stageNames).filter(([s])=>s!==d.stage).map(([s,l])=>`<button class="small" data-stage="${s}">Move to ${l}</button>`).join(' ');
+  return `<h2>💼 ${esc(d.title)}</h2><p class="note">${esc(d.client)}${d.contact?` — ${esc(d.contact)}`:''} · ${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'no value yet'} · <b>${esc(d.stage_label||d.stage)}</b></p>
+  <p><button class="ghost small" id="dl-back">← All deals</button></p>
+  <h3>Move this deal</h3><p>${stageBtns}</p>
+  <h3>Add a note</h3>
+  <label>Note</label><input id="dl-note" type="text" placeholder="e.g. Called Sara — she will confirm on Sunday.">
+  <div style="margin:8px 0"><button id="dl-note-add">Add note</button></div>
+  <h3>Drafts</h3>${drafts||'<p class="note">No drafts yet. A workflow can write one here, or the team can draft it — you send it yourself.</p>'}
+  <h3>Timeline</h3>
+  ${events?`<table><tr><th>When</th><th>What</th><th></th></tr>${events}</table>`:'<p class="note">Nothing on the timeline yet.</p>'}
+  <div id="page-msg"></div>`;
 }
 
 let currentOffice=null;
@@ -846,6 +897,17 @@ function bindPage(name){
   if(q('learn-add')) q('learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('learn-text').value,bot_id:q('learn-bot').value})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
   if(q('off-learn-add')) q('off-learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('off-learn-text').value,office_id:currentOffice})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-learn-del]').forEach(el=>el.onclick=async()=>{await api(`/api/learnings/${el.dataset.learnDel}`,{method:'DELETE'}); renderPage(name);});
+  if(q('dl-back')) q('dl-back').onclick=()=>{currentDeal=null; renderPage(name);};
+  if(q('dl-create')) q('dl-create').onclick=async()=>{try{const d=await api('/api/deals',{method:'POST',body:JSON.stringify({title:q('dl-title').value,client:q('dl-client').value,contact:q('dl-contact').value,value:q('dl-value').value?parseFloat(q('dl-value').value):null,currency:q('dl-currency').value})}); currentDeal=d.id; renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-deal-open]').forEach(el=>el.onclick=()=>{currentDeal=el.dataset.dealOpen; renderPage(name);});
+  document.querySelectorAll('[data-deal-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this deal? Its timeline and drafts go too.')) return; await api(`/api/deals/${el.dataset.dealDel}`,{method:'DELETE'}); renderPage(name);});
+  document.querySelectorAll('[data-stage]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({stage:el.dataset.stage})}); const fired=(d.workflows_fired||[]).map(w=>`${w.rule}: ${w.result}`).join(' | '); msg(fired?`Moved to ${d.stage_label}. Workflows ran — ${fired}`:`Moved to ${d.stage_label}.`); renderPage(name);}catch(e){msg(e.message);}});
+  if(q('dl-note-add')) q('dl-note-add').onclick=async()=>{try{await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({note:q('dl-note').value})}); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-draft-del]').forEach(el=>el.onclick=async()=>{await api(`/api/deals/${currentDeal}/drafts/${el.dataset.draftDel}`,{method:'DELETE'}); renderPage(name);});
+  if(q('wf-action')) q('wf-action').onchange=()=>{const a=q('wf-action').value; q('wf-bot-row').style.display=(a==='create_task')?'block':'none'; q('wf-office-row').style.display=(a==='office_job')?'block':'none';};
+  if(q('wf-create')) q('wf-create').onclick=async()=>{try{await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,stage:q('wf-stage').value,action:q('wf-action').value,bot_id:q('wf-bot').value,office_id:q('wf-office').value,text:q('wf-text').value})}); msg('Workflow created — it will run when a deal moves to that stage.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-wf-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/deal-workflows/${el.dataset.wfToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
+  document.querySelectorAll('[data-wf-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workflow?')) return; await api(`/api/deal-workflows/${el.dataset.wfDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom
   document.querySelectorAll('[data-workroom-open]').forEach(el=>el.onclick=async()=>{currentWorkroom=el.dataset.workroomOpen; renderPage(name);});
   document.querySelectorAll('[data-workroom-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workroom? Its documents, questions and notes go too.')) return; await api('/api/workrooms/'+el.dataset.workroomDel,{method:'DELETE'}); if(currentWorkroom===el.dataset.workroomDel) currentWorkroom=null; renderPage(name);});
