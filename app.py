@@ -717,12 +717,45 @@ TEMPLATES_FILE = DATA_DIR / "templates.json"
 SHIPPED_TEMPLATES_FILE = BASE_DIR / "templates.json"
 
 SERVICE_CONNECTORS = [
-    {"id": "gmail", "label": "Gmail", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
-    {"id": "drive", "label": "Google Drive", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
-    {"id": "calendar", "label": "Google Calendar", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
-    {"id": "slack", "label": "Slack", "auth": "OAuth / token", "setup": "Create a Slack app, add a bot token (xoxb-...) in Secure store as SLACK_BOT_TOKEN, then enable here. v1: config only."},
-    {"id": "github", "label": "GitHub", "auth": "Personal access token", "setup": "Create a fine-grained token on github.com, add it in Secure store as GITHUB_TOKEN, then enable here. v1: config only."},
-    {"id": "notion", "label": "Notion", "auth": "Integration token", "setup": "Create a Notion integration, add its token in Secure store as NOTION_TOKEN, share a page with it, then enable here. v1: config only."},
+    # Service connectors. "category" groups them in the UI. "token_env"
+    # names the env var (saved in Secure store) holding the token/key
+    # Test uses; connectors without a token_env need OAuth, so v1 is
+    # config + setup instructions only and Test honestly reports
+    # not_connected - never faked. "key_env" is a second credential
+    # (Trello needs both an API key and a token).
+    # --- Email & productivity ---
+    {"id": "gmail", "label": "Gmail", "category": "Email & productivity", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "drive", "label": "Google Drive", "category": "Email & productivity", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "calendar", "label": "Google Calendar", "category": "Email & productivity", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "outlook", "label": "Outlook (Microsoft 365)", "category": "Email & productivity", "auth": "OAuth", "setup": "Connect in the app with your Microsoft account (OAuth, Microsoft Graph). v1: config only - sign-in flow is not built yet."},
+    {"id": "dropbox", "label": "Dropbox", "category": "Email & productivity", "auth": "Access token", "token_env": "DROPBOX_TOKEN", "setup": "Create an app in the Dropbox App Console, generate an access token, add it in Secure store as DROPBOX_TOKEN, then enable here. Test calls get_current_account."},
+    # --- Chat ---
+    {"id": "slack", "label": "Slack", "category": "Chat", "auth": "OAuth / token", "token_env": "SLACK_BOT_TOKEN", "setup": "Create a Slack app, add a bot token (xoxb-...) in Secure store as SLACK_BOT_TOKEN, then enable here. Test calls auth.test."},
+    {"id": "telegram", "label": "Telegram", "category": "Chat", "auth": "Bot token", "token_env": "TELEGRAM_BOT_TOKEN", "setup": "Talk to @BotFather on Telegram, create a bot to get a token, add it in Secure store as TELEGRAM_BOT_TOKEN, then enable here. Test calls getMe. (Inbound replies are set up under Messaging channels.)"},
+    {"id": "discord", "label": "Discord", "category": "Chat", "auth": "Bot token", "token_env": "DISCORD_BOT_TOKEN", "setup": "Create an application in the Discord Developer Portal, add a bot and copy its token, add it in Secure store as DISCORD_BOT_TOKEN, then enable here. Test calls users/@me. (Inbound replies are set up under Messaging channels.)"},
+    {"id": "whatsapp", "label": "WhatsApp", "category": "Chat", "auth": "Access token", "token_env": "WHATSAPP_ACCESS_TOKEN", "setup": "Create a WhatsApp Business app, add its access token in Secure store as WHATSAPP_ACCESS_TOKEN, then enable here. v1: config only - Test does not call Meta yet. (Inbound replies are set up under Messaging channels.)"},
+    {"id": "teams", "label": "Microsoft Teams", "category": "Chat", "auth": "OAuth", "setup": "Connect in the app with your Microsoft account (OAuth, Microsoft Graph). v1: config only - sign-in flow is not built yet."},
+    # --- Work ---
+    {"id": "notion", "label": "Notion", "category": "Work", "auth": "Integration token", "token_env": "NOTION_TOKEN", "setup": "Create a Notion integration, add its token in Secure store as NOTION_TOKEN, share a page with it, then enable here. Test calls users/me."},
+    {"id": "trello", "label": "Trello", "category": "Work", "auth": "API key + token", "token_env": "TRELLO_TOKEN", "key_env": "TRELLO_API_KEY", "setup": "Get an API key and a token from trello.com/app-key, add them in Secure store as TRELLO_API_KEY and TRELLO_TOKEN, then enable here. Test calls members/me."},
+    {"id": "asana", "label": "Asana", "category": "Work", "auth": "OAuth", "setup": "Connect in the app with your Asana account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "jira", "label": "Jira", "category": "Work", "auth": "OAuth", "setup": "Connect in the app with your Atlassian account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "linear", "label": "Linear", "category": "Work", "auth": "OAuth", "setup": "Connect in the app with your Linear account (OAuth). v1: config only - sign-in flow is not built yet."},
+    {"id": "airtable", "label": "Airtable", "category": "Work", "auth": "Personal access token", "token_env": "AIRTABLE_PAT", "setup": "Create a personal access token in your Airtable account settings, add it in Secure store as AIRTABLE_PAT, then enable here. Test lists your bases."},
+    {"id": "sheets", "label": "Google Sheets", "category": "Work", "auth": "OAuth", "setup": "Connect in the app with your Google account (OAuth). v1: config only - sign-in flow is not built yet."},
+    # --- Dev ---
+    {"id": "github", "label": "GitHub", "category": "Dev", "auth": "Personal access token", "token_env": "GITHUB_TOKEN", "setup": "Create a fine-grained token on github.com, add it in Secure store as GITHUB_TOKEN, then enable here. Test calls /user."},
+    {"id": "gitlab", "label": "GitLab", "category": "Dev", "auth": "Personal access token", "token_env": "GITLAB_TOKEN", "setup": "Create a personal access token on gitlab.com, add it in Secure store as GITLAB_TOKEN, then enable here. Test calls /user."},
+    # --- CRM & sales ---
+    {"id": "hubspot", "label": "HubSpot", "category": "CRM & sales", "auth": "Private app token", "token_env": "HUBSPOT_TOKEN", "setup": "Create a private app in HubSpot settings and copy its access token, add it in Secure store as HUBSPOT_TOKEN, then enable here. Test checks the token against HubSpot."},
+    {"id": "salesforce", "label": "Salesforce", "category": "CRM & sales", "auth": "OAuth", "setup": "Connect in the app with your Salesforce account (OAuth). v1: config only - sign-in flow is not built yet."},
+    # --- Payments ---
+    {"id": "stripe", "label": "Stripe", "category": "Payments", "auth": "Secret key", "token_env": "STRIPE_SECRET_KEY", "setup": "Copy a secret key (sk_...) from your Stripe dashboard, add it in Secure store as STRIPE_SECRET_KEY, then enable here. Test calls /v1/account. Use a restricted key if you only need reads."},
+    # --- Video & meetings ---
+    {"id": "zoom", "label": "Zoom", "category": "Video & meetings", "auth": "OAuth access token", "token_env": "ZOOM_ACCESS_TOKEN", "setup": "Create a Server-to-Server OAuth app in the Zoom Marketplace, copy its access token, add it in Secure store as ZOOM_ACCESS_TOKEN, then enable here. Test calls users/me. Without a token it stays Not connected."},
+    # --- Social & publishing ---
+    {"id": "x", "label": "X (Twitter)", "category": "Social & publishing", "auth": "OAuth", "setup": "Connect in the app with your X account (OAuth 2.0). v1: config only - sign-in flow is not built yet."},
+    {"id": "linkedin", "label": "LinkedIn", "category": "Social & publishing", "auth": "OAuth", "setup": "Connect in the app with your LinkedIn account (OAuth 2.0). v1: config only - sign-in flow is not built yet."},
 ]
 BUILTIN_SKILLS = [
     {"id": "research", "name": "Research", "builtin": True, "enabled": True,
@@ -2515,8 +2548,13 @@ def list_connectors():
     services = []
     for svc in SERVICE_CONNECTORS:
         saved = store["services"].get(svc["id"], {})
+        last = store["last_test"].get(svc["id"]) or {}
+        # Honest status from the last real Test; never "connected" without one.
+        status = last.get("status") if last.get("status") in ("connected", "failed") else "not_connected"
         services.append({**svc, "enabled": saved.get("enabled", False),
-                         "status": "not_connected", "last_test": store["last_test"].get(svc["id"])})
+                         "status": status,
+                         "status_detail": last.get("detail", "") if last else "",
+                         "last_test": last or None})
     return {"providers": providers, "services": services}
 
 @app.post("/api/connectors/{kind}/{cid}/toggle")
@@ -2530,6 +2568,106 @@ def toggle_connector(kind: str, cid: str, body: dict):
         raise HTTPException(404, "Connector not found")
     save_connectors_store(store)
     return {"kind": kind, "id": cid, "enabled": body.get("enabled")}
+
+def _test_service_connector(svc: dict):
+    """Real Test for a service connector. Returns (status, detail).
+    Token-based connectors call the service's own "who am I" endpoint
+    with the saved token; OAuth-only connectors (no token_env) stay
+    config-only and honestly report not_connected with the setup text.
+    Tokens are never logged or returned."""
+    token_env = svc.get("token_env")
+    if not token_env:
+        return "not_connected", svc["setup"]
+    token = (os.getenv(token_env) or "").strip()
+    if not token:
+        return "not_connected", f"No token saved - add {token_env} in Settings > Secure store. " + svc["setup"]
+    cid = svc["id"]
+    try:
+        with _http_client(timeout=15, external=True) as c:
+            if cid == "github":
+                r = c.get("https://api.github.com/user",
+                          headers={"Authorization": f"Bearer {token}",
+                                   "Accept": "application/vnd.github+json"})
+                if r.status_code == 200:
+                    return "connected", f"Connected as {r.json().get('login', '?')}."
+            elif cid == "slack":
+                r = c.post("https://slack.com/api/auth.test",
+                           headers={"Authorization": f"Bearer {token}"})
+                d = r.json()
+                if d.get("ok"):
+                    return "connected", f"Connected as {d.get('user', '?')} on {d.get('team', '?')}."
+            elif cid == "telegram":
+                r = c.get(f"https://api.telegram.org/bot{token}/getMe")
+                d = r.json()
+                if d.get("ok") and d.get("result"):
+                    res = d["result"]
+                    return "connected", f"Connected as @{res.get('username', '?')} ({res.get('first_name', '')})."
+            elif cid == "discord":
+                r = c.get("https://discord.com/api/users/@me",
+                          headers={"Authorization": f"Bot {token}"})
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected as {d.get('username', '?')}."
+            elif cid == "notion":
+                r = c.get("https://api.notion.com/v1/users/me",
+                          headers={"Authorization": f"Bearer {token}",
+                                   "Notion-Version": "2022-06-28"})
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected as {d.get('name', '?')} ({d.get('type', 'bot')})."
+            elif cid == "trello":
+                key = (os.getenv(svc.get("key_env", "TRELLO_API_KEY")) or "").strip()
+                if not key:
+                    return "not_connected", "No API key saved - add TRELLO_API_KEY in Settings > Secure store. " + svc["setup"]
+                r = c.get("https://api.trello.com/1/members/me",
+                          params={"key": key, "token": token})
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected as {d.get('username', '?')} ({d.get('fullName', '')})."
+            elif cid == "airtable":
+                r = c.get("https://api.airtable.com/v0/meta/bases",
+                          headers={"Authorization": f"Bearer {token}"})
+                if r.status_code == 200:
+                    n = len((r.json() or {}).get("bases") or [])
+                    return "connected", f"Connected - {n} base(s) visible to this token."
+            elif cid == "stripe":
+                r = c.get("https://api.stripe.com/v1/account",
+                          headers={"Authorization": f"Bearer {token}"})
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected to Stripe account {d.get('display_name') or d.get('email') or d.get('id', '?')}."
+            elif cid == "gitlab":
+                r = c.get("https://gitlab.com/api/v4/user",
+                          headers={"Authorization": f"Bearer {token}"})
+                if r.status_code == 200:
+                    return "connected", f"Connected as {r.json().get('username', '?')}."
+            elif cid == "dropbox":
+                r = c.post("https://api.dropboxapi.com/2/users/get_current_account",
+                           headers={"Authorization": f"Bearer {token}",
+                                    "Content-Type": "application/json"}, content=b"null")
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected as {(d.get('name') or {}).get('display_name', '?')}."
+            elif cid == "zoom":
+                r = c.get("https://api.zoom.us/v2/users/me",
+                          headers={"Authorization": f"Bearer {token}"})
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected as {d.get('email', '?')}."
+            elif cid == "hubspot":
+                r = c.get(f"https://api.hubapi.com/oauth/v1/access-tokens/{token}")
+                if r.status_code == 200:
+                    d = r.json()
+                    return "connected", f"Connected - HubSpot token for user {d.get('user', '?')}."
+            else:
+                return "not_connected", svc["setup"]
+        if r.status_code == 401:
+            return "failed", "Token rejected (HTTP 401) - check the token in Secure store."
+        if r.status_code == 403:
+            return "failed", "Token rejected (HTTP 403) - it may lack the permission this check needs."
+        return "failed", f"Service answered HTTP {r.status_code} - the token may be wrong or expired."
+    except Exception as e:
+        return "failed", f"Could not reach the service: {e}"
 
 @app.post("/api/connectors/{kind}/{cid}/test")
 def test_connector(kind: str, cid: str):
@@ -2552,7 +2690,10 @@ def test_connector(kind: str, cid: str):
         return result
     if kind == "service" and any(x["id"] == cid for x in SERVICE_CONNECTORS):
         svc = next(x for x in SERVICE_CONNECTORS if x["id"] == cid)
-        result = {"id": cid, "status": "not_connected", "detail": svc["setup"], "ts": int(time.time())}
+        from datetime import datetime as _dt
+        status, detail = _test_service_connector(svc)
+        result = {"id": cid, "status": status, "detail": detail, "ts": int(time.time()),
+                  "checked_at": _dt.now().isoformat(timespec="seconds")}
         store["last_test"][cid] = result
         save_connectors_store(store)
         return result
