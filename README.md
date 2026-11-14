@@ -415,6 +415,14 @@ it never fires a backlog of missed runs. Nothing runs while the app
 is closed: routines are not a system service. Pause, resume, run
 now, or delete a routine from the same page. See `docs/routines.md`.
 
+The team also **learns from daily work**: a routine that ran and an
+office job you approved are recorded as learnings — what you want
+done regularly, what passed the audit — and shown back to the bot
+every time it works, so it presents what it learned when you need
+it (e.g. your pricing when it drafts a quotation). You can also
+teach the team directly ("Always add 12% margin to Cisco quotes")
+and delete any learning that is wrong. See `docs/learnings.md`.
+
 ## Document workroom — documents with proof
 
 Sidebar → **Workroom**. Modelled on the TeamOffice idea of a

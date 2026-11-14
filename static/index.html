@@ -481,6 +481,7 @@ async function renderPage(name){
 async function routinesHtml(){
   const routines=await api('/api/routines');
   const bots=await api('/api/bots');
+  const learnings=await api('/api/learnings');
   const botName=id=>(bots.find(b=>b.id===id)||{}).name||'deleted bot';
   const rows=routines.map(r=>`<tr><td><b>${esc(r.name)}</b><br><span class="note">${esc((r.task||'').slice(0,120))}</span></td><td>${esc(botName(r.bot_id))}</td><td>${esc(r.schedule_text||'')}</td><td>${r.next_run?new Date(r.next_run*1000).toLocaleString():'—'}</td><td>${r.enabled?'✅ On':'⏸ Off'}${r.last_status?`<br><span class="note">last: ${esc(r.last_status)}${r.last_run?` · ${new Date(r.last_run*1000).toLocaleString()}`:''}</span>`:''}</td><td><button class="small" data-rt-run="${r.id}">▶ Run now</button> <button class="small" data-rt-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-rt-del="${r.id}">Delete</button></td></tr>`).join('');
   const runsHtml=routines.flatMap(r=>(r.runs||[]).slice(-3).map(run=>`<li><b>${esc(r.name)}</b> — ${esc(run.status)} · ${new Date(run.at*1000).toLocaleString()} — ${esc((run.summary||'').slice(0,200))}</li>`)).join('');
@@ -497,6 +498,12 @@ async function routinesHtml(){
   <div style="margin:8px 0"><button id="rt-create">Create routine</button></div>
   <h3>Your routines</h3>
   ${routines.length?`<table><tr><th>Routine</th><th>Bot</th><th>Schedule</th><th>Next run</th><th>Status</th><th></th></tr>${rows}</table>`:'<p class="note">No routines yet. Create one above — for example, a daily price check or a weekly sales summary.</p>'}
+  <h3>What the team has learned</h3>
+  <p class="note">The team learns from daily work — a routine that ran, a job you approved — and from what you teach it. It brings this back when it works, e.g. how you price a quotation.</p>
+  ${learnings.length?`<ul>${learnings.map(l=>`<li>${esc(l.text)} <span class="note">(${esc(l.source||'manual')}${l.source_name?` — ${esc(l.source_name)}`:''})</span> <button class="small" data-learn-del="${l.id}">Delete</button></li>`).join('')}</ul>`:'<p class="note">Nothing learned yet. Run a routine or approve an office job and the team starts its record.</p>'}
+  <label>Teach the team something</label><input id="learn-text" type="text" placeholder="e.g. Always add 12% margin to Cisco quotes">
+  <label>For bot</label><select id="learn-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>
+  <div style="margin:8px 0"><button id="learn-add">Teach it</button></div>
   ${runsHtml?`<h3>Recent runs</h3><ul>${runsHtml}</ul>`:''}`;
 }
 
@@ -517,6 +524,7 @@ async function officeHtml(){
     <div id="page-msg"></div>`;
   }
   const o=await api('/api/offices/'+currentOffice);
+  const officeLearnings=await api('/api/learnings?office_id='+currentOffice);
   const officeRoles=await api('/api/office/roles');
   const roleLabel={boss:'Office Manager (boss)'};
   officeRoles.forEach(r=>roleLabel[r.id]=r.label);
@@ -553,6 +561,11 @@ async function officeHtml(){
   <pre style="white-space:pre-wrap;background:#faf7ff;border:1px solid #e9e4f2;border-radius:12px;padding:14px;max-height:220px;overflow:auto">${esc(o.memory||'(empty)')}</pre>
   <label>Add to office memory</label><input id="off-mem-text" type="text" placeholder="e.g. Our biggest customer is Al Rayyan Trading.">
   <div style="margin:8px 0"><button id="off-mem-add">Add memory</button></div>
+  <h3>What the team has learned</h3>
+  <p class="note">The team learns from daily work — a job you approved, a routine that ran — and from what you teach it. It brings this back when it works, e.g. how you price a quotation.</p>
+  ${officeLearnings.length?`<ul>${officeLearnings.map(l=>`<li>${esc(l.text)} <span class="note">(${esc(l.source||'manual')}${l.source_name?` — ${esc(l.source_name)}`:''})</span> <button class="small" data-learn-del="${l.id}">Delete</button></li>`).join('')}</ul>`:'<p class="note">Nothing learned yet. Approve a job and the team starts its record.</p>'}
+  <label>Teach the team something</label><input id="off-learn-text" type="text" placeholder="e.g. Always add 12% margin to Cisco quotes.">
+  <div style="margin:8px 0"><button id="off-learn-add">Teach it</button></div>
   <h3>Blackboard — messages between the team</h3>
   ${board?`<table><tr><th>Time</th><th>From → To</th><th>Message</th></tr>${board}</table>`:'<p class="note">Nothing on the blackboard yet.</p>'}
   <div id="page-msg"></div>`;
@@ -830,6 +843,9 @@ function bindPage(name){
   document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-rt-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/routines/${el.dataset.rtToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-rt-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this routine?')) return; await api(`/api/routines/${el.dataset.rtDel}`,{method:'DELETE'}); renderPage(name);});
+  if(q('learn-add')) q('learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('learn-text').value,bot_id:q('learn-bot').value})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('off-learn-add')) q('off-learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('off-learn-text').value,office_id:currentOffice})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
+  document.querySelectorAll('[data-learn-del]').forEach(el=>el.onclick=async()=>{await api(`/api/learnings/${el.dataset.learnDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom
   document.querySelectorAll('[data-workroom-open]').forEach(el=>el.onclick=async()=>{currentWorkroom=el.dataset.workroomOpen; renderPage(name);});
   document.querySelectorAll('[data-workroom-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workroom? Its documents, questions and notes go too.')) return; await api('/api/workrooms/'+el.dataset.workroomDel,{method:'DELETE'}); if(currentWorkroom===el.dataset.workroomDel) currentWorkroom=null; renderPage(name);});

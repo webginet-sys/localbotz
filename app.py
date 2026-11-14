@@ -1337,10 +1337,14 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
     mem = load_memory(bot["id"])
     mem_text = "\n".join(f"- {f}" for f in mem.get("facts", [])) or "(no memory yet)"
     skills_text = _skills_text_for_bot(bot)
+    learn_text = _learnings_text(bot_id=bot["id"])
     system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
               "You have tools for web search, browser automation, workspace files, "
               "and safe shell commands. Use them when needed, then answer in plain text."
-              + (f"\n\nEnabled skills:\n{skills_text}" if skills_text else ""))
+              + (f"\n\nEnabled skills:\n{skills_text}" if skills_text else "")
+              + (f"\n\nWhat the team has learned from this user's daily work — "
+                 f"use it when it fits, e.g. how they price a quotation:\n{learn_text}"
+                 if learn_text else ""))
     messages = [{"role": "system", "content": system}]
     # Keep last 20 history turns as context (only user/assistant text)
     for m in history[-20:]:
@@ -2710,6 +2714,7 @@ def run_office_job(office_id: str, body: dict):
     members.sort(key=lambda m: ROLE_ORDER.index(m["role"]) if m["role"] in ROLE_ORDER else 99)
     boss = next((m for m in office.get("members", []) if m["role"] == "boss"), None)
     memory = load_office_memory(office_id)
+    office_learn = _learnings_text(office_id=office_id)
     steps = []
     previous = ""
     workers = members or ([boss] if boss else [])
@@ -2719,7 +2724,9 @@ def run_office_job(office_id: str, body: dict):
             continue
         prompt = (f"Office: {office['name']}\nJob: {title}\nBrief: {brief}\n\n"
                   f"Shared office memory:\n{memory}\n\n"
-                  f"Work done so far by the team:\n{previous or '(nothing yet — you are first)'}\n\n"
+                  + (f"What the team has learned from this user's daily work:\n{office_learn}\n\n"
+                     if office_learn else "")
+                  + f"Work done so far by the team:\n{previous or '(nothing yet — you are first)'}\n\n"
                   f"Your role: {OFFICE_ROLES[member['role']]['label']}. Do your part now and report back in plain text, so the next team member can use it.")
         append_blackboard(office_id, "Boss", member["name"],
                           f"Your part of '{title}': {brief[:300]}")
@@ -2776,6 +2783,12 @@ def approve_office_job(office_id: str, job_id: str, body: dict):
     job["approval"] = {"status": "approved", "decided_at": int(time.time()), "note": note}
     _save_office_job(office_id, job)
     append_office_memory(office_id, _job_memory_line(job, job.get("steps", [])) + " Approved by you.")
+    # Learn from the approved work: record what the user wanted and
+    # what passed the audit, so the team brings it back next time.
+    _record_learning(
+        None, office_id, "office job", job["title"],
+        f"Approved job '{job['title']}': {job['brief'][:200]} "
+        f"Audit verdict: {job.get('audit', {}).get('verdict', 'not audited')}.")
     append_blackboard(office_id, "You", "Boss",
                       f"Approved '{job['title']}'" + (f" — {note}" if note else "."))
     return job
@@ -3570,6 +3583,14 @@ def _run_routine(routine: dict, manual: bool = False):
                 save_memory(bot["id"], mem)
             except Exception:
                 pass
+            # Learn from the daily work: record what the user wants
+            # this routine to do, so the bot brings it back next time
+            # (e.g. how they price a quotation). Only done runs teach.
+            if run["status"] == "done":
+                _record_learning(
+                    bot["id"], None, "routine", stored["name"],
+                    f"Daily work — routine '{stored['name']}': the user wants this done regularly: "
+                    f"{stored['task'][:200]} Last result: {run['summary'][:200]}")
         stored.setdefault("runs", []).append(run)
         stored["runs"] = stored["runs"][-20:]
         stored["last_run"] = run["at"]
@@ -3728,6 +3749,94 @@ def run_routine_now(routine_id: str):
         raise HTTPException(404, "Routine not found")
     result["schedule_text"] = _routine_schedule_text(result)
     return result
+
+
+# ---------- Learnings — what the team learns from daily work ----------
+# A learning is a durable record of what the user wants, learned from
+# work that actually happened (a routine that ran, an office job the
+# user approved) or added by hand (e.g. "Always add 12% margin to
+# Cisco quotes"). Learnings are shown back to the bot in its prompt
+# (run_agent) and to the team in an office job prompt, so the team
+# presents what it learned when the user needs it — e.g. the pricing
+# it learned when drafting the next quotation. They are a record, not
+# a model: with a real model the bot applies them; in mock mode they
+# are recorded and shown, never invented.
+LEARNINGS_FILE = DATA_DIR / "learnings.json"
+
+
+def load_learnings():
+    learnings = _load_json(LEARNINGS_FILE, None)
+    return learnings if isinstance(learnings, list) else []
+
+
+def save_learnings(learnings):
+    _save_json(LEARNINGS_FILE, learnings)
+    return learnings
+
+
+def _record_learning(bot_id, office_id, source, source_name, text):
+    """Add one learning, unless the same text is already recorded for
+    the same bot/office. Keeps the last 200."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    learnings = load_learnings()
+    for x in learnings:
+        if (x.get("text") == text and x.get("bot_id") == bot_id
+                and x.get("office_id") == office_id):
+            return x
+    entry = {"id": uuid.uuid4().hex[:8], "text": text, "bot_id": bot_id,
+             "office_id": office_id, "source": source,
+             "source_name": source_name, "created_at": int(time.time())}
+    learnings.append(entry)
+    learnings = learnings[-200:]
+    save_learnings(learnings)
+    return entry
+
+
+def _learnings_text(bot_id=None, office_id=None):
+    """Latest 10 learnings for a bot or an office, as prompt lines.
+    Empty string when there is nothing to show."""
+    items = [x for x in load_learnings()
+             if (bot_id and x.get("bot_id") == bot_id)
+             or (office_id and x.get("office_id") == office_id)]
+    if not items:
+        return ""
+    return "\n".join(f"- {x['text']}" for x in items[-10:])
+
+
+@app.get("/api/learnings")
+def list_learnings(bot_id: str = "", office_id: str = ""):
+    items = load_learnings()
+    if bot_id:
+        items = [x for x in items if x.get("bot_id") == bot_id]
+    if office_id:
+        items = [x for x in items if x.get("office_id") == office_id]
+    return items
+
+
+@app.post("/api/learnings", status_code=201)
+def add_learning(body: dict):
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Write what the team should remember.")
+    bot_id = (body.get("bot_id") or "").strip() or None
+    office_id = (body.get("office_id") or "").strip() or None
+    if not bot_id and not office_id:
+        raise HTTPException(400, "Pick a bot or an office for this learning.")
+    if bot_id and not get_bot(bot_id):
+        raise HTTPException(400, "That bot does not exist.")
+    if office_id and not get_office(office_id):
+        raise HTTPException(400, "That office does not exist.")
+    entry = _record_learning(bot_id, office_id, "manual", "", text)
+    return entry
+
+
+@app.delete("/api/learnings/{learning_id}")
+def delete_learning(learning_id: str):
+    learnings = [x for x in load_learnings() if x["id"] != learning_id]
+    save_learnings(learnings)
+    return {"deleted": learning_id}
 
 
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------
