@@ -254,7 +254,28 @@ Open `GET /admin` in a browser and enter the `ADMIN_TOKEN` from
 
 API (all need `X-Admin-Token`): `GET /admin/stats`,
 `GET /admin/users`, `POST /admin/users/<workspace>/disable|enable`,
-`GET /admin/installs`, `GET /admin/usage?limit=100`.
+`GET /admin/installs`, `GET /admin/usage?limit=100`,
+`GET /admin/pricing`, `POST /admin/pricing`, `GET /admin/revenue`.
+
+## Pricing — the pricing panel
+
+Renting premium models is pay-as-you-go, per 1M tokens (USD).
+Defaults are the providers' public list prices — Claude Sonnet
+$3 in / $15 out, GPT-4o $2.50 / $10, GPT-4o mini $0.15 / $0.60,
+Gemini 2.5 Flash $0.30 / $2.50, Gemini 2.5 Pro $1.25 / $10,
+DeepSeek $0.27 / $1.10 — full table in `docs/pricing.md` and in
+`server/data/pricing.json`.
+
+- **Users see the prices before they register:** `GET /v1/pricing`
+  (no auth) lists the premium models and their prices. The app
+  shows it under Settings → Connectors → VPS Premium → Show prices.
+- **You change them in the admin panel:** `GET /admin` → Pricing —
+  one row per model, change a number, Save pricing. The new price
+  applies to later requests; every completed chat writes its cost
+  into `usage.log` (`cost_usd` next to the token counts).
+- **Revenue:** `GET /admin` → Revenue — total revenue, requests
+  billed, cost by workspace, by model, and by day (last 14 days).
+  See `docs/pricing.md` for the full pricing story.
 
 ## Security notes
 

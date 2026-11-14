@@ -53,6 +53,50 @@ from fastapi.responses import JSONResponse
 
 BASE_DIR = Path(__file__).resolve().parent
 USAGE_LOG = BASE_DIR / "usage.log"
+
+# ---- Pricing (the "rent one from us" price list) -----------------------
+# USD per 1M tokens (input, output), same defaults as the LocalBotz app's
+# data/pricing.json so the client and the server agree. These are the
+# providers' public list prices at the time of writing; the VPS owner
+# can change any of them in the admin panel (Pricing) and the new price
+# applies to later requests. Grok / Kimi / GLM are starting prices —
+# confirm them in the provider's own docs before relying on them.
+# Local models are always free and never appear here.
+DEFAULT_PRICING_USD_PER_1M = {
+    "claude-sonnet-4-5": (3.00, 15.00), "claude-opus-4-1": (15.00, 75.00),
+    "gpt-4o": (2.50, 10.00), "gpt-4o-mini": (0.15, 0.60),
+    "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-pro": (1.25, 10.00),
+    "deepseek-chat": (0.27, 1.10), "deepseek-reasoner": (0.55, 2.19),
+    "grok-4": (3.00, 15.00), "kimi-k2": (0.60, 2.50), "glm-4.5": (0.60, 2.20),
+}
+PRICING_FILE = BASE_DIR / "data" / "pricing.json"
+
+def _load_pricing():
+    """{currency, per_model: {model: {per_1m_input_usd, per_1m_output_usd}}}"""
+    try:
+        d = json.loads(PRICING_FILE.read_text(encoding="utf-8"))
+        if isinstance(d, dict) and isinstance(d.get("per_model"), dict):
+            return d
+    except Exception:
+        pass
+    return {"currency": "USD",
+            "per_model": {m: {"per_1m_input_usd": pin, "per_1m_output_usd": pout}
+                          for m, (pin, pout) in DEFAULT_PRICING_USD_PER_1M.items()}}
+
+def _save_pricing(d):
+    PRICING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PRICING_FILE.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    return d
+
+def _price_for_model(model: str, pricing=None):
+    pricing = pricing or _load_pricing()
+    entry = (pricing.get("per_model") or {}).get(model) or {}
+    return (float(entry.get("per_1m_input_usd", 0.0)),
+            float(entry.get("per_1m_output_usd", 0.0)))
+
+def _cost_usd(model: str, in_tokens: int, out_tokens: int, pricing=None):
+    pin, pout = _price_for_model(model, pricing)
+    return round(in_tokens * pin / 1_000_000 + out_tokens * pout / 1_000_000, 6)
 APP_VERSION = "0.3.0"
 
 # ---- .env loading (no extra dependency) ----
@@ -144,14 +188,16 @@ def _token_hash(token: str) -> str:
 
 def _log_usage(token: str, model: str, provider: str, usage: dict, workspace_id: str = "", ip: str = ""):
     try:
+        in_tok = int((usage or {}).get("input_tokens")
+                     or (usage or {}).get("prompt_tokens") or 0)
+        out_tok = int((usage or {}).get("output_tokens")
+                      or (usage or {}).get("completion_tokens") or 0)
         entry = {"ts": int(time.time()), "token_hash": _token_hash(token),
                  "workspace_id": workspace_id or "",
                  "ip": ip or "",
                  "model": model, "provider": provider,
-                 "input_tokens": int((usage or {}).get("input_tokens")
-                                     or (usage or {}).get("prompt_tokens") or 0),
-                 "output_tokens": int((usage or {}).get("output_tokens")
-                                      or (usage or {}).get("completion_tokens") or 0)}
+                 "cost_usd": _cost_usd(model, in_tok, out_tok),
+                 "input_tokens": in_tok, "output_tokens": out_tok}
         with USAGE_LOG.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception:
@@ -190,6 +236,18 @@ def health():
 @app.get("/v1/models")
 def list_models(request: Request):
     _auth(request)  # token, workspace_id
+
+@app.get("/v1/pricing")
+def public_pricing():
+    # No auth: the price list is public, so users can see what renting
+    # costs before they register. Never includes keys or tokens.
+    pricing = _load_pricing()
+    return {"currency": pricing.get("currency", "USD"),
+            "models": [{"id": m, "object": "model", "owned_by": _owner_of(m),
+                        "per_1m_input_usd": (pricing["per_model"].get(m) or {}).get("per_1m_input_usd", 0.0),
+                        "per_1m_output_usd": (pricing["per_model"].get(m) or {}).get("per_1m_output_usd", 0.0)}
+                       for m in PREMIUM_MODELS],
+            "note": "Prices are USD per 1M tokens. Local models are always free."}
     return {"object": "list",
             "data": [{"id": m, "object": "model", "created": 0,
                       "owned_by": _owner_of(m)} for m in PREMIUM_MODELS]}
@@ -409,6 +467,67 @@ def admin_usage(request: Request, limit: int = 100):
     entries = _load_usage()
     entries.sort(key=lambda u: int(u.get("ts") or 0), reverse=True)
     return entries[:max(1, min(int(limit or 100), 500))]
+
+@app.get("/admin/pricing")
+def admin_get_pricing(request: Request):
+    _require_admin(request)
+    return _load_pricing()
+
+@app.post("/admin/pricing")
+async def admin_set_pricing(request: Request):
+    _require_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    pricing = _load_pricing()
+    per_model = body.get("per_model") or {}
+    if not isinstance(per_model, dict):
+        raise HTTPException(400, "per_model must be an object of model -> prices.")
+    for model, entry in per_model.items():
+        if not isinstance(entry, dict):
+            continue
+        pricing.setdefault("per_model", {})[model] = {
+            "per_1m_input_usd": float(entry.get("per_1m_input_usd", 0.0)),
+            "per_1m_output_usd": float(entry.get("per_1m_output_usd", 0.0))}
+    if body.get("currency"):
+        pricing["currency"] = str(body["currency"])[:8]
+    return _save_pricing(pricing)
+
+@app.get("/admin/revenue")
+def admin_revenue(request: Request):
+    _require_admin(request)
+    users = {u.get("workspace_id"): u for u in _load_users()}
+    usage = _load_usage()
+    total_cost = 0.0
+    per_workspace, per_model, per_day = {}, {}, {}
+    for u in usage:
+        cost = float(u.get("cost_usd") or 0.0)
+        total_cost += cost
+        ws = u.get("workspace_id") or "master"
+        w = per_workspace.setdefault(ws, {"requests": 0, "input_tokens": 0,
+                                          "output_tokens": 0, "cost_usd": 0.0})
+        w["requests"] += 1
+        w["input_tokens"] += int(u.get("input_tokens") or 0)
+        w["output_tokens"] += int(u.get("output_tokens") or 0)
+        w["cost_usd"] = round(w["cost_usd"] + cost, 6)
+        m = per_model.setdefault(u.get("model", "?"), {"requests": 0, "cost_usd": 0.0})
+        m["requests"] += 1
+        m["cost_usd"] = round(m["cost_usd"] + cost, 6)
+        day = datetime.fromtimestamp(int(u.get("ts") or 0), timezone.utc).date().isoformat()
+        d = per_day.setdefault(day, {"requests": 0, "cost_usd": 0.0})
+        d["requests"] += 1
+        d["cost_usd"] = round(d["cost_usd"] + cost, 6)
+    ws_list = []
+    for ws_id, w in sorted(per_workspace.items(), key=lambda kv: -kv[1]["cost_usd"]):
+        u = users.get(ws_id) or {}
+        ws_list.append({"workspace_id": ws_id, "name": u.get("name", ""),
+                        "email": u.get("email", ""), **w})
+    return {"total_cost_usd": round(total_cost, 6),
+            "requests_total": len(usage),
+            "per_workspace": ws_list,
+            "per_model": per_model,
+            "per_day": dict(sorted(per_day.items(), reverse=True)[:14])}
 
 # ---------- provider clients ----------
 async def _chat_openai_compatible(model: str, messages, tools, base_url: str,

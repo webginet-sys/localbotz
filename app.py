@@ -1894,6 +1894,23 @@ def vps_register(body: dict):
             "configured": True,
             "note": "Registered. Your token is saved in Secure store — pick provider 'VPS Premium' per bot to use premium models."}
 
+@app.get("/api/vps/pricing")
+def vps_pricing():
+    # Public price list from the VPS gateway (GET {base}/pricing, no
+    # auth) — what renting premium models costs, before the user
+    # registers. Never includes keys or tokens.
+    base = get_vps_base_url()
+    if not base or base == VPS_PLACEHOLDER_URL:
+        return {"models": [], "currency": "USD", "error": "Set the VPS base URL first in Settings > Connectors > VPS Premium."}
+    try:
+        with _http_client(timeout=15, external=not _is_local_url(base)) as c:
+            r = c.get(f"{base}/pricing")
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        return {"models": [], "currency": "USD",
+                "error": f"Could not reach the VPS gateway at {base}: {e}."}
+
 @app.get("/api/vps/models")
 def vps_models():
     # List the premium models the VPS gateway offers (GET {base}/models

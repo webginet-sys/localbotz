@@ -512,8 +512,9 @@ async function connectorsHtml(isSettings){
   <p class="note">Point the app at your VPS gateway (see <code>server/</code> in the repo) to use premium models — Claude, GPT, Gemini — without putting any provider API key on this computer. Your provider keys stay on the VPS; this app only sends a token the VPS owner issued to you. Status: <b>${vps.configured?'configured':'not configured'}</b> · Token: ${vps.has_token?esc(vps.masked_token||'stored'):'not set'}</p>
   <label>VPS base URL</label><input id="vps-url" type="text" value="${esc(vps.base_url||'')}" placeholder="https://YOUR-VPS/v1">
   <label>Your VPS token (stored in Secure store, never shown)</label><input id="vps-token" type="password" autocomplete="off" placeholder="Leave blank to keep the current token">
-  <div style="margin:8px 0"><button id="vps-save">Save VPS Premium</button> <button id="vps-test" class="ghost">Test connection</button> <button id="vps-models" class="ghost">List premium models</button></div>
+  <div style="margin:8px 0"><button id="vps-save">Save VPS Premium</button> <button id="vps-test" class="ghost">Test connection</button> <button id="vps-models" class="ghost">List premium models</button> <button id="vps-prices" class="ghost">Show prices</button></div>
   <div id="vps-models-out"></div>
+  <div id="vps-prices-out"></div>
   <h3>📝 No token yet? Register on the VPS</h3>
   <p class="note">If you installed LocalBotz and don't have a premium token, register on the VPS server: give your name and email, and the server creates your workspace and gives you your own token. The token is saved here automatically — you don't have to paste anything. (If registration is closed on that server, ask the VPS owner for a token instead.)</p>
   <label>Your name</label><input id="vps-reg-name" type="text" placeholder="Your name">
@@ -664,6 +665,7 @@ function bindPage(name){
   if(q('vps-save')) q('vps-save').onclick=async()=>{const body={base_url:q('vps-url').value.trim()}; const tok=q('vps-token').value.trim(); if(tok) body.token=tok; await api('/api/vps/config',{method:'POST',body:JSON.stringify(body)}); q('vps-token').value=''; await loadProviders(); msg('VPS Premium saved. Pick provider “VPS Premium” per bot to use it.'); renderPage(name);};
   if(q('vps-test')) q('vps-test').onclick=async()=>{const r=await api('/api/connectors/provider/vps/test',{method:'POST'}); msg(`VPS Premium: ${r.status} — ${r.detail||''}`);};
   if(q('vps-models')) q('vps-models').onclick=async()=>{const r=await api('/api/vps/models'); const out=$('vps-models-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Premium models on your VPS:</p><ul>${(r.models||[]).map(m=>`<li><code>${esc(m)}</code></li>`).join('')||'<li>None listed by the gateway.</li>'}</ul>`; msg(r.error||`${(r.models||[]).length} premium model(s) listed.`);};
+  if(q('vps-prices')) q('vps-prices').onclick=async()=>{const r=await api('/api/vps/pricing'); const out=$('vps-prices-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Renting premium models costs (USD per 1M tokens):</p><table><tr><th>Model</th><th>Input / 1M</th><th>Output / 1M</th></tr>${(r.models||[]).map(m=>`<tr><td><code>${esc(m.id)}</code></td><td>$${m.per_1m_input_usd}</td><td>$${m.per_1m_output_usd}</td></tr>`).join('')}</table><p class="note">Local models are always free. Prices are set by the VPS owner in the admin panel.</p>`;};
   if(q('vps-register')) q('vps-register').onclick=async()=>{
     const out=$('vps-register-out');
     const name=q('vps-reg-name').value.trim(), email=q('vps-reg-email').value.trim();

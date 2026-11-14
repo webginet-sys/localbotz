@@ -3,69 +3,137 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LocalBotz Admin — where the software is used, and what it logs</title>
+<title>LocalBotz Admin — users, installs, usage, pricing &amp; revenue</title>
 <style>
-  :root { --pink:#ec2a8a; --purple:#7c3aed; --ink:#1f1b2e; --muted:#5b5566; --line:#e9e4f2; --soft:#faf7ff; }
+  :root { --teal:#0f766e; --teal-soft:#e6f4f2; --navy:#17384a; --ink:#1f1b2e; --muted:#5b5566; --line:#e2e8ea; --soft:#f7fafa; --red:#dc2626; --green:#15803d; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#fff; line-height:1.6; }
-  .wrap { max-width:1100px; margin:0 auto; padding:0 20px 60px; }
-  header { border-bottom:1px solid var(--line); padding:20px 0; }
-  header h1 { margin:0; font-size:26px; }
-  header h1 span { background:linear-gradient(90deg,var(--pink),var(--purple)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  header p { color:var(--muted); margin:4px 0 0; }
-  h2 { font-size:22px; margin:36px 0 8px; }
-  p.note { color:var(--muted); }
-  .login { margin-top:24px; }
-  .login input { padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; width:320px; max-width:100%; }
-  button { background:linear-gradient(90deg,var(--pink),var(--purple)); color:#fff; border:0; border-radius:999px; padding:10px 20px; font-size:15px; font-weight:700; cursor:pointer; }
-  button.ghost { background:#fff; color:var(--purple); border:2px solid var(--purple); }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#fff; line-height:1.55; }
+  a { color:var(--teal); }
+  /* Login */
+  .login-wrap { max-width:480px; margin:80px auto; padding:0 20px; text-align:center; }
+  .login-wrap h1 { font-size:30px; margin:12px 0 4px; }
+  .login-wrap h1 span { color:var(--teal); }
+  .login-wrap p { color:var(--muted); }
+  .login-wrap input { width:100%; padding:12px; border:1px solid #ccc; border-radius:10px; font-size:16px; margin-top:12px; }
+  .err { color:var(--red); font-weight:700; min-height:22px; }
+  button { background:var(--teal); color:#fff; border:0; border-radius:999px; padding:10px 20px; font-size:15px; font-weight:700; cursor:pointer; }
+  button:hover { opacity:.92; }
+  button.ghost { background:#fff; color:var(--teal); border:2px solid var(--teal); }
   button.small { padding:6px 12px; font-size:13px; }
-  button.danger { background:#dc2626; }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-top:8px; }
-  .stat { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--soft); }
-  .stat b { font-size:28px; display:block; line-height:1.1; }
-  .stat span { color:var(--muted); font-size:14px; }
-  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  button.danger { background:var(--red); }
+  button:disabled { opacity:.55; cursor:default; }
+  /* Layout */
+  .app { display:flex; min-height:100vh; }
+  aside { width:240px; flex:none; background:var(--navy); color:#fff; padding:20px 0; }
+  aside .brand { padding:0 20px 16px; border-bottom:1px solid rgba(255,255,255,.15); }
+  aside .brand b { font-size:20px; letter-spacing:.02em; }
+  aside .brand b span { color:#7dd3c8; }
+  aside .brand small { display:block; color:#b8c9d1; font-size:13px; margin-top:2px; }
+  aside nav { padding:12px 0; }
+  aside nav button { display:block; width:100%; text-align:left; background:none; border:0; border-radius:0; color:#dbe7ec; padding:11px 20px; font-size:15px; font-weight:600; cursor:pointer; }
+  aside nav button:hover { background:rgba(255,255,255,.08); }
+  aside nav button.active { background:var(--teal); color:#fff; }
+  aside .foot { padding:16px 20px; font-size:13px; color:#b8c9d1; }
+  aside .foot button { width:100%; margin-top:8px; }
+  main { flex:1; min-width:0; padding:24px 28px 60px; }
+  main h1 { font-size:26px; margin:0 0 4px; }
+  main h2 { font-size:20px; margin:32px 0 8px; }
+  .sub { color:var(--muted); margin:0 0 8px; }
+  .note { color:var(--muted); font-size:14px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-top:16px; }
+  .card { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--soft); }
+  .card b { font-size:26px; display:block; line-height:1.15; }
+  .card span { color:var(--muted); font-size:14px; }
+  .card b.green { color:var(--green); }
+  table { width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { background:var(--soft); }
-  code { background:#f3f0fa; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:0.92em; word-break:break-all; }
-  .err { color:#dc2626; font-weight:700; }
+  code { background:#eef4f3; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:.92em; word-break:break-all; }
+  input[type=number], input[type=text] { padding:8px 10px; border:1px solid #ccc; border-radius:8px; font-size:14px; width:130px; }
+  .section { display:none; }
+  .section.active { display:block; }
   .muted { color:var(--muted); }
+  @media (max-width:760px){ .app{flex-direction:column;} aside{width:100%;} aside nav button{display:inline-block;width:auto;} }
 </style>
 </head>
 <body>
-<header><div class="wrap">
+<div class="login-wrap" id="login">
+  <div style="font-size:44px">🤖</div>
   <h1>LocalBotz <span>Admin</span></h1>
-  <p>Where the software is used, and what it logs. Only the VPS owner sees this page.</p>
-</div></header>
-<div class="wrap">
-  <div class="login" id="login">
-    <label for="token"><b>Admin token</b> <span class="muted">(ADMIN_TOKEN from the server .env)</span></label><br>
-    <input id="token" type="password" autocomplete="off" placeholder="Paste your admin token">
-    <button onclick="login()">Open admin panel</button>
-    <p class="note">The token is kept only in this browser (localStorage) and sent as the X-Admin-Token header.</p>
-    <p id="login-err" class="err"></p>
-  </div>
-
-  <div id="panel" style="display:none">
-    <p><button class="ghost" onclick="loadAll()">↻ Refresh</button> <button class="ghost" onclick="logout()">Log out</button></p>
-    <h2>Overview</h2>
-    <div class="stats" id="stats"></div>
-    <p class="note" id="reg-note"></p>
-
-    <h2>Registered users / workspaces</h2>
-    <p class="note">People who registered on this server (name + email). Each has their own token; disable one to cut off their premium access.</p>
-    <table><thead><tr><th>Workspace</th><th>Name</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr></thead><tbody id="users"></tbody></table>
-
-    <h2>Installs — where the software is used</h2>
-    <p class="note">Every LocalBotz install that has VPS Premium configured sends a heartbeat when it starts: install id, app version, platform/OS, and when it was last seen. No personal data, no chat content.</p>
-    <table><thead><tr><th>Install</th><th>Workspace</th><th>Version</th><th>Platform / OS</th><th>IP</th><th>First seen</th><th>Last seen</th></tr></thead><tbody id="installs"></tbody></table>
-
-    <h2>Usage log</h2>
-    <p class="note">One line per premium chat request: time, workspace, model, provider, tokens in/out, client IP. Message content is never logged.</p>
-    <table><thead><tr><th>Time</th><th>Workspace</th><th>Model</th><th>Provider</th><th>Tokens in / out</th><th>IP</th></tr></thead><tbody id="usage"></tbody></table>
-  </div>
+  <p>Users, installs, usage, pricing &amp; revenue — where the software is used, and what it earns.</p>
+  <input id="token" type="password" autocomplete="off" placeholder="Admin token (ADMIN_TOKEN from the server .env)">
+  <p><button onclick="login()">Open admin panel</button></p>
+  <p class="err" id="login-err"></p>
+  <p class="note">The token is kept only in this browser (localStorage) and sent as the X-Admin-Token header. Only the VPS owner sees this page.</p>
 </div>
+
+<div class="app" id="panel" style="display:none">
+  <aside>
+    <div class="brand"><b>LocalBotz <span>Admin</span></b><small>Your server · your users · your prices</small></div>
+    <nav>
+      <button data-sec="overview" class="active" onclick="showSec('overview')">📊 Overview</button>
+      <button data-sec="users" onclick="showSec('users')">👥 Users &amp; workspaces</button>
+      <button data-sec="installs" onclick="showSec('installs')">💻 Installs</button>
+      <button data-sec="usage" onclick="showSec('usage')">📜 Usage log</button>
+      <button data-sec="pricing" onclick="showSec('pricing')">💲 Pricing</button>
+      <button data-sec="revenue" onclick="showSec('revenue')">💰 Revenue</button>
+    </nav>
+    <div class="foot">
+      <button class="ghost" onclick="loadAll()">↻ Refresh</button>
+      <button class="ghost" onclick="logout()">Log out</button>
+    </div>
+  </aside>
+  <main>
+    <section class="section active" id="sec-overview">
+      <h1>Overview</h1>
+      <p class="sub">Everything at a glance. <span id="reg-note"></span></p>
+      <div class="cards" id="stats"></div>
+      <h2>Top workspaces by cost</h2>
+      <div id="top-ws"></div>
+      <h2>Top models by cost</h2>
+      <div id="top-models"></div>
+    </section>
+
+    <section class="section" id="sec-users">
+      <h1>Users &amp; workspaces</h1>
+      <p class="sub">People who registered on this server (name + email). Each has their own token; disable one to cut off their premium access at once.</p>
+      <table><thead><tr><th>Workspace</th><th>Name</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr></thead><tbody id="users"></tbody></table>
+    </section>
+
+    <section class="section" id="sec-installs">
+      <h1>Installs — where the software is used</h1>
+      <p class="sub">Every LocalBotz install with VPS Premium configured sends a heartbeat when it starts: install id, app version, platform/OS, and when it was last seen. No personal data, no chat content.</p>
+      <table><thead><tr><th>Install</th><th>Workspace</th><th>Version</th><th>Platform / OS</th><th>IP</th><th>First seen</th><th>Last seen</th></tr></thead><tbody id="installs"></tbody></table>
+    </section>
+
+    <section class="section" id="sec-usage">
+      <h1>Usage log</h1>
+      <p class="sub">One line per premium chat request: time, workspace, model, provider, tokens in/out, cost, client IP. Message content is never logged.</p>
+      <table><thead><tr><th>Time</th><th>Workspace</th><th>Model</th><th>Provider</th><th>Tokens in / out</th><th>Cost</th><th>IP</th></tr></thead><tbody id="usage"></tbody></table>
+    </section>
+
+    <section class="section" id="sec-pricing">
+      <h1>Pricing — what renting costs</h1>
+      <p class="sub">The price list users see before they register (<code>/v1/pricing</code>). Prices are USD per 1M tokens. Change a price and save — it applies to later requests. Local models are always free and never appear here.</p>
+      <table><thead><tr><th>Model</th><th>Input / 1M tokens ($)</th><th>Output / 1M tokens ($)</th></tr></thead><tbody id="pricing"></tbody></table>
+      <p style="margin-top:14px"><button onclick="savePricing()">💾 Save pricing</button> <span id="pricing-msg" class="note"></span></p>
+      <p class="note">Starting prices are the providers' public list prices. Grok / Kimi / GLM are starting prices — confirm them in the provider's own docs before relying on them.</p>
+    </section>
+
+    <section class="section" id="sec-revenue">
+      <h1>Revenue</h1>
+      <p class="sub">What the premium models have earned, from the usage log. Costs are computed from the price list at the time of each request.</p>
+      <div class="cards" id="rev-cards"></div>
+      <h2>By workspace</h2>
+      <div id="rev-ws"></div>
+      <h2>By model</h2>
+      <div id="rev-models"></div>
+      <h2>Last 14 days</h2>
+      <div id="rev-days"></div>
+    </section>
+  </main>
+</div>
+
 <script>
 let TOKEN = localStorage.getItem('lb-admin-token') || '';
 async function api(path, opts={}) {
@@ -74,50 +142,86 @@ async function api(path, opts={}) {
   if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || ('HTTP ' + r.status)); }
   return r.json();
 }
-function esc(s){ return String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function fmtTime(iso){ if(!iso) return '—'; const d=new Date(iso); return isNaN(d)?esc(iso):d.toLocaleString(); }
-function fmtTs(ts){ if(!ts) return '—'; return new Date(ts*1000).toLocaleString(); }
+const esc=s=>String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=n=>'$'+Number(n||0).toFixed(n<0.01&&n>0?4:2);
+const fmtTime=iso=>{ if(!iso) return '—'; const d=new Date(iso); return isNaN(d)?esc(iso):d.toLocaleString(); };
+const fmtTs=ts=>ts?new Date(ts*1000).toLocaleString():'—';
+function showSec(name){
+  document.querySelectorAll('aside nav button').forEach(b=>b.classList.toggle('active', b.dataset.sec===name));
+  document.querySelectorAll('main .section').forEach(s=>s.classList.toggle('active', s.id==='sec-'+name));
+}
 async function login(){
   TOKEN = document.getElementById('token').value.trim();
   if(!TOKEN){ document.getElementById('login-err').textContent='Enter the admin token.'; return; }
   try { await api('/admin/stats'); localStorage.setItem('lb-admin-token', TOKEN);
     document.getElementById('login').style.display='none';
-    document.getElementById('panel').style.display='block';
+    document.getElementById('panel').style.display='flex';
     loadAll();
   } catch(e){ document.getElementById('login-err').textContent=e.message; }
 }
 function logout(){ localStorage.removeItem('lb-admin-token'); TOKEN=''; location.reload(); }
 async function loadAll(){
   try{
-    const s = await api('/admin/stats');
-    document.getElementById('stats').innerHTML =
-      `<div class="stat"><b>${s.users_total}</b><span>Registered users</span></div>`+
-      `<div class="stat"><b>${s.users_active}</b><span>Active / ${s.users_disabled} disabled</span></div>`+
-      `<div class="stat"><b>${s.installs_total}</b><span>Installs seen (${s.installs_last_24h} in last 24h)</span></div>`+
-      `<div class="stat"><b>${s.requests_total}</b><span>Premium requests (${s.requests_last_24h} in last 24h)</span></div>`+
-      `<div class="stat"><b>${(s.input_tokens_total+s.output_tokens_total).toLocaleString()}</b><span>Total tokens in+out</span></div>`;
+    const [s, users, installs, usage, pricing, rev] = await Promise.all([
+      api('/admin/stats'), api('/admin/users'), api('/admin/installs'),
+      api('/admin/usage?limit=100'), api('/admin/pricing'), api('/admin/revenue')]);
     document.getElementById('reg-note').textContent =
       'Registration is ' + (s.registration_open ? 'OPEN — anyone can sign up at /register.' : 'CLOSED — only tokens you issue by hand work.') +
       ' Premium models: ' + (s.premium_models||[]).join(', ') + '.';
-    const users = await api('/admin/users');
+    document.getElementById('stats').innerHTML =
+      `<div class="card"><b>${s.users_total}</b><span>Registered users (${s.users_active} active)</span></div>`+
+      `<div class="card"><b>${s.installs_total}</b><span>Installs seen (${s.installs_last_24h} in last 24h)</span></div>`+
+      `<div class="card"><b>${s.requests_total}</b><span>Premium requests (${s.requests_last_24h} in last 24h)</span></div>`+
+      `<div class="card"><b>${(s.input_tokens_total+s.output_tokens_total).toLocaleString()}</b><span>Total tokens in+out</span></div>`+
+      `<div class="card"><b class="green">${money(rev.total_cost_usd)}</b><span>Total revenue (metered cost)</span></div>`;
+    const wsRows = (rev.per_workspace||[]).slice(0,5).map(w=>
+      `<tr><td><code>${esc(w.workspace_id)}</code><br>${esc(w.name||'')} ${esc(w.email||'')}</td><td>${w.requests}</td><td>${money(w.cost_usd)}</td></tr>`).join('');
+    document.getElementById('top-ws').innerHTML = wsRows
+      ? `<table><tr><th>Workspace</th><th>Requests</th><th>Cost</th></tr>${wsRows}</table>` : '<p class="note">No usage yet.</p>';
+    const mRows = Object.entries(rev.per_model||{}).sort((a,b)=>b[1].cost_usd-a[1].cost_usd).slice(0,5).map(([m,v])=>
+      `<tr><td><code>${esc(m)}</code></td><td>${v.requests}</td><td>${money(v.cost_usd)}</td></tr>`).join('');
+    document.getElementById('top-models').innerHTML = mRows
+      ? `<table><tr><th>Model</th><th>Requests</th><th>Cost</th></tr>${mRows}</table>` : '<p class="note">No usage yet.</p>';
     document.getElementById('users').innerHTML = users.length ? users.map(u=>
       `<tr><td><code>${esc(u.workspace_id)}</code></td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.status)}</td><td>${fmtTime(u.created)}</td><td>${u.status==='active'
         ? `<button class="small danger" onclick="setUser('${esc(u.workspace_id)}','disable')">Disable</button>`
         : `<button class="small" onclick="setUser('${esc(u.workspace_id)}','enable')">Enable</button>`}</td></tr>`).join('')
       : '<tr><td colspan="6" class="muted">No users registered yet. Sign-ups appear here after someone registers at /register.</td></tr>';
-    const installs = await api('/admin/installs');
     document.getElementById('installs').innerHTML = installs.length ? installs.map(i=>
       `<tr><td><code>${esc(i.install_id)}</code></td><td><code>${esc(i.workspace_id)}</code></td><td>${esc(i.app_version||'—')}</td><td>${esc(i.platform||'—')} ${esc(i.os||'')}</td><td>${esc(i.ip||'—')}</td><td>${fmtTime(i.first_seen)}</td><td>${fmtTime(i.last_seen)}</td></tr>`).join('')
       : '<tr><td colspan="7" class="muted">No installs have phoned home yet. An install appears here after it starts with VPS Premium configured.</td></tr>';
-    const usage = await api('/admin/usage?limit=100');
     document.getElementById('usage').innerHTML = usage.length ? usage.map(u=>
-      `<tr><td>${fmtTs(u.ts)}</td><td><code>${esc(u.workspace_id||'master')}</code></td><td><code>${esc(u.model)}</code></td><td>${esc(u.provider)}</td><td>${(u.input_tokens||0).toLocaleString()} / ${(u.output_tokens||0).toLocaleString()}</td><td>${esc(u.ip||'—')}</td></tr>`).join('')
-      : '<tr><td colspan="6" class="muted">No premium requests logged yet.</td></tr>';
+      `<tr><td>${fmtTs(u.ts)}</td><td><code>${esc(u.workspace_id||'master')}</code></td><td><code>${esc(u.model)}</code></td><td>${esc(u.provider)}</td><td>${(u.input_tokens||0).toLocaleString()} / ${(u.output_tokens||0).toLocaleString()}</td><td>${money(u.cost_usd)}</td><td>${esc(u.ip||'—')}</td></tr>`).join('')
+      : '<tr><td colspan="7" class="muted">No premium requests logged yet.</td></tr>';
+    const pm = pricing.per_model||{};
+    document.getElementById('pricing').innerHTML = Object.keys(pm).sort().map(m=>
+      `<tr><td><code>${esc(m)}</code></td><td><input type="number" step="0.01" min="0" data-price-in="${esc(m)}" value="${pm[m].per_1m_input_usd}"></td><td><input type="number" step="0.01" min="0" data-price-out="${esc(m)}" value="${pm[m].per_1m_output_usd}"></td></tr>`).join('');
+    document.getElementById('rev-cards').innerHTML =
+      `<div class="card"><b class="green">${money(rev.total_cost_usd)}</b><span>Total revenue</span></div>`+
+      `<div class="card"><b>${rev.requests_total}</b><span>Requests billed</span></div>`+
+      `<div class="card"><b>${(rev.per_workspace||[]).length}</b><span>Paying workspaces</span></div>`;
+    document.getElementById('rev-ws').innerHTML = (rev.per_workspace||[]).length ? `<table><tr><th>Workspace</th><th>Name / email</th><th>Requests</th><th>Tokens in / out</th><th>Cost</th></tr>${(rev.per_workspace||[]).map(w=>
+      `<tr><td><code>${esc(w.workspace_id)}</code></td><td>${esc(w.name||'—')}<br>${esc(w.email||'')}</td><td>${w.requests}</td><td>${w.input_tokens.toLocaleString()} / ${w.output_tokens.toLocaleString()}</td><td>${money(w.cost_usd)}</td></tr>`).join('')}</table>` : '<p class="note">No revenue yet.</p>';
+    document.getElementById('rev-models').innerHTML = Object.keys(rev.per_model||{}).length ? `<table><tr><th>Model</th><th>Requests</th><th>Cost</th></tr>${Object.entries(rev.per_model).sort((a,b)=>b[1].cost_usd-a[1].cost_usd).map(([m,v])=>
+      `<tr><td><code>${esc(m)}</code></td><td>${v.requests}</td><td>${money(v.cost_usd)}</td></tr>`).join('')}</table>` : '<p class="note">No revenue yet.</p>';
+    document.getElementById('rev-days').innerHTML = Object.keys(rev.per_day||{}).length ? `<table><tr><th>Day</th><th>Requests</th><th>Cost</th></tr>${Object.entries(rev.per_day).map(([d,v])=>
+      `<tr><td>${esc(d)}</td><td>${v.requests}</td><td>${money(v.cost_usd)}</td></tr>`).join('')}</table>` : '<p class="note">No revenue yet.</p>';
   }catch(e){ alert(e.message); }
 }
 async function setUser(ws, action){
   if(!confirm(action==='disable' ? 'Disable this workspace? Its premium token stops working.' : 'Enable this workspace again?')) return;
   await api('/admin/users/'+encodeURIComponent(ws)+'/'+action, {method:'POST'});
+  loadAll();
+}
+async function savePricing(){
+  const per_model = {};
+  document.querySelectorAll('[data-price-in]').forEach(el=>{
+    const m = el.dataset.priceIn;
+    const out = document.querySelector(`[data-price-out="${CSS.escape(m)}"]`);
+    per_model[m] = {per_1m_input_usd: parseFloat(el.value)||0, per_1m_output_usd: parseFloat(out?out.value:0)||0};
+  });
+  await api('/admin/pricing', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({per_model})});
+  document.getElementById('pricing-msg').textContent = 'Pricing saved — applies to later requests.';
   loadAll();
 }
 if (TOKEN) { document.getElementById('token').value = TOKEN; login(); }
