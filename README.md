@@ -1,0 +1,508 @@
+![LocalBotz](assets/logo.png)
+
+# LocalBotz — a simpler, fully local clone of AbacusAI Bot
+
+A personal-agent app you run on your own computer. No Electron, no cloud,
+no API keys. Bots have their own name, instructions/persona, model, chat
+history and memory file. The agent can search the web, drive a real browser
+(Playwright/Chromium), read/write files in `./workspace`, and run safe shell
+commands — driven by a downloaded local model in **LM Studio**.
+
+## Install from GitHub (terminal)
+
+```bash
+git clone https://github.com/<username>/localbotz.git
+cd localbotz
+```
+
+Then run it — Windows: `start.bat`, macOS / Linux: `./start.sh`
+(first run: `chmod +x start.sh`). The starter creates a venv, installs
+the dependencies and starts the app on http://localhost:8000.
+
+**Lightweight install** (core only, no browser automation — smaller and
+faster to download, and the app still runs; browser tools just say
+"Playwright is not installed" until you add it):
+
+```bash
+./start.sh --light        # macOS / Linux
+start.bat --light         # Windows
+```
+
+Add browser automation later with `./start.sh --with-browser`
+(or `pip install -r requirements-browser.txt && playwright install chromium`).
+
+**Works on Windows, macOS and Linux.** The code uses `pathlib` throughout,
+no hardcoded OS paths and no OS-only shell commands — the file commands in
+`run_command` (`ls`/`dir`, `cat`/`type`, `grep`, `find`, …) are implemented
+in Python, so they behave the same on all three.
+
+Inspired by [AbacusAI Bot](https://github.com/abacusai/abacusai-bot)
+(MIT, Electron + TypeScript). This is a deliberately smaller re-implementation
+in Python, not a fork of that repo.
+
+## What it does
+
+- **Bots** — create / list / select / delete bots, each with name,
+  instructions, model, own chat (`data/chats/<id>.json`) and memory
+  (`data/memory/<id>.json`). Starter templates: **Chief of Staff** and
+  **Research Scout**. Stored as plain JSON in `data/` (`bots.json`).
+- **Local model (LM Studio, default)** — talks to LM Studio's
+  OpenAI-compatible local server at `http://localhost:1234/v1` via
+  `/chat/completions`. Default model: **Qwen3.5** — set with
+  `MODEL` / `LLM_MODEL` in `.env`, or per bot in the UI. You can use
+  **any local model** you have in LM Studio or Ollama: the app asks the
+  local server what it actually has (`GET /v1/models`) and lists those
+  models in the **Available models** dropdown — Qwen3.5 is only the
+  fallback when the list cannot be fetched.
+  > If LM Studio shows a fuller identifier for your model, e.g.
+  > `qwen/qwen3.5-...`, copy that **exact** identifier into `MODEL`
+  > (or into the bot's Model field in the UI). The app sends whatever
+  > is configured — it does not guess the identifier.
+- **Agent tool loop** — up to 8 tool turns per reply, shown in the chat UI:
+  `web_search` / `browser_search` (DuckDuckGo), `browser_open`,
+  `browser_read`, `browser_screenshot` (saved to `data/screenshots/`),
+  `browser_click`, `browser_type`, `list_files`, `read_file`, `write_file`
+  (restricted to `./workspace`, never outside), `run_command` (allowlisted
+  commands only, 30 s timeout, workspace as cwd, cross-platform).
+- **Web UI** — http://localhost:8000 — sidebar with bots + New Bot form
+  (including an editable Model field per bot), main chat, model + status
+  indicator (LM Studio reachable / not reachable / mock), memory view,
+  tool-output display. Plain HTML/JS, no build step.
+- **Mock mode** — `python app.py --mock` or `MOCK_MODE=1`: test the UI,
+  bots and tools without any model running.
+
+## Quick start (all OS)
+
+The start scripts do everything: check Python, create a venv, install
+dependencies, install Playwright Chromium, then run the app.
+
+- **Windows:** double-click `start.bat`, or in Command Prompt / PowerShell:
+  `start.bat` (test mode: `start.bat --mock`)
+- **macOS / Linux:** `chmod +x start.sh` (first time only), then
+  `./start.sh` (test mode: `./start.sh --mock`)
+
+Then open **http://localhost:8000**. LM Studio must be running first
+(see step 2 in your OS section below).
+
+---
+
+## Windows
+
+### 1. Install Python 3.11+
+Download the installer from https://www.python.org/downloads/windows/
+and run it. **Tick "Add python.exe to PATH"** on the first screen, then
+Install. Check it worked — in Command Prompt *or* PowerShell:
+
+```cmd
+python --version
+```
+
+You should see `Python 3.11` or newer. If `python` is not recognised,
+close and reopen the terminal (or reinstall with the PATH box ticked).
+
+> PowerShell vs Command Prompt: both work for everything below.
+> The only difference is running the script: in PowerShell type
+> `.\start.bat` (the `.\` is required); in Command Prompt just
+> `start.bat`. Double-clicking `start.bat` in Explorer also works.
+
+### 2. LM Studio + Qwen3.5
+1. Download LM Studio from https://lmstudio.ai/ and install it
+   (the Windows `.exe` installer).
+2. In LM Studio, search for and download the **Qwen3.5** model.
+3. Load Qwen3.5 (open it in a chat, or load it from the model list).
+4. Go to the **Developer tab** (left sidebar, `</>` icon) and press
+   **Start Server**. It serves on `http://localhost:1234` by default.
+   Leave LM Studio running while you use LocalBotz.
+5. Note the exact model identifier LM Studio shows. The default in this
+   app is `qwen3.5`. If LM Studio shows a fuller identifier, e.g.
+   `qwen/qwen3.5-...`, set it exactly — copy `.env.example` to `.env`
+   and set `MODEL=qwen/qwen3.5-...`, or set the Model field in the UI.
+
+### 3. Run it
+
+```cmd
+start.bat
+```
+
+The script creates `.venv`, installs `requirements.txt`, installs
+Playwright Chromium, and starts the app on http://localhost:8000.
+To test without a model: `start.bat --mock`.
+
+If you prefer manual steps, the equivalents are:
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+python app.py
+```
+
+---
+
+## macOS
+
+### 1. Install Python 3.11+
+Either download it from https://www.python.org/downloads/macos/,
+or with Homebrew:
+
+```bash
+brew install python
+```
+
+Check it:
+
+```bash
+python3 --version
+```
+
+You should see `Python 3.11` or newer. (macOS ships an old system
+`python3` — the steps below always use `python3` explicitly, and the
+start script creates its own venv, so the system Python is not used
+to run the app.)
+
+### 2. LM Studio + Qwen3.5
+1. Download LM Studio from https://lmstudio.ai/ (macOS `.dmg`) and
+   drag it to Applications.
+2. In LM Studio, search for and download the **Qwen3.5** model.
+3. Load Qwen3.5 (open it in a chat, or load it from the model list).
+4. Go to the **Developer tab** (left sidebar, `</>` icon) and press
+   **Start Server**. It serves on `http://localhost:1234` by default.
+   Leave LM Studio running while you use LocalBotz.
+5. Note the exact model identifier LM Studio shows. The default in this
+   app is `qwen3.5`. If LM Studio shows a fuller identifier, e.g.
+   `qwen/qwen3.5-...`, set it exactly — copy `.env.example` to `.env`
+   and set `MODEL=qwen/qwen3.5-...`, or set the Model field in the UI.
+
+### 3. Run it
+
+```bash
+chmod +x start.sh   # first time only
+./start.sh
+```
+
+The script creates `.venv`, installs `requirements.txt`, installs
+Playwright Chromium, and starts the app on http://localhost:8000.
+To test without a model: `./start.sh --mock`.
+
+Manual equivalent:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+python app.py
+```
+
+---
+
+## Linux
+
+### 1. Install Python 3.11+
+Ubuntu / Debian:
+
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip
+```
+
+Fedora:
+
+```bash
+sudo dnf install python3
+```
+
+Arch:
+
+```bash
+sudo pacman -S python
+```
+
+Check it:
+
+```bash
+python3 --version
+```
+
+You need `Python 3.11` or newer. If your distro ships an older Python,
+install a newer one from https://www.python.org/downloads/ (or deadsnakes
+on Ubuntu: `sudo add-apt-repository ppa:deadsnakes/ppa`).
+
+### 2. LM Studio + Qwen3.5
+1. Download LM Studio from https://lmstudio.ai/ (Linux AppImage) and
+   make it executable / run it.
+2. In LM Studio, search for and download the **Qwen3.5** model.
+3. Load Qwen3.5 (open it in a chat, or load it from the model list).
+4. Go to the **Developer tab** (left sidebar, `</>` icon) and press
+   **Start Server**. It serves on `http://localhost:1234` by default.
+   Leave LM Studio running while you use LocalBotz.
+5. Note the exact model identifier LM Studio shows. The default in this
+   app is `qwen3.5`. If LM Studio shows a fuller identifier, e.g.
+   `qwen/qwen3.5-...`, set it exactly — copy `.env.example` to `.env`
+   and set `MODEL=qwen/qwen3.5-...`, or set the Model field in the UI.
+
+### 3. Run it
+
+```bash
+chmod +x start.sh   # first time only
+./start.sh
+```
+
+The script creates `.venv`, installs `requirements.txt`, installs
+Playwright Chromium, and starts the app on http://localhost:8000.
+To test without a model: `./start.sh --mock`.
+
+Manual equivalent:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+python app.py
+```
+
+Note: `playwright install chromium` may ask for system libraries on
+Linux; if it does, run `playwright install-deps chromium` (needs sudo)
+or install the missing packages your distro suggests.
+
+---
+
+## Templates — Make a Bot
+
+Click **＋ Make a bot** in the sidebar:
+
+> A bot is a standing agent with its own instructions, schedule, memory and chats. Start from a template, or name one and describe the job.
+
+- **Avatar picker** — 8 choices (🤖 👔 🔬 🌅 📰 📝 💬 👀), stored per bot.
+- **Name your bot** + **Describe the job** — the job becomes part of the bot's instructions when you create it from scratch.
+- **Template tabs** — Featured, Personal Assistant, Productivity, Research, More (More shows all 15 templates).
+- **Template cards** — each has an icon, name and short description. Clicking one pre-fills name, instructions, avatar, provider/model (default LM Studio / Qwen3.5), enabled tools and schedule — all still editable before you press Create bot.
+
+Templates (in `templates.json`, copied to `data/templates.json` on first run):
+
+| Tab | Templates |
+|---|---|
+| Research | Deep Researcher, Competitor Watch, News Radar, Research Paper Scout, Decision Researcher |
+| Personal Assistant | Chief of Staff, Email Drafting, Morning Brief, Meeting Prep, Follow-Up Tracker, WhatsApp Agent |
+| Productivity | Task Planner, Meeting Notes, Research Scout, Inbox Triage |
+| Featured | Deep Researcher, News Radar, Chief of Staff, Morning Brief, Task Planner, Research Scout |
+
+Each template stores its full instructions, default tools and a schedule (e.g. `daily 07:00`, `on_demand`). The schedule is stored per bot and shown in the sidebar; scheduled *running* of bots is not built yet in v1 — bots run when you chat with them.
+
+## Library
+
+The **Library** section in the sidebar has 5 pages, sharing the same data files as Settings (no duplicate stores):
+
+- **Connectors** — all model providers (LM Studio, Ollama, Claude, OpenAI, Gemini, OpenRouter, Groq, Mistral, Cerebras) plus service connectors (Gmail, Drive, Calendar, Slack, GitHub, Notion). Enable/disable, Test connection, status (reachable / missing key / offline). Service connectors that need OAuth are config + setup instructions in v1, with status **Not connected** — never faked.
+- **Messaging** — WhatsApp, Telegram, Discord. Same data as Settings > Messaging channels: config, inbound-replies toggle (off by default), approved senders, status **Not connected** in v1.
+- **MCP servers** — add/remove a server by name + command or URL (and env), enable/disable, Test. The test really runs the server (stdio JSON-RPC or HTTP `tools/list`) and lists its tools when it answers; if it cannot be reached, the error is shown. Stored in `data/mcp_servers.json`.
+- **Skills** — built-in skills (Research, File help, Browser help, Coding help, Email drafting, Morning Brief) plus custom skills you add (name + instructions + optional source folder/file). Enable/disable per bot, delete custom ones. Stored in `data/skills.json`. Enabled skills are added to the bot's system prompt.
+- **Tools** — the full built-in tool list (`browser_open`, `browser_read`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_search`, `web_search`, `list_files`, `read_file`, `write_file`, `run_command`) with descriptions, global enable/disable, per-bot toggles, and which bots use each. Toggles are enforced in the agent loop.
+
+## Settings
+
+The **Settings** section in the sidebar has 7 pages, in this order:
+
+1. **General** — default provider (LM Studio) + default model (Qwen3.5), workspace folder, theme (light/dark), data location, app version, reset settings. Persisted to `data/settings.json`.
+2. **Connectors** — same provider/service connector list as Library > Connectors (shared store).
+3. **Wallet** — local API spend tracking only, no real payments. Usage log per provider/model (calls, est. cost where known), monthly budget + alert, reset. Stored in `data/wallet.json`. Local models cost $0.
+4. **Secure store** — local vault for API keys. Add/edit/delete a key per provider; stored in `.env` (gitignored). Keys are displayed **masked only** (e.g. `sk-...abcd`), never shown in full and never logged.
+5. **Permissions** — global toggles (file read/write, shell, browser, web search, network) + per-bot approval mode (Ask / Auto / Full) + blocked paths. Enforced in the agent tool loop: Ask blocks mutating tools (write, shell, click/type); turning network off blocks online providers; blocked paths are refused by the file tools.
+6. **Messaging channels** — same data as Library > Messaging (shared store).
+7. **Devices** — this computer (hostname, OS, Python version, Playwright Chromium installed or not, LM Studio reachable or not), browser automation status, plus extra devices you add; remove extra devices (this computer cannot be removed).
+
+## Using online providers (DeepSeek, Claude, OpenAI, Gemini, OpenRouter...)
+
+Local mode works fully offline with no keys: LM Studio + Qwen3.5 is the default. When you have internet, you can also use online providers:
+
+1. Get an API key from the provider (e.g. Anthropic Console for Claude, platform.openai.com for OpenAI, Google AI Studio for Gemini, openrouter.ai, console.groq.com, console.mistral.ai, cloud.cerebras.ai).
+2. Add it in **Settings > Secure store** (masked, stored in `.env`), or add the line to `.env` yourself — see `.env.example` for the variable names (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY`). Keys are never hardcoded or committed.
+3. Pick the provider + model per bot — in the **Make a Bot** form, or in the chat header (provider dropdown + model field, then Apply), or from the **Available models** dropdown, which only lists models that can actually work right now. Defaults: DeepSeek `deepseek-chat`, Claude `claude-sonnet-4-5`, OpenAI `gpt-4o-mini` (Codex: `gpt-5-codex` / `codex-mini-latest` if available on your account), Gemini `gemini-2.5-flash`, OpenRouter `openrouter/auto`, Groq `llama-3.3-70b-versatile`, Mistral `mistral-small-latest`, Cerebras `llama-3.3-70b`.
+4. Check status in the sidebar status line or Library > Connectors > Test: it shows configured / missing key / reachable for the selected provider, without ever displaying the key.
+
+The tool loop works the same for every provider. Claude uses its native Messages API (tool calls are translated to/from its format in `app.py`); the others use the standard OpenAI-compatible `/chat/completions` format.
+
+**Fallback:** if an online provider fails (no key, no internet, API error), the chat shows a clear error and, if LM Studio is reachable, offers a one-click switch back to LM Studio (local, Qwen3.5). Usage (calls/tokens/est. cost) is recorded in the Wallet.
+
+## Providers
+
+| Provider | Key (env var) | Models | Notes |
+|---|---|---|---|
+| LM Studio (local) | — | any model in LM Studio (listed live) | Default. Offline, no key. |
+| Ollama (local) | — | any model in Ollama (listed live) | Fallback local server. |
+| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` (default), `deepseek-reasoner` | OpenAI-compatible, https://api.deepseek.com/v1 |
+| Claude | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` (default), `claude-opus-4-1` | Native Messages API. |
+| OpenAI / Codex | `OPENAI_API_KEY` | `gpt-4o-mini` (default), `gpt-4o`, plus Codex models `gpt-5-codex` / `codex-mini-latest` if available on your account | Codex models need Codex access on the OpenAI account; if they are not available to you, pick `gpt-4o` / `gpt-4o-mini`. |
+| Google Gemini (AI Studio) | `GEMINI_API_KEY` | `gemini-2.5-flash` (default), `gemini-2.5-pro` | Get a key in Google AI Studio. |
+| OpenRouter | `OPENROUTER_API_KEY` | `openrouter/auto` (default) | One key, many models. |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | |
+| Mistral | `MISTRAL_API_KEY` | `mistral-small-latest` | |
+| Cerebras | `CEREBRAS_API_KEY` | `llama-3.3-70b` | |
+| VPS Premium | `VPS_API_TOKEN` (your token, not a provider key) | Claude Sonnet, GPT, Gemini — whatever the VPS offers | See below. No provider keys in the client. |
+
+**Provider status** (Library / Settings → Connectors, and the Test button)
+uses these exact states, stored with the last-checked time in
+`data/connectors.json`:
+
+- **Not connected** — no key is saved.
+- **Saved, not checked** — a key is saved but has not been tested yet.
+- **Connected** — the last Test succeeded (shown as "Saved" / "Connected").
+- **Failed** — the last Test failed, with the error shown.
+
+Keys are shown masked only (e.g. `sk-...abcd`) and never in full.
+
+## Whichever model is available
+
+You do not have to decide up front which model to use — the app shows
+you what is actually usable **right now**:
+
+- The **Available models** dropdown (chat header, and Make a Bot) is
+  grouped by source — Local — LM Studio, Local — Ollama, Premium — VPS,
+  Claude, OpenAI, Gemini, … — and is filled live from
+  `GET /api/models/available`, which probes every source: LM Studio's
+  `GET /v1/models`, Ollama's `GET /api/tags`, the VPS gateway's
+  `GET /v1/models`, and the direct providers (listed only when their
+  API key is configured). Press **↻ Models** to refresh it.
+- A source that cannot work right now appears **greyed out with the
+  reason** — e.g. "LM Studio not running", "no key", "VPS offline" —
+  so you cannot pick a model that can't work without being told why.
+- If a bot's saved model becomes unavailable (you unloaded it in LM
+  Studio, the VPS went down, a key was removed), the chat says so
+  plainly and suggests the nearest available model, with a **one-click
+  switch** button. Local models work when LM Studio/Ollama is running,
+  premium models when the VPS is reachable, direct providers when a
+  key is set — use whichever is available.
+
+## Premium models from a VPS
+
+If Thomas (or you) runs the gateway in `server/` on a VPS, you can use
+premium models — **Claude Sonnet, GPT, Gemini** — without putting any
+provider API key on your own computer:
+
+1. **On the VPS** (see `server/README.md` for the full deploy — SSH or
+   Tailscale, systemd or Docker, nginx + Let's Encrypt for public
+   access): copy `server/.env.example` to `server/.env`, set
+   `PREMIUM_API_TOKEN` (a long random token you issue to users) and
+   **your** provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+   `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). The
+   premium model list is `PREMIUM_MODELS` in that file — default
+   `claude-sonnet-4-5,gpt-4o,gpt-4o-mini,gemini-2.5-flash,gemini-2.5-pro`;
+   add newer ids there (and `deepseek-chat` / `deepseek-reasoner` for
+   DeepSeek) and restart the gateway.
+2. **In the app:** Settings → Connectors → **VPS Premium** — paste the
+   gateway base URL (e.g. `https://YOUR-VPS/v1`) and the token the VPS
+   owner issued you, then **List premium models**. Or set in `.env`:
+   `VPS_BASE_URL=https://YOUR-VPS/v1` and `VPS_API_TOKEN=<your token>`.
+3. Pick provider **VPS Premium** per bot and choose a model from the
+   live list the gateway returns.
+
+Your provider keys stay on the VPS only — the client never holds them,
+and the gateway never sends them back or writes them to logs. The
+client only sends its own user token. If the VPS is unreachable or the
+token is wrong, the app shows a clear error and falls back to the
+local model (LM Studio).
+
+## If LM Studio is not running
+
+The status indicator in the UI turns red and chat replies explain how to
+start it (load Qwen3.5, Start Server in the Developer tab, check the model
+id). Nothing is sent to any cloud service — the model, files and browser
+all stay local.
+
+## Ollama (alternative, fallback only)
+
+If you prefer Ollama instead of LM Studio, set in `.env`:
+
+```bash
+LLM_BASE_URL=http://localhost:11434/v1
+MODEL=<the model you pulled, e.g. qwen3.5 or llama3.1:8b>
+```
+
+then `ollama serve` and `ollama pull <model>`. LM Studio remains the
+default; Ollama is not required.
+
+## Configuration
+
+| Setting | Default | Notes |
+|---|---|---|
+| `LLM_BASE_URL` | `http://localhost:1234/v1` | LM Studio; Ollama fallback: `http://localhost:11434/v1` |
+| `MODEL` / `LLM_MODEL` | `qwen3.5` | Exact id shown in LM Studio; per-bot model overrides this in the UI |
+| `MOCK_MODE` | off | `1` or `--mock` to test without a model |
+| `PORT` | `8000` | `python app.py --port 8000` |
+| `HOST` | `127.0.0.1` | Local only by default |
+
+Copy `.env.example` to `.env` to set these persistently.
+
+## API (for scripts / curl)
+
+```
+GET  /health                    # status, provider, model, LM Studio reachability
+GET  /api/status                # {provider, llm_base_url, model, llm_reachable, lm_studio_reachable}
+GET  /api/templates
+GET  /api/models/available     # live probe: only models usable right now, grouped by source
+GET  /api/providers/{id}/models # live list for one provider (LM Studio/Ollama/VPS/…)
+GET  /api/vps/config           # VPS Premium base URL + token status (masked)
+GET  /api/vps/models           # premium models the VPS gateway offers
+GET  /api/tools
+GET  /api/bots                  # list bots
+POST /api/bots                  # {"name","instructions","model","template"}
+GET  /api/bots/{id}/chat
+POST /api/bots/{id}/chat        # {"message": "..."} -> {"reply","tools"}
+POST /api/bots/{id}/chat/reset
+GET  /api/bots/{id}/memory
+POST /api/bots/{id}/memory      # {"fact": "..."}
+GET  /screenshots/<file>        # browser screenshots
+```
+
+The status check probes `GET {LLM_BASE_URL}/models` and reports whether
+LM Studio (or the configured provider) is reachable.
+
+## Project layout
+
+```
+app.py                 FastAPI app + agent tool loop + LLM client (pathlib, cross-platform)
+static/index.html      Single-page UI: chat, Make a Bot, Library, Settings (no build step)
+static/logo.png        LocalBotz logo (also in assets/logo.png)
+assets/logo.png        LocalBotz logo for the GitHub repo / README
+templates.json         15 shipped bot templates (copied to data/templates.json)
+start.bat              Windows starter (venv + core deps, browser optional + run)
+start.sh               macOS/Linux starter (venv + core deps, browser optional + run)
+requirements.txt       Core only: fastapi, uvicorn, httpx (lightweight install)
+requirements-browser.txt  Optional: playwright (browser automation)
+server/                VPS Premium gateway (FastAPI): app.py, requirements.txt,
+                       Dockerfile, .env.example, README.md (SSH/Tailscale deploy)
+.env.example           LLM_BASE_URL / MODEL (qwen3.5) / VPS_BASE_URL + VPS_API_TOKEN /
+                       all optional provider API keys
+LICENSE                MIT — copyright Thomas
+CONTRIBUTING.md        How to contribute (no secrets in commits, local-first)
+SECURITY.md            How keys are protected, how to report a vulnerability
+workspace/             The ONLY folder bots can read/write (welcome.txt inside)
+data/                  bots.json, chats/, memory/, screenshots/, templates.json,
+                       settings.json, connectors.json, mcp_servers.json, skills.json,
+                       wallet.json, permissions.json, messaging.json, devices.json
+                       (created at runtime; .env holds keys, gitignored)
+```
+
+## Safety notes
+
+- Bots run with the tools above, but files are sandboxed to `./workspace`
+  and shell commands are allowlisted with shell metacharacters
+  (`; & | \` $ > <`) rejected and a 30 s timeout. File commands are
+  implemented in Python, so they cannot invoke a platform shell at all.
+- The server binds to `127.0.0.1` by default — only your computer can reach it.
+- Keep it that way if you connect messaging apps later; do not expose it
+  publicly without authentication.
+
+## What this is NOT (yet)
+
+Compared with AbacusAI Bot: no live WhatsApp/Telegram/Discord messaging
+(config + approved senders only, status Not connected), no live
+Gmail/Drive/Calendar connectors (config + setup instructions only), and
+no scheduled routines — a bot's schedule (e.g. `daily 07:00`) is stored
+and shown, but nothing runs it yet; bots run when you chat with them.
+MCP servers *are* in v1: add one in Library > MCP servers and Test really
+runs it (stdio JSON-RPC or HTTP `tools/list`) and lists its tools.
+Those gaps are the natural next steps — the bot/tool structure in `app.py`
+(`TOOLS`, `run_agent`) is where they would plug in.

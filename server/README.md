@@ -1,0 +1,219 @@
+# LocalBotz VPS Premium gateway
+
+A small FastAPI server that runs on **your VPS** and serves premium models
+(Claude Sonnet, GPT, Gemini) to LocalBotz clients over an OpenAI-compatible
+API — without any provider API key ever leaving the VPS.
+
+```
+LocalBotz app (your computer)                Your VPS
+  provider = "VPS Premium"      Bearer token   ┌─────────────────────┐
+  model = claude-sonnet-4-5 ───────────────►   │ Premium gateway      │
+  (no provider keys here)                      │  GET /v1/models      │
+                                               │  POST /v1/chat/...   │
+                                               │  ANTHROPIC_API_KEY   │
+                                               │  OPENAI_API_KEY      │
+                                               │  GEMINI_API_KEY      │
+                                               └─────────────────────┘
+```
+
+## Premium models
+
+Configured in `server/.env` as `PREMIUM_MODELS` (comma-separated).
+Default:
+
+| Model | Provider on the VPS |
+|---|---|
+| `claude-sonnet-4-5` | Anthropic (Claude Sonnet) |
+| `gpt-4o`, `gpt-4o-mini` | OpenAI (GPT) |
+| `gemini-2.5-flash`, `gemini-2.5-pro` | Google (Gemini) |
+| `deepseek-chat`, `deepseek-reasoner` | DeepSeek | Add to `PREMIUM_MODELS` + set `DEEPSEEK_API_KEY` |
+
+To add newer models, add their ids to `PREMIUM_MODELS` and restart:
+
+```bash
+PREMIUM_MODELS=claude-sonnet-4-5,gpt-4o,gpt-4o-mini,gpt-5,gemini-2.5-flash,gemini-2.5-pro
+```
+
+Routing is by model id prefix: `claude-*` → Anthropic, `gpt-*` → OpenAI,
+`gemini-*` → Google, `deepseek-*` → DeepSeek, anything else → OpenRouter
+(if `OPENROUTER_API_KEY` is set). A model is only offered if its provider key is configured on
+the VPS — otherwise the gateway returns a clear error naming the
+provider, not the key.
+
+## How users connect (client side)
+
+In the LocalBotz app: **Settings → Connectors → VPS Premium** — paste
+the gateway base URL and the token you issued them, then **List premium
+models**. Or in `.env`:
+
+```bash
+VPS_BASE_URL=https://YOUR-VPS/v1
+VPS_API_TOKEN=<the token you issued them>
+```
+
+Then pick provider **VPS Premium** per bot. The app fetches the model
+list live from the gateway, so users only see models the VPS actually
+offers. If the VPS is unreachable or the token is wrong, the app shows
+a clear error and falls back to the local model (LM Studio).
+
+## Setup on the VPS
+
+### 1. Get the files onto the VPS — two ways
+
+**A. SSH** (public VPS):
+
+```bash
+# From your computer (replace user@host with your VPS login):
+ssh user@host
+# On the VPS:
+git clone https://github.com/<username>/localbotz.git
+cd localbotz/server
+cp .env.example .env
+nano .env   # set PREMIUM_API_TOKEN + your provider keys (see below)
+```
+
+**B. Tailscale** (private, no public ports needed):
+
+```bash
+# Join the tailnet on both machines (install Tailscale, log in).
+# From your computer, reach the VPS by its tailnet name or 100.x IP:
+ssh user@<vps-tailnet-name>
+# Then the same steps as above: clone, cd localbotz/server, edit .env.
+```
+
+The deploy steps after this are identical for both paths. The only
+difference is how the gateway is reached afterwards:
+
+- **Public premium access:** bind to `127.0.0.1` and put nginx + HTTPS
+  in front (section 3). Users connect to `https://YOUR-VPS/v1`.
+- **Private (tailnet-only) access:** bind to the VPS's Tailscale IP
+  (`HOST=<100.x IP>` in `.env`) and skip nginx entirely. Only devices
+  on your tailnet can reach it — no public exposure at all.
+
+### 2. Configure `.env`
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+- `PREMIUM_API_TOKEN` — a long random token **you** issue to users.
+  Generate one: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`.
+  This is not a provider key and cannot be used anywhere else.
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
+  `OPENROUTER_API_KEY` — your provider keys, only in this file, only
+  on this VPS. Fill in the ones for the models in `PREMIUM_MODELS`.
+- `PREMIUM_MODELS` — the list above; add newer model ids here.
+
+### 3. Run it
+
+**systemd (recommended for always-on):**
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+Create `/etc/systemd/system/localbotz-gateway.service`:
+
+```ini
+[Unit]
+Description=LocalBotz VPS Premium gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=localbotz
+WorkingDirectory=/home/localbotz/localbotz/server
+EnvironmentFile=/home/localbotz/localbotz/server/.env
+ExecStart=/home/localbotz/localbotz/server/.venv/bin/python app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now localbotz-gateway
+sudo systemctl status localbotz-gateway
+curl http://127.0.0.1:8001/health
+```
+
+**Docker:**
+
+```bash
+docker build -t localbotz-gateway .
+docker run -d --name localbotz-gateway --restart unless-stopped \
+  --env-file .env -p 127.0.0.1:8001:8001 localbotz-gateway
+```
+
+The image does **not** contain `.env` — pass it with `--env-file`
+(or `-e PREMIUM_API_TOKEN=... -e ANTHROPIC_API_KEY=...`).
+
+### 4. Public HTTPS with nginx + Let's Encrypt (only for public access)
+
+If you want users outside your tailnet to use the premium models,
+put nginx in front. The gateway itself stays on `127.0.0.1:8001`.
+
+`/etc/nginx/sites-available/localbotz`:
+
+```nginx
+server {
+    listen 80;
+    server_name YOUR-VPS;  # e.g. premium.example.com
+
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Keep long model replies alive:
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/localbotz /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d YOUR-VPS   # Let's Encrypt HTTPS
+```
+
+Users then set `VPS_BASE_URL=https://YOUR-VPS/v1` in the app.
+For tailnet-only access, skip this section and use the Tailscale IP.
+
+## API
+
+| Endpoint | Auth | What it does |
+|---|---|---|
+| `GET /health` | none | `{"status":"ok", ...}` — uptime check, no keys |
+| `GET /v1/models` | Bearer token | The configured premium models |
+| `POST /v1/chat/completions` | Bearer token | OpenAI-compatible chat, routed to the right provider |
+
+Requests without a token get `401`; a wrong token gets `401`; a
+model that isn't configured gets `400` listing what is available;
+a missing provider key on the VPS gets `502` naming the provider
+(never the key). Streaming (`stream: true`) is not supported yet.
+
+## Usage logging
+
+Every completed chat is appended to `usage.log` (JSON lines):
+timestamp, a SHA-256 hash prefix of the token (never the token
+itself), model, provider, input/output tokens. No message content
+and no provider keys are ever logged. Rotate it if it grows:
+`logrotate` or just `> usage.log` when the gateway is stopped.
+
+## Security notes
+
+- Keep `.env` readable only by the service user: `chmod 600 .env`.
+- Never commit `.env`, never paste provider keys into the client app,
+  a chat, or a screenshot.
+- Rotate `PREMIUM_API_TOKEN` if it leaks: change it in `.env`,
+  restart the gateway, and issue the new token to your users.
+- Tool use through the gateway is best-effort for Claude: tool calls
+  are translated to/from Anthropic's format in `app.py`, but a model
+  that does not support tools returns plain text.

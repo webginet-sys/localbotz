@@ -1,0 +1,6 @@
+# Local Bot — browser automation (optional).
+# Install with: pip install -r requirements-browser.txt
+# Then: playwright install chromium
+# Without this, the app still runs; browser tools reply with a clear
+# "Playwright is not installed" message instead of crashing.
+playwright>=1.48

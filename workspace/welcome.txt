@@ -1,0 +1,4 @@
+Welcome to your Local Bot workspace.
+Bots can only read/write files inside this folder (./workspace).
+Try asking your bot: "List the files in my workspace" or
+"Write a short note to workspace/notes.txt".

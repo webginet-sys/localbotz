@@ -1,0 +1,28 @@
+# Secrets — never commit these
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Runtime data (created on first run; seeded from templates.json)
+data/*
+!data/.gitkeep
+
+# Playwright browsers (large, downloaded by `playwright install chromium`)
+# Uncomment if you want to keep browser binaries out of a shared cache:
+# .cache/ms-playwright/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
