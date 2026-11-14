@@ -9,6 +9,8 @@ history and memory file. The agent can search the web, drive a real browser
 (Playwright/Chromium), read/write files in `./workspace`, and run safe shell
 commands — driven by a downloaded local model in **LM Studio**.
 
+> **MIT licensed and built in the open.** [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).
+
 ## Download — for everyone
 
 **You do not need to know how to use a terminal.** If you have never
@@ -630,3 +632,7 @@ MCP servers *are* in v1: add one in Library > MCP servers and Test really
 runs it (stdio JSON-RPC or HTTP `tools/list`) and lists its tools.
 Those gaps are the natural next steps — the bot/tool structure in `app.py`
 (`TOOLS`, `run_agent`) is where they would plug in.
+
+---
+
+MIT licensed and built in the open. [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).

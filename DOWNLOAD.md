@@ -85,3 +85,7 @@ start.bat         # Windows
 See [README.md](README.md) for the full guide, and [download.html](download.html) for the same instructions as a web page.
 
 Support: https://github.com/webginet-sys/localbotz/issues
+
+---
+
+MIT licensed and built in the open. Read the code, run it from source, or send a pull request: https://github.com/webginet-sys/localbotz/pulls
