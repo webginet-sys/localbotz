@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your account — LocalBotz</title>
+<style>
+  :root {
+    --bg: #0e1113; --panel: #16191c; --panel2: #1d2125; --line: #2a2f34;
+    --ink: #f2f4f5; --muted: #9aa4ab; --teal: #2dd4bf; --teal-dark: #0d9488;
+    --gold: #f5c542; --green: #34d399; --red: #f87171; --radius: 14px;
+  }
+  body.light {
+    --bg: #f6f8f7; --panel: #ffffff; --panel2: #f0f4f3; --line: #dfe9e7;
+    --ink: #1f2a30; --muted: #5b6b72;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.55; }
+  a { color: var(--teal); }
+  .shell { display: flex; min-height: 100vh; }
+  /* Sidebar */
+  aside { width: 248px; flex: none; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 14px; position: sticky; top: 0; height: 100vh; }
+  aside .logo { font-weight: 800; letter-spacing: .14em; color: var(--teal); font-size: 15px; padding: 4px 10px 0; }
+  aside .logo small { display: block; letter-spacing: 0; color: var(--muted); font-weight: 500; font-size: 12px; margin-top: 2px; }
+  aside .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 22px 10px 8px; }
+  aside nav a { display: block; padding: 9px 10px; border-radius: 9px; color: var(--ink); text-decoration: none; font-size: 15px; margin: 1px 0; }
+  aside nav a:hover { background: var(--panel2); }
+  aside nav a.active { background: var(--panel2); font-weight: 700; }
+  aside .user { margin-top: auto; border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 10px; align-items: center; }
+  aside .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--teal-dark); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex: none; }
+  aside .user .who { min-width: 0; }
+  aside .user .who b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  aside .user .who span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  /* Main */
+  main { flex: 1; min-width: 0; padding: 0 28px 60px; }
+  header.top { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  header.top .crumb { color: var(--muted); font-size: 14px; }
+  header.top .crumb b { color: var(--ink); }
+  header.top .spacer { flex: 1; }
+  header.top button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; cursor: pointer; font-size: 14px; }
+  .page { display: none; max-width: 1060px; }
+  .page.active { display: block; }
+  h1 { font-size: 30px; margin: 26px 0 4px; }
+  h1 .hl { border-bottom: 5px solid var(--gold); }
+  h2 { font-size: 21px; margin: 38px 0 6px; }
+  p.sub { color: var(--muted); font-size: 16px; margin: 0 0 18px; }
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .toggle button { background: transparent; color: var(--muted); border: 0; padding: 8px 16px; cursor: pointer; font-size: 14px; font-weight: 700; }
+  .toggle button.on { background: var(--ink); color: var(--bg); }
+  .plans { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-top: 18px; }
+  @media (max-width: 900px) { .plans { grid-template-columns: 1fr; } aside { display: none; } }
+  .plan { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; position: relative; }
+  .plan.hot { border-color: var(--gold); }
+  .badge { position: absolute; top: 16px; right: 16px; font-size: 12px; font-weight: 700; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .badge.gold { background: var(--gold); color: #231f00; border-color: var(--gold); }
+  .badge.green { background: var(--green); color: #06281c; border-color: var(--green); }
+  .plan h3 { font-size: 20px; margin: 0 0 4px; }
+  .plan .price { font-size: 34px; font-weight: 800; margin: 8px 0 2px; }
+  .plan .price small { font-size: 15px; font-weight: 500; color: var(--muted); }
+  .plan .was { color: var(--muted); text-decoration: line-through; margin-right: 8px; }
+  .plan ul { margin: 14px 0; padding-left: 20px; color: var(--muted); }
+  .plan ul li { margin: 7px 0; }
+  .plan ul li b { color: var(--ink); }
+  .btn { display: inline-block; background: var(--gold); color: #231f00; border: 0; border-radius: 999px; padding: 13px 22px; font-size: 16px; font-weight: 700; cursor: pointer; text-decoration: none; text-align: center; width: 100%; margin-top: 10px; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn.teal { background: var(--teal-dark); color: #fff; }
+  .fine { font-size: 13px; color: var(--muted); margin-top: 14px; display: flex; gap: 22px; flex-wrap: wrap; }
+  .fine span::before { content: "✓ "; color: var(--green); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-top: 18px; }
+  .card h3 { margin: 0 0 4px; font-size: 18px; }
+  .card p { color: var(--muted); margin: 4px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .feat { display: flex; gap: 12px; margin: 14px 0; }
+  .feat .ic { flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--panel2); display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .feat b { display: block; }
+  .feat span { color: var(--muted); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  th { color: var(--muted); font-weight: 600; }
+  .road { display: flex; gap: 0; margin: 22px 0 6px; overflow-x: auto; padding-bottom: 8px; }
+  .road .stop { flex: 1; min-width: 110px; border-top: 2px solid var(--teal-dark); padding: 10px 10px 0 0; position: relative; font-size: 13px; }
+  .road .stop::before { content: ""; position: absolute; top: -7px; left: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--teal-dark); }
+  .road .stop.next { border-top-style: dashed; border-top-color: var(--muted); }
+  .road .stop.next::before { background: transparent; border: 2px dashed var(--muted); }
+  .road .stop b { display: block; font-size: 14px; }
+  .road .stop .when { color: var(--muted); }
+  .road .stop .here { display: inline-block; background: var(--green); color: #06281c; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+  label { display: block; font-weight: 700; margin: 14px 0 4px; }
+  input, select { width: 100%; padding: 11px; border: 1px solid var(--line); border-radius: 10px; font-size: 16px; background: var(--panel2); color: var(--ink); }
+  .note { color: var(--muted); font-size: 14px; }
+  .code { font-size: 34px; letter-spacing: .35em; font-weight: 800; text-align: center; background: var(--panel2); border-radius: 12px; padding: 14px; margin: 14px 0; }
+  .danger { border-color: #7f1d1d !important; }
+  .danger h3 { color: var(--red); }
+  footer { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 16px; color: var(--muted); font-size: 14px; display: flex; gap: 22px; flex-wrap: wrap; }
+  .msg { margin-top: 12px; font-size: 14px; }
+  .msg.err { color: var(--red); }
+  .msg.ok { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="logo">LOCALBOTZ<small>Your account</small></div>
+    <div class="label">Your account</div>
+    <nav id="nav">
+      <a href="#home" data-page="home" class="active">🏠 Home</a>
+      <a href="#licence" data-page="licence">🔑 Licence</a>
+      <a href="#plan" data-page="plan">📋 Plan</a>
+      <a href="#payments" data-page="payments">💳 Payments</a>
+      <a href="#signincode" data-page="signincode">🔐 Sign in code</a>
+      <a href="#settings" data-page="settings">⚙️ Settings</a>
+    </nav>
+    <div class="user">
+      <div class="avatar" id="avatar">LB</div>
+      <div class="who"><b id="who-name">…</b><span id="who-email">…</span></div>
+    </div>
+  </aside>
+  <main>
+    <header class="top">
+      <span class="crumb">Your account &nbsp;›&nbsp; <b id="crumb">Home</b></span>
+      <span class="spacer"></span>
+      <button onclick="toggleTheme()" title="Switch light / dark theme">☀️ Theme</button>
+      <button onclick="location.href='/logout'">↪ Sign out</button>
+    </header>
+
+    <!-- HOME -->
+    <section class="page active" id="page-home">
+      <h1>Let your agents work <span class="hl">all month</span></h1>
+      <p class="sub">LocalBotz is free to download and run. You only pay when you want premium models or a machine in the cloud.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <span class="note" id="plan-now"></span>
+        <span class="toggle" id="billing-toggle">
+          <button class="on" onclick="setBilling('monthly',this)">Monthly</button>
+          <button onclick="setBilling('yearly',this)">Yearly · save 2 months</button>
+        </span>
+      </div>
+      <div class="plans" id="plans-home"></div>
+      <div class="fine">
+        <span>Renews each month until you cancel. Cancel any time.</span>
+        <span>Premium usage is metered to your workspace — no subscription needed.</span>
+        <span>Payments are metered by the server owner. No card is stored here.</span>
+      </div>
+
+      <h2>What you get in Premium</h2>
+      <p class="sub">Your agents work as a company on your machine.</p>
+      <div class="card"><div class="grid2">
+        <div class="feat"><div class="ic">∞</div><div><b>Pay as you go</b><span>No monthly fee. Premium models are metered per 1M tokens, at the live prices below.</span></div></div>
+        <div class="feat"><div class="ic">🔌</div><div><b>Integrations</b><span>25 popular connectors, MCP servers and skills, wired to your agents.</span></div></div>
+        <div class="feat"><div class="ic">🏢</div><div><b>Your office team</b><span>A boss and an AI team with shared memory, working together on your computer.</span></div></div>
+        <div class="feat"><div class="ic">⚡</div><div><b>Persistent agents</b><span>Agents that pick up tasks on their own and report back while you're away.</span></div></div>
+      </div></div>
+
+      <h2>What you get in Cloud Office</h2>
+      <p class="sub">Everything in Premium, on a computer that never sleeps.</p>
+      <div class="card"><div class="grid2">
+        <div class="feat"><div class="ic">✓</div><div><b>Everything in Premium</b><span>Metered premium models, integrations, office team and persistent agents.</span></div></div>
+        <div class="feat"><div class="ic">🖥️</div><div><b>An always-on computer</b><span>Your agents run on it 24/7, on a machine we run for you.</span></div></div>
+        <div class="feat"><div class="ic">☁️</div><div><b>It keeps going while your laptop is shut</b><span>Your office works day and night, and messages the agents on your computer.</span></div></div>
+      </div></div>
+
+      <h2>Roadmap</h2>
+      <p class="sub">From our first launch to where we are, and what comes next.</p>
+      <div class="card"><div class="road" id="roadmap"></div>
+      <p style="margin-top:18px">✨ <b>Team LocalBotz is continuously building</b> — the app, the gateway and the office, out in the open, every day.</p></div>
+
+      <div class="grid2">
+        <div class="card"><h3>⬇️ Download</h3><p id="dl-ver">Version 0.3.0 of LocalBotz.</p>
+          <p><a class="btn teal" href="https://github.com/webginet-sys/localbotz/archive/refs/heads/main.zip">Download for Windows / Mac / Linux</a></p>
+          <p class="note">Free forever, with no account needed to install and run. One ZIP, one install step.</p></div>
+        <div class="card"><h3>🛟 Support</h3><p>Stuck, or something looks wrong? Open an issue and we'll help.</p>
+          <p><a class="btn ghost" href="https://github.com/webginet-sys/localbotz/issues">Open an issue on GitHub</a></p>
+          <p class="note">For billing, include your workspace id — it's on your Licence page.</p></div>
+      </div>
+    </section>
+
+    <!-- LICENCE -->
+    <section class="page" id="page-licence">
+      <h1>Your licence</h1>
+      <p class="sub">Your workspace and premium access on this server.</p>
+      <div class="card" id="licence-card"><p>Loading…</p></div>
+    </section>
+
+    <!-- PLAN -->
+    <section class="page" id="page-plan">
+      <h1>Your plan</h1>
+      <p class="sub">Choose the plan that fits how you work.</p>
+      <div style="display:flex;justify-content:flex-end;">
+        <span class="toggle" id="billing-toggle-2">
+          <button class="on" onclick="setBilling('monthly',this)">Monthly</button>
+          <button onclick="setBilling('yearly',this)">Yearly · save 2 months</button>
+        </span>
+      </div>
+      <div class="plans" id="plans-plan"></div>
+
+      <h2>Cloud Office — choose the machine</h2>
+      <p class="sub">The machine that runs your agents in the cloud.</p>
+      <div class="card">
+        <label>Machine</label>
+        <select id="machine">
+          <option value="2|8">2 vCPU · 8 GB RAM — the machine this server runs on</option>
+          <option value="4|8">4 vCPU · 8 GB RAM</option>
+          <option value="8|16">8 vCPU · 16 GB RAM</option>
+        </select>
+        <label>Disk</label>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn ghost" style="width:auto;margin:0;" onclick="diskStep(-100)">−</button>
+          <b id="disk-val" style="min-width:80px;text-align:center;">100 GB</b>
+          <button class="btn ghost" style="width:auto;margin:0;" onclick="diskStep(100)">+</button>
+          <span class="note">Larger machines and disks are priced by the server owner.</span>
+        </div>
+        <p id="max-price" style="margin-top:16px;"></p>
+        <p><button class="btn" style="width:auto;" onclick="chooseMax()">Choose Cloud Office</button></p>
+        <p class="note" id="max-note"></p>
+      </div>
+
+      <h2>Free vs Premium</h2>
+      <p class="sub">Everything in Free, and much more.</p>
+      <div class="card"><table>
+        <tr><th></th><th>Free</th><th>Premium</th><th>Cloud Office</th></tr>
+        <tr><td>Local model (LM Studio / Qwen3.5)</td><td>✓ Unlimited</td><td>✓ Unlimited</td><td>✓ Unlimited</td></tr>
+        <tr><td>Premium models (Claude, GPT, Gemini, DeepSeek)</td><td>—</td><td>✓ Metered</td><td>✓ Metered</td></tr>
+        <tr><td>Bots and office team</td><td>✓ Unlimited</td><td>✓ Unlimited</td><td>✓ Unlimited</td></tr>
+        <tr><td>Connectors, MCP servers, skills</td><td>✓ 25 connectors</td><td>✓ 25 connectors</td><td>✓ 25 connectors</td></tr>
+        <tr><td>Agents work while your computer sleeps</td><td>—</td><td>—</td><td>✓ Always on</td></tr>
+        <tr><td>Your data stays local</td><td>✓</td><td>✓</td><td>✓</td></tr>
+      </table></div>
+
+      <h2>Included in every plan</h2>
+      <p class="sub">Every plan comes with the LocalBotz app, and it works the same on all of them.</p>
+      <div class="card"><div class="grid2">
+        <div class="feat"><div class="ic">💳</div><div><b>No credit card needed</b><span>LocalBotz is free to download and run. You only pay when you want more.</span></div></div>
+        <div class="feat"><div class="ic">💻</div><div><b>Works on your machine</b><span>Windows, Mac and Linux. One ZIP, one install step.</span></div></div>
+        <div class="feat"><div class="ic">🔒</div><div><b>Your data stays local</b><span>Your agents run on your machine, and your files stay yours.</span></div></div>
+        <div class="feat"><div class="ic">🚪</div><div><b>Cancel any time</b><span>No lock-in, and your Free plan stays when you cancel.</span></div></div>
+      </div></div>
+
+      <h2>Teams</h2>
+      <div class="card"><p><b>Work together on shared workspaces and agents.</b></p>
+      <p id="teams-line">Loading…</p>
+      <p><a class="btn ghost" style="width:auto;" href="http://localhost:8000/">Open the app</a></p></div>
+
+      <h2>Receipts</h2>
+      <div class="card"><p><b>All your receipts in one place.</b></p><div id="receipts-plan"><p>Loading…</p></div></div>
+    </section>
+
+    <!-- PAYMENTS -->
+    <section class="page" id="page-payments">
+      <h1>Payments</h1>
+      <p class="sub">Your premium usage and receipts.</p>
+      <div class="card" id="payments-card"><p>Loading…</p></div>
+    </section>
+
+    <!-- SIGN IN CODE -->
+    <section class="page" id="page-signincode">
+      <h1>Sign in code</h1>
+      <p class="sub">Sign in to the app.</p>
+      <div class="card">
+        <p>When LocalBotz asks you to sign in, make a code here and paste it into the app — Settings → Connectors → VPS Premium → Sign in with a code. The code works once and expires in 10 minutes.</p>
+        <p><button class="btn teal" style="width:auto;" onclick="makeCode()">Make a sign-in code</button></p>
+        <div id="code-out"></div>
+        <p class="msg" id="code-msg"></p>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="page" id="page-settings">
+      <h1>Settings</h1>
+      <p class="sub">Your account, appearance and session.</p>
+      <div class="card"><h3>Signed in as</h3><p id="settings-who">Loading…</p>
+        <p class="note">You sign in with this account here and in the app.</p></div>
+      <div class="card"><h3>Appearance</h3><p>Remembered in this browser only.</p>
+        <p><button class="btn ghost" style="width:auto;" onclick="toggleTheme()">Switch light / dark theme</button></p></div>
+      <div class="card"><h3>Session</h3><p>Signing out ends this browser session. Your workspace and the app on your machine stay as they are.</p>
+        <p><button class="btn ghost" style="width:auto;" onclick="location.href='/logout'">Sign out</button></p></div>
+      <div class="card danger"><h3>Delete account</h3>
+        <p>Delete your account and what we hold about you. You are signed out everywhere, and it cannot be undone. Your premium token stops working at once. Usage records are kept without your name, for as long as the server owner needs them.</p>
+        <p><button class="btn ghost" style="width:auto;color:var(--red);border-color:var(--red);" onclick="deleteAccount()">Delete account</button></p>
+        <p class="msg err" id="del-msg"></p></div>
+    </section>
+
+    <footer>
+      <a href="https://github.com/webginet-sys/localbotz">GitHub</a>
+      <a href="https://localbotz.io/">localbotz.io</a>
+      <span>LocalBotz — free, open, and yours.</span>
+    </footer>
+  </main>
+</div>
+<script>
+let ACCT = null, PRICING = null, BILLING = 'monthly', DISK = 100;
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function money(n){ return '$' + Number(n).toFixed(2); }
+function cloudPrice(){
+  if (!PRICING || !PRICING.plans || PRICING.plans.cloud_office_monthly_usd == null) return null;
+  const m = Number(PRICING.plans.cloud_office_monthly_usd);
+  return BILLING === 'yearly' ? { per: m*10/12, billed: m*10, label: 'a month, billed once a year' }
+                              : { per: m, billed: m, label: 'a month' };
+}
+function planCardsHTML(){
+  const cp = cloudPrice();
+  const premRows = (PRICING ? PRICING.models : []).map(m=>'<li><b>'+esc(m.id)+'</b> — '+money(m.per_1m_input_usd)+' in / '+money(m.per_1m_output_usd)+' out, per 1M tokens</li>').join('');
+  const cloudPriceHTML = cp
+    ? '<div class="price">'+money(cp.per)+' <small>'+esc(cp.label)+'</small></div>' + (BILLING==='yearly' ? '<div class="note">'+money(cp.billed)+' billed once a year — 2 months free.</div>' : '')
+    : '<div class="price">— <small>price not set yet</small></div><div class="note">The server owner sets it in the admin panel.</div>';
+  const freeCard = '<div class="plan"><span class="badge">Your plan now</span><h3>Free</h3>'
+    + '<div class="price">$0 <small>a month</small></div>'
+    + '<p><b>Your local model, unlimited, on your computer.</b></p>'
+    + '<ul><li>Local model (LM Studio / Qwen3.5) — <b>unlimited</b></li><li>Unlimited bots and office team</li><li>25 connectors, MCP servers, skills</li><li>Your data stays on your computer</li></ul>'
+    + '<a class="btn ghost" href="https://github.com/webginet-sys/localbotz/archive/refs/heads/main.zip">Download LocalBotz</a></div>';
+  const premCard = '<div class="plan hot"><span class="badge gold">Recommended</span><h3>Premium</h3>'
+    + '<div class="price">Pay as you go</div>'
+    + '<p><b>Your agents work all month — pay only for what you use.</b></p>'
+    + '<ul>' + (premRows || '<li>Premium models, metered per 1M tokens</li>') + '</ul>'
+    + '<a class="btn" href="#plan" onclick="showPage(\'plan\');return false;">Use premium models</a>'
+    + '<p class="note" style="margin-top:10px">No monthly fee. Pick a premium model in the app and it is metered to your workspace.</p></div>';
+  const cloudCard = '<div class="plan"><span class="badge green">● Always on</span><h3>Cloud Office</h3>'
+    + cloudPriceHTML
+    + '<p><b>Your office on our computer, day and night.</b></p>'
+    + '<ul><li>Everything in Premium, with no monthly fee on top of usage</li><li>Agents work while your computer sleeps</li><li>A Cloud Office of your own: 2 vCPU, 8 GB memory, 100 GB disk</li><li>Its own always-on computer, in the cloud</li></ul>'
+    + '<a class="btn" href="#plan" onclick="showPage(\'plan\');return false;">Configure Cloud Office</a></div>';
+  return freeCard + premCard + cloudCard;
+}
+function renderPlans(){
+  $('plans-home').innerHTML = planCardsHTML();
+  $('plans-plan').innerHTML = planCardsHTML();
+  const cp = cloudPrice();
+  $('max-price').innerHTML = cp
+    ? 'Your Cloud Office is <b>'+money(cp.per)+' '+esc(cp.label)+'</b>' + (BILLING==='yearly' ? ' ('+money(cp.billed)+' billed once a year).' : ', and renews every month until you cancel.')
+    : '<b>Cloud Office is not priced yet.</b> The server owner sets the monthly price in the admin panel.';
+  $('max-note').textContent = cp ? 'Pick the machine and the disk, then confirm on the next step.' : 'Until a price is set, the Cloud Office cannot be bought from this panel.';
+}
+function setBilling(mode, btn){
+  BILLING = mode;
+  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.toggle').forEach(t=>{
+    const btns = t.querySelectorAll('button');
+    btns[0].classList.toggle('on', mode==='monthly');
+    btns[1].classList.toggle('on', mode==='yearly');
+  });
+  renderPlans();
+}
+function diskStep(d){ DISK = Math.max(100, Math.min(1000, DISK + d)); $('disk-val').textContent = DISK + ' GB'; }
+function chooseMax(){
+  const cp = cloudPrice();
+  $('max-note').textContent = cp
+    ? 'Cloud Office (' + $('machine').value.replace('|', ' vCPU · ') + ' RAM, ' + DISK + ' GB disk) at ' + money(cp.per) + ' ' + cp.label + ' — the server owner will confirm your order. For now, this panel only records your choice.'
+    : 'Cloud Office is not priced yet — the server owner sets the monthly price in the admin panel first.';
+}
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  try { localStorage.setItem('lb-theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch(e){}
+}
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $('page-'+name).classList.add('active');
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active', a.dataset.page===name));
+  $('crumb').textContent = name.charAt(0).toUpperCase() + name.slice(1).replace('signincode','Sign in code');
+  try { history.replaceState(null, '', '#'+name); } catch(e){}
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('#nav a').forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); showPage(a.dataset.page); }));
+function initials(name){
+  const parts = String(name||'').trim().split(/\s+/);
+  return ((parts[0]||'L')[0] + (parts[1] ? parts[1][0] : 'B')).toUpperCase();
+}
+function receiptsHTML(list){
+  if (!list || !list.length) return '<p>Nothing paid yet.</p><p class="note">When you use premium models, your usage will show here.</p>';
+  return '<table><tr><th>Date</th><th>Requests</th><th>Tokens in / out</th><th>Cost</th></tr>'
+    + list.map(r=>'<tr><td>'+esc(r.date)+'</td><td>'+r.requests+'</td><td>'+r.input_tokens+' / '+r.output_tokens+'</td><td>'+money(r.cost_usd)+'</td></tr>').join('') + '</table>';
+}
+async function load(){
+  if (localStorage.getItem('lb-theme') === 'light') document.body.classList.add('light');
+  const r = await fetch('/api/account');
+  if (!r.ok) { location.href = '/login'; return; }
+  ACCT = await r.json();
+  PRICING = await (await fetch('/v1/pricing')).json();
+  $('who-name').textContent = ACCT.name || 'LocalBotz user';
+  $('who-email').textContent = ACCT.email || '';
+  $('avatar').textContent = initials(ACCT.name);
+  $('plan-now').textContent = 'You are on the Free plan — your local model is unlimited.';
+  $('licence-card').innerHTML =
+    '<h3>Your workspace</h3>'
+    + '<p>Workspace <code>'+esc(ACCT.workspace_id)+'</code> · Plan: <b>'+esc(ACCT.plan)+'</b> · Status: <b>'+esc(ACCT.status||'active')+'</b></p>'
+    + '<p>Member since ' + esc((ACCT.created||'').slice(0,10)) + ' · ' + esc(ACCT.email) + '</p>'
+    + '<p>Premium requests so far: <b>'+ACCT.usage.requests+'</b> · Spend so far: <b>'+money(ACCT.usage.cost_usd)+'</b></p>'
+    + '<p>Your premium token is saved in the LocalBotz app under Settings → Connectors → VPS Premium. Lost it? Make a sign-in code instead, or ask the server owner for a new token.</p>'
+    + '<p><a class="btn ghost" style="width:auto;" href="#plan" onclick="showPage(\'plan\');return false;">See plans</a></p>';
+  $('teams-line').textContent = 'You have 1 workspace (' + ACCT.workspace_id + ') on this server. Invite people to your office from the app.';
+  $('receipts-plan').innerHTML = receiptsHTML(ACCT.receipts);
+  $('payments-card').innerHTML = '<p><b>Premium spend so far: '+money(ACCT.usage.cost_usd)+'</b> across '+ACCT.usage.requests+' requests.</p>' + receiptsHTML(ACCT.receipts)
+    + '<p class="note">Premium usage is metered to your workspace. The server owner bills you — no card is stored here.</p>';
+  $('settings-who').textContent = (ACCT.name||'') + ' — ' + (ACCT.email||'') + ' · workspace ' + ACCT.workspace_id;
+  $('roadmap').innerHTML = [
+    ['14 Nov 2026','LocalBotz v0.2.0','First working clone'],
+    ['14 Nov 2026','VPS gateway live','api.localbotz.io'],
+    ['14 Nov 2026','Pricing + admin','Price list & revenue'],
+    ['14 Nov 2026','Office + agents','AI team, persistent agents'],
+    ['14 Nov 2026','Sign-in portal','Login, plan, WhatsApp'],
+    ['14 Nov 2026','User panel','This panel','here'],
+    ['Up next','WhatsApp webhook','Bot answers on WhatsApp'],
+    ['Up next','Cloud Office','Rent a computer from us'],
+    ['Up next','Schedules','Routines that run on their own']
+  ].map(s=>'<div class="stop'+(s[2]==='here'?'':'')+(s[0]==='Up next'?' next':'')+'"><span class="when">'+esc(s[0])+'</span><b>'+esc(s[1])+'</b>'+esc(s[2]==='here'?'':s[2])+(s[2]==='here'?'<span class="here">We are here</span>':'')+'</div>').join('');
+  renderPlans();
+  const h = (location.hash||'#home').slice(1);
+  if (['home','licence','plan','payments','signincode','settings'].includes(h)) showPage(h);
+}
+async function makeCode(){
+  $('code-msg').textContent = '';
+  const r = await fetch('/api/signin-code', {method:'POST'});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { $('code-msg').textContent = d.detail || 'Could not make a code.'; $('code-msg').className = 'msg err'; return; }
+  $('code-out').innerHTML = '<div class="code">'+esc(d.code)+'</div><p class="note" style="text-align:center;">Works once, expires in 10 minutes. Paste it into the app.</p>';
+  $('code-msg').textContent = 'Code ready.';
+  $('code-msg').className = 'msg ok';
+}
+async function deleteAccount(){
+  if (!confirm('Delete your LocalBotz account? This cannot be undone. Your premium token stops working at once.')) return;
+  const r = await fetch('/api/delete-account', {method:'POST'});
+  if (r.ok) { location.href = '/login'; return; }
+  const d = await r.json().catch(()=>({}));
+  $('del-msg').textContent = d.detail || 'Could not delete the account.';
+}
+load();
+</script>
+</body>
+</html>

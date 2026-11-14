@@ -81,7 +81,8 @@ def _load_pricing():
         pass
     return {"currency": "USD",
             "per_model": {m: {"per_1m_input_usd": pin, "per_1m_output_usd": pout}
-                          for m, (pin, pout) in DEFAULT_PRICING_USD_PER_1M.items()}}
+                          for m, (pin, pout) in DEFAULT_PRICING_USD_PER_1M.items()},
+            "plans": {"cloud_office_monthly_usd": None}}
 
 def _save_pricing(d):
     PRICING_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -250,6 +251,7 @@ def public_pricing():
                         "per_1m_input_usd": (pricing["per_model"].get(m) or {}).get("per_1m_input_usd", 0.0),
                         "per_1m_output_usd": (pricing["per_model"].get(m) or {}).get("per_1m_output_usd", 0.0)}
                        for m in PREMIUM_MODELS],
+            "plans": pricing.get("plans", {"cloud_office_monthly_usd": None}),
             "note": "Prices are USD per 1M tokens. Local models are always free."}
     return {"object": "list",
             "data": [{"id": m, "object": "model", "created": 0,
@@ -559,17 +561,37 @@ async def login(request: Request):
 
 @app.get("/account")
 def account_page(request: Request):
-    from fastapi.responses import HTMLResponse, RedirectResponse
+    from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
     if not _session_user(request):
         return RedirectResponse("/login", status_code=302)
+    page = BASE_DIR / "account.html"
+    if page.exists():
+        return FileResponse(page, media_type="text/html")
     return HTMLResponse(ACCOUNT_PAGE)
+
+def _receipts_for(workspace_id: str):
+    per_day = {}
+    for e in _load_usage():
+        if e.get("workspace_id") != workspace_id:
+            continue
+        day = datetime.fromtimestamp(int(e.get("ts") or 0), timezone.utc).date().isoformat()
+        d = per_day.setdefault(day, {"date": day, "requests": 0, "input_tokens": 0,
+                                     "output_tokens": 0, "cost_usd": 0.0})
+        d["requests"] += 1
+        d["input_tokens"] += int(e.get("input_tokens") or 0)
+        d["output_tokens"] += int(e.get("output_tokens") or 0)
+        d["cost_usd"] = round(d["cost_usd"] + float(e.get("cost_usd") or 0.0), 4)
+    return sorted(per_day.values(), key=lambda d: d["date"], reverse=True)[:60]
 
 @app.get("/api/account")
 def account_api(request: Request):
     user = _require_session(request)
     return {"workspace_id": user.get("workspace_id"), "name": user.get("name"),
             "email": user.get("email"), "plan": "Free",
+            "status": user.get("status", "active"),
+            "created": user.get("created", ""),
             "usage": _usage_for(user.get("workspace_id", "")),
+            "receipts": _receipts_for(user.get("workspace_id", "")),
             "whatsapp_number": user.get("whatsapp") or "",
             "premium_models": PREMIUM_MODELS}
 
@@ -609,6 +631,79 @@ async def whatsapp_start(request: Request):
                 "note": "WhatsApp chat is not set up on this server yet (WHATSAPP_BOT_NUMBER is not set)."}
     text = _urlquote("Hi LocalBotz, I'm " + user.get("workspace_id", "") + " — let's chat.")
     return {"wa_url": "https://wa.me/" + WHATSAPP_BOT_NUMBER + "?text=" + text}
+
+# ---------- sign-in codes -------------------------------------------------
+# Panel page "Sign in code": a signed-in user makes a 6-digit code (valid
+# 10 minutes, one use). The LocalBotz app exchanges it for the user's
+# token — the gateway only stores the token's hash, so exchanging mints a
+# FRESH token for that workspace and the old one stops working. The app
+# saves the new token automatically.
+SIGNIN_CODES_FILE = BASE_DIR / "data" / "signin_codes.json"
+
+def _load_signin_codes():
+    try:
+        data = json.loads(SIGNIN_CODES_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _save_signin_codes(codes):
+    SIGNIN_CODES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SIGNIN_CODES_FILE.write_text(json.dumps(codes, indent=2), encoding="utf-8")
+
+@app.post("/api/signin-code")
+def make_signin_code(request: Request):
+    user = _require_session(request)
+    code = str(secrets.randbelow(900000) + 100000)
+    codes = [c for c in _load_signin_codes() if int(c.get("expires", 0)) > int(time.time())]
+    codes.append({"code_hash": hashlib.sha256(code.encode()).hexdigest(),
+                  "workspace_id": user.get("workspace_id"),
+                  "created": int(time.time()), "expires": int(time.time()) + 600})
+    _save_signin_codes(codes)
+    return {"code": code, "expires_in_s": 600,
+            "note": "Works once, for 10 minutes. Exchanging it replaces your old token."}
+
+@app.post("/v1/exchange-code")
+async def exchange_signin_code(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    code = str(body.get("code") or "").strip()
+    if not re.match(r"^\d{6}$", code):
+        raise HTTPException(400, "A 6-digit sign-in code is required.")
+    h = hashlib.sha256(code.encode()).hexdigest()
+    codes = _load_signin_codes()
+    match = None
+    for c in codes:
+        if c.get("code_hash") == h and int(c.get("expires", 0)) > int(time.time()):
+            match = c
+            break
+    if not match:
+        raise HTTPException(401, "Wrong or expired sign-in code. Make a new one on your account page.")
+    _save_signin_codes([c for c in codes if c.get("code_hash") != h])
+    users = _load_users()
+    token = "lbx_" + secrets.token_urlsafe(32)
+    for u in users:
+        if u.get("workspace_id") == match.get("workspace_id") and u.get("status") == "active":
+            u["token_hash"] = hashlib.sha256(token.encode()).hexdigest()
+            _save_users(users)
+            return {"workspace_id": u["workspace_id"], "email": u["email"], "token": token,
+                    "note": "Your old token no longer works — this new one is saved in the app."}
+    raise HTTPException(403, "This premium account is disabled. Contact the VPS owner.")
+
+@app.post("/api/delete-account")
+def delete_account(request: Request):
+    user = _require_session(request)
+    ws = user.get("workspace_id")
+    _save_users([u for u in _load_users() if u.get("workspace_id") != ws])
+    _save_sessions([s for s in _load_sessions() if s.get("workspace_id") != ws])
+    _save_signin_codes([c for c in _load_signin_codes() if c.get("workspace_id") != ws])
+    _delete_session(request)
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("lb_session", path="/")
+    return resp
 
 def _require_admin(request: Request):
     if not ADMIN_TOKEN:
@@ -780,6 +875,12 @@ async def admin_set_pricing(request: Request):
             "per_1m_output_usd": float(entry.get("per_1m_output_usd", 0.0))}
     if body.get("currency"):
         pricing["currency"] = str(body["currency"])[:8]
+    plans = body.get("plans")
+    if isinstance(plans, dict):
+        p = pricing.setdefault("plans", {})
+        if "cloud_office_monthly_usd" in plans:
+            v = plans.get("cloud_office_monthly_usd")
+            p["cloud_office_monthly_usd"] = None if v in (None, "") else max(0.0, float(v))
     return _save_pricing(pricing)
 
 @app.get("/admin/revenue")

@@ -116,6 +116,9 @@
       <h1>Pricing — what renting costs</h1>
       <p class="sub">The price list users see before they register (<code>/v1/pricing</code>). Prices are USD per 1M tokens. Change a price and save — it applies to later requests. Local models are always free and never appear here.</p>
       <table><thead><tr><th>Model</th><th>Input / 1M tokens ($)</th><th>Output / 1M tokens ($)</th></tr></thead><tbody id="pricing"></tbody></table>
+      <h2 style="margin-top:22px">Cloud Office — monthly price</h2>
+      <p class="sub">The price users see for the Cloud Office plan in their account panel. Leave blank and the panel says the price is not set yet.</p>
+      <p><label>Cloud Office, $ per month <input type="number" step="1" min="0" id="cloud-price" placeholder="e.g. 99" style="max-width:160px"></label></p>
       <p style="margin-top:14px"><button onclick="savePricing()">💾 Save pricing</button> <span id="pricing-msg" class="note"></span></p>
       <p class="note">Starting prices are the providers' public list prices. Grok / Kimi / GLM are starting prices — confirm them in the provider's own docs before relying on them.</p>
     </section>
@@ -196,6 +199,8 @@ async function loadAll(){
     const pm = pricing.per_model||{};
     document.getElementById('pricing').innerHTML = Object.keys(pm).sort().map(m=>
       `<tr><td><code>${esc(m)}</code></td><td><input type="number" step="0.01" min="0" data-price-in="${esc(m)}" value="${pm[m].per_1m_input_usd}"></td><td><input type="number" step="0.01" min="0" data-price-out="${esc(m)}" value="${pm[m].per_1m_output_usd}"></td></tr>`).join('');
+    const cp = (pricing.plans||{}).cloud_office_monthly_usd;
+    document.getElementById('cloud-price').value = (cp==null?'':cp);
     document.getElementById('rev-cards').innerHTML =
       `<div class="card"><b class="green">${money(rev.total_cost_usd)}</b><span>Total revenue</span></div>`+
       `<div class="card"><b>${rev.requests_total}</b><span>Requests billed</span></div>`+
@@ -220,7 +225,7 @@ async function savePricing(){
     const out = document.querySelector(`[data-price-out="${CSS.escape(m)}"]`);
     per_model[m] = {per_1m_input_usd: parseFloat(el.value)||0, per_1m_output_usd: parseFloat(out?out.value:0)||0};
   });
-  await api('/admin/pricing', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({per_model})});
+  await api('/admin/pricing', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({per_model, plans:{cloud_office_monthly_usd: (document.getElementById('cloud-price').value==='' ? null : parseFloat(document.getElementById('cloud-price').value)||0)}})});
   document.getElementById('pricing-msg').textContent = 'Pricing saved — applies to later requests.';
   loadAll();
 }

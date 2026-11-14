@@ -255,6 +255,39 @@ as Abacus: sign-in page, plan page, then WhatsApp.
    download the app instead** (→ the GitHub repo). A webhook that
    answers WhatsApp messages is not built yet — that is the next step
    once the number exists.
+
+## User panel (like the Munder Difflin account page)
+
+`GET /account` (after sign-in) is a dark sidebar panel — `server/account.html`
+— with Home, Licence, Plan, Payments, Sign in code and Settings:
+
+- **Home:** "Let your agents work all month", Monthly/Yearly toggle, and
+  three plan cards — **Free** ($0, local model unlimited), **Premium**
+  (pay as you go, live per-token prices from `/v1/pricing`, no monthly
+  fee), **Cloud Office** (always-on computer; monthly price from
+  `plans.cloud_office_monthly_usd` in `data/pricing.json`, set in the
+  admin panel — yearly is 10× monthly, i.e. 2 months free; until a price
+  is set the panel says so). Then "What you get in Premium / Cloud
+  Office", a Roadmap (real LocalBotz milestones, all 14 Nov 2026, with
+  "We are here" at the user panel), Download (version 0.3.0, Windows /
+  Mac / Linux ZIP) and Support (GitHub Issues).
+- **Licence:** workspace id, plan, status, member since, premium usage
+  and spend so far.
+- **Plan:** the same three cards, a Cloud Office configurator (machine
+  + disk stepper — larger machines are priced by the server owner),
+  Free vs Premium vs Cloud Office table, "Included in every plan",
+  Teams (1 workspace) and Receipts.
+- **Payments:** premium spend so far and per-day receipts from
+  `usage.log`. "Nothing paid yet" until the first premium request.
+- **Sign in code:** `POST /api/signin-code` (session) makes a 6-digit
+  code, valid 10 minutes, one use. The app exchanges it at
+  `POST /v1/exchange-code` — the gateway only stores the token's hash,
+  so exchanging mints a **fresh** token for that workspace and the old
+  one stops working. The app saves the new token automatically
+  (Settings → Connectors → VPS Premium → Sign in with a code).
+- **Settings:** signed-in-as card, light/dark theme (this browser
+  only), sign out, and **Delete account** (`POST /api/delete-account`
+  — removes the user, sessions and codes; cannot be undone).
 Set `REGISTRATION_OPEN=false` in `.env` to close sign-ups — then
 only tokens you issue by hand (`PREMIUM_API_TOKEN` /
 `PREMIUM_API_TOKENS`) work. Registered users' tokens work exactly

@@ -541,6 +541,11 @@ async function connectorsHtml(isSettings){
   <label>Email</label><input id="vps-reg-email" type="email" placeholder="you@example.com">
   <div style="margin:8px 0"><button id="vps-register">Register for Premium</button></div>
   <div id="vps-register-out"></div>
+  <h3>🔐 Sign in with a code</h3>
+  <p class="note">Made a sign-in code on your account page? Paste it here — the server gives you a fresh token and saves it automatically. Your old token stops working.</p>
+  <label>6-digit sign-in code</label><input id="vps-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456">
+  <div style="margin:8px 0"><button id="vps-code-signin">Sign in with code</button></div>
+  <div id="vps-code-out"></div>
   <p class="note">Already registered? <a href="${esc((vps.base_url||'https://api.localbotz.io/v1').replace(/\/v1\/?$/,''))}/login" target="_blank">Sign in to your LocalBotz account</a> to see your plan, usage and WhatsApp chat.</p>
   <h3>Service connectors</h3><table><tr><th>Service</th><th>Auth</th><th>Status</th><th>Setup</th><th></th></tr>${svcRows}</table>
   <p class="note">Keys are added in Settings &gt; Secure store. Test connection probes the provider and updates its status.</p><div id="page-msg"></div>`;
@@ -705,6 +710,20 @@ function bindPage(name){
       await loadProviders(); msg('Registered for VPS Premium. Your token is saved.');
     }catch(e){
       if(out) out.innerHTML=`<p class="note">❌ Registration failed: ${esc(e.message||e)}</p>`;
+    }
+  };
+  if(q('vps-code-signin')) q('vps-code-signin').onclick=async()=>{
+    const out=$('vps-code-out');
+    const code=q('vps-code').value.trim(), base_url=q('vps-url').value.trim();
+    if(!/^\d{6}$/.test(code)){ if(out) out.innerHTML='<p class="note">Enter the 6-digit code from your account page.</p>'; return; }
+    if(!base_url){ if(out) out.innerHTML='<p class="note">Enter the VPS base URL above first (e.g. https://api.localbotz.io/v1).</p>'; return; }
+    if(out) out.innerHTML='<p class="note">Signing in…</p>';
+    try{
+      const r=await api('/api/vps/signin-code',{method:'POST',body:JSON.stringify({code,base_url})});
+      if(out) out.innerHTML=`<p class="note">✅ Signed in! Workspace <code>${esc(r.workspace_id||'')}</code> for ${esc(r.email||'')}. Your new token is saved — your old token no longer works.</p>`;
+      await loadProviders(); msg('Signed in with code. Your new token is saved.');
+    }catch(e){
+      if(out) out.innerHTML=`<p class="note">❌ Sign-in failed: ${esc(e.message||e)}</p>`;
     }
   };
   // Office

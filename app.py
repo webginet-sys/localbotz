@@ -1930,6 +1930,42 @@ def vps_register(body: dict):
             "configured": True,
             "note": "Registered. Your token is saved in Secure store — pick provider 'VPS Premium' per bot to use premium models."}
 
+@app.post("/api/vps/signin-code")
+def vps_signin_code(body: dict):
+    # Sign in with a 6-digit code made on the VPS account panel
+    # (/account → Sign in code). The gateway exchanges it for a FRESH token
+    # for that workspace — the old token stops working. We save the base
+    # URL + new token the same way as the manual VPS setup.
+    code = (body.get("code") or "").strip()
+    base_url = (body.get("base_url") or get_vps_base_url() or "").strip().rstrip("/")
+    if not re.match(r"^\d{6}$", code):
+        raise HTTPException(400, "Enter the 6-digit sign-in code from your account page.")
+    if not base_url or base_url == VPS_PLACEHOLDER_URL:
+        raise HTTPException(400, "Set the VPS base URL first (e.g. https://api.localbotz.io/v1).")
+    try:
+        with _http_client(timeout=20, external=not _is_local_url(base_url)) as c:
+            r = c.post(f"{base_url}/exchange-code", json={"code": code})
+        if r.status_code in (400, 401):
+            raise HTTPException(401, "Wrong or expired sign-in code. Make a new one on your account page.")
+        if r.status_code == 403:
+            raise HTTPException(403, "This premium account is disabled. Contact the VPS owner.")
+        r.raise_for_status()
+        data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Could not reach the VPS gateway at {base_url}: {e}. Check the base URL and that the gateway is running.")
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(502, "The VPS gateway did not return a token.")
+    store = load_connectors_store()
+    store.setdefault("vps", {})["base_url"] = base_url
+    save_connectors_store(store)
+    _set_env_key("VPS_API_TOKEN", token)
+    return {"workspace_id": data.get("workspace_id"), "email": data.get("email"),
+            "configured": True,
+            "note": "Signed in. Your new token is saved in Secure store — your old token no longer works."}
+
 @app.get("/api/vps/pricing")
 def vps_pricing():
     # Public price list from the VPS gateway (GET {base}/pricing, no
