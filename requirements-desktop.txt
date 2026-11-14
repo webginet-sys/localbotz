@@ -10,6 +10,6 @@
 #   pywinauto  — Windows only: the accessibility tree (buttons and
 #                fields inside a window). On macOS/Linux the window
 #                list + screenshots still work without it.
-pyautogui>=0.9.54
-pygetwindow>=0.0.9
-pywinauto>=0.6.8; sys_platform == 'win32'
+pyautogui==0.9.54
+pygetwindow==0.0.9
+pywinauto==0.6.9; sys_platform == 'win32'

@@ -39,6 +39,14 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
+      - name: Set up Python (to fetch the bundled libraries)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch bundled Python libraries (vendor/wheels)
+        run: python scripts/fetch_wheels.py
+
       - name: Stage files for the installer
         shell: pwsh
         run: |

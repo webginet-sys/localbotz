@@ -9,5 +9,5 @@
 #                  key (GEMINI_API_KEY in Secure store) + internet.
 #                  Live usage is billed to the key owner.
 #   websockets   — the WebSocket transport for /ws/live-voice.
-google-genai>=1.0
-websockets>=0.14
+google-genai==3.3.0
+websockets==17.4

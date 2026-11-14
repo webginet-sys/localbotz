@@ -223,9 +223,22 @@ if not exist ".venv\Scripts\python.exe" (
   )
 )
 
+REM ---------- Python libraries: bundled pack first, PyPI as fallback ----------
+REM LocalBotz-Setup.exe ships every Python library the app needs in
+REM vendor\wheels, so the install does not have to download them.
+REM When that folder is here, install from it (offline). Otherwise
+REM download from PyPI once, as before. Either way the user installs
+REM nothing by hand — it is all in this one install step.
+set PIP_OFFLINE=0
+set PIP_TOOLS_DONE=0
+if exist "vendor\wheels\*.whl" (
+  set PIP_OFFLINE=1
+  echo [LocalBotz] Found the bundled library pack — installing Python libraries offline.
+)
+
 echo [LocalBotz] Installing core dependencies (lightweight)...
 ".venv\Scripts\python.exe" -m pip install -q --upgrade pip
-".venv\Scripts\python.exe" -m pip install -q -r requirements.txt
+call :pip_req requirements.txt
 if errorlevel 1 (
   echo [LocalBotz] pip install failed. See the error above.
   pause
@@ -236,7 +249,7 @@ REM ---------- Browser automation — always installed upfront ----------
 echo [LocalBotz] Installing browser automation (Playwright + Chromium)...
 echo [LocalBotz] This is part of the full install, so browser automation
 echo [LocalBotz] is ready before you need it — nothing to install later.
-".venv\Scripts\python.exe" -m pip install -q -r requirements-browser.txt
+call :pip_req requirements-browser.txt
 if errorlevel 1 (
   echo [LocalBotz] Playwright install failed. See the error above.
   pause
@@ -255,7 +268,7 @@ echo [LocalBotz] Installing desktop control (mouse/keyboard/window tools)...
 echo [LocalBotz] This is part of the full install, so a bot can use the
 echo [LocalBotz] desktop apps on this computer — Excel, the BOQ, the old
 echo [LocalBotz] accounting software — with nothing to install later.
-".venv\Scripts\python.exe" -m pip install -q -r requirements-desktop.txt
+call :pip_req requirements-desktop.txt
 if errorlevel 1 (
   echo [LocalBotz] Desktop control install failed. See the error above.
   pause
@@ -265,7 +278,7 @@ REM ---------- Live voice — best-effort, never a hard stop ----------
 echo [LocalBotz] Installing live voice support (Gemini Live + WebSocket)...
 echo [LocalBotz] Best-effort only: if this fails, LocalBotz still starts,
 echo [LocalBotz] and Talk still works — the Live Voice page will say so.
-".venv\Scripts\python.exe" -m pip install -q -r requirements-live.txt
+call :pip_req requirements-live.txt
 if errorlevel 1 echo [LocalBotz] NOTE: live voice install did not work. Chat and Talk still work; live voice needs a Gemini key and this package.
 echo [LocalBotz] Verifying the full install (Python, packages, Chromium)...
 ".venv\Scripts\python.exe" scripts\check_install.py
@@ -299,3 +312,24 @@ echo [LocalBotz] If it stopped with an error, the error is above — send a
 echo [LocalBotz] screenshot of it, or the file install.log, and it can be fixed.
 echo [LocalBotz] To start LocalBotz again, double-click start.bat.
 pause
+goto :eof
+
+REM Install one requirements file. When the bundled library pack is
+REM here (vendor\wheels, shipped inside LocalBotz-Setup.exe), install
+REM from it offline; otherwise download from PyPI. If the pack does
+REM not cover the file, fall back to PyPI for the rest. Build tools
+REM (setuptools + wheel) are installed from the pack first, once, so
+REM a library that ships without a wheel can still be built offline.
+REM Usage: call :pip_req requirements.txt — exit code 0 on success.
+:pip_req
+if "%PIP_OFFLINE%"=="1" (
+  if "%PIP_TOOLS_DONE%"=="0" (
+    ".venv\Scripts\python.exe" -m pip install -q --no-index --find-links=vendor\wheels setuptools wheel
+    set PIP_TOOLS_DONE=1
+  )
+  ".venv\Scripts\python.exe" -m pip install -q --no-index --no-build-isolation --find-links=vendor\wheels -r "%~1"
+  if not errorlevel 1 exit /b 0
+  echo [LocalBotz] The bundled pack did not cover %~1 — downloading the rest...
+)
+".venv\Scripts\python.exe" -m pip install -q -r "%~1"
+exit /b %ERRORLEVEL%

@@ -6,4 +6,4 @@
 # a clear "Playwright is not installed" message instead of crashing.
 # Install with: pip install -r requirements-browser.txt
 # Then: playwright install chromium
-playwright>=1.48
+playwright==1.65.2

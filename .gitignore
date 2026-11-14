@@ -16,6 +16,10 @@ build/
 data/*
 !data/.gitkeep
 
+# Bundled Python library wheels (built by scripts/fetch_wheels.py /
+# the Windows installer workflow; ~65 MB of binaries — never commit)
+vendor/
+
 # Playwright browsers (large, downloaded by `playwright install chromium`)
 # Uncomment if you want to keep browser binaries out of a shared cache:
 # .cache/ms-playwright/
