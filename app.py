@@ -73,7 +73,7 @@ def _default_settings():
             "default_model": (os.getenv("MODEL") or os.getenv("LLM_MODEL") or "qwen3.5"),
             "workspace_folder": "workspace", "theme": "light",
             "onboarding_done": False, "run_mode": "computer", "autostart": False,
-            "data_location": str(DATA_DIR), "app_version": APP_VERSION}
+            "data_location": str(DATA_DIR), "app_version": APP_VERSION, "default_language": "auto"}
 
 
 def _autostart_path():
@@ -143,6 +143,72 @@ def save_settings(settings):
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
     return settings
+
+# ---------- Languages: every country, every language -----------------------
+# Shipped catalogue (languages.json): ISO 3166 countries with their
+# official languages (Unicode CLDR) + ISO 639-1 languages with native
+# names. The AI understands a language as well as the model behind it
+# does — this catalogue never claims equal fluency in every language.
+LANGUAGES_FILE = BASE_DIR / "languages.json"
+_LANGUAGES_CACHE = None
+
+def load_languages():
+    global _LANGUAGES_CACHE
+    if _LANGUAGES_CACHE is not None:
+        return _LANGUAGES_CACHE
+    try:
+        data = json.loads(LANGUAGES_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("languages"):
+            _LANGUAGES_CACHE = data
+            return data
+    except Exception:
+        pass
+    _LANGUAGES_CACHE = {"note": "", "countries": [], "languages": [], "common": []}
+    return _LANGUAGES_CACHE
+
+def _language(code):
+    code = (code or "").strip().lower()
+    for lang in load_languages().get("languages", []):
+        if lang.get("code") == code:
+            return lang
+    return None
+
+def _validate_language(code):
+    """None/"auto" is fine; anything else must be in the catalogue."""
+    if code is None:
+        return "auto"
+    code = str(code).strip().lower()
+    if code in ("", "auto"):
+        return "auto"
+    if not _language(code):
+        raise HTTPException(400, f"Unknown language: {code}. Pick one from GET /api/languages.")
+    return code
+
+def _effective_language(bot=None, override=None):
+    """Per-chat override -> bot's language -> global default -> "auto"."""
+    for cand in (override, (bot or {}).get("language")):
+        if cand and str(cand).strip().lower() not in ("", "auto"):
+            try:
+                return _validate_language(cand)
+            except HTTPException:
+                continue
+    try:
+        default = load_settings().get("default_language") or "auto"
+    except Exception:
+        default = "auto"
+    if default and str(default).strip().lower() not in ("", "auto"):
+        try:
+            return _validate_language(default)
+        except HTTPException:
+            pass
+    return "auto"
+
+def _language_rule(code):
+    if code == "auto":
+        return "Reply in the same language the user wrote in."
+    lang = _language(code) or {"name": code, "native_name": code}
+    return (f"Reply in {lang['name']} ({lang['native_name']}) unless the user "
+            f"clearly asks for another language.")
 
 SETTINGS = load_settings()
 # Workspace folder is configurable in Settings > General (relative to the app folder).
@@ -445,6 +511,7 @@ def load_bots():
         b.setdefault("routing", "off")
         b.setdefault("talk_mode", "off")
         b.setdefault("show_me_how", "off")
+        b.setdefault("language", "auto")
     return bots
 
 def save_bots(bots):
@@ -1899,7 +1966,7 @@ def _screenshot_path_from(result: str):
 
 
 def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
-              talk: bool = False, show_me_how=None):
+              talk: bool = False, show_me_how=None, language=None):
     # Tool loop, max 8 turns. Returns (reply, tool_trace, extra).
     # extra carries error/fallback info for the UI; the loop itself is
     # identical for every provider (see llm_chat translation).
@@ -1939,6 +2006,8 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
     learn_text = _learnings_text(bot_id=bot["id"])
     talk_mode = bool(talk) or (bot.get("talk_mode") or "off") == "on"
     show_how = (bot.get("show_me_how") or "off") == "on" if show_me_how is None else bool(show_me_how)
+    eff_lang = _effective_language(bot, override=language)
+    lang_rule = _language_rule(eff_lang)
     steps = []  # Show-me-how steps, filled in as tools run (mock + real).
     system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
               "You have tools for web search, browser automation, workspace files, "
@@ -1953,6 +2022,7 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
                  "BEFORE you do it, one step at a time, and say what you are "
                  "about to click or type and where, so the user can follow on "
                  "their own screen." if show_how else "")
+              + f"\n\nLanguage: {lang_rule}"
               + (f"\n\nEnabled skills:\n{skills_text}" if skills_text else "")
               + (f"\n\nWhat the team has learned from this user's daily work — "
                  f"use it when it fits, e.g. how they price a quotation:\n{learn_text}"
@@ -1983,6 +2053,10 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
                      f"start the local server (Developer tab), set MODEL to that model's exact id, "
                      f"and restart without --mock for real local-model replies. I can still search the web, "
                      f"browse, and read/write files in ./workspace.")
+        if eff_lang != "auto":
+            _ln = _language(eff_lang) or {"name": eff_lang}
+            reply += (f"\n\n[Language: replying in {_ln['name']} — mock mode, so this text is "
+                      f"still in English. With a real model the reply comes in {_ln['name']}.]")
         if show_how:
             if not steps:
                 dresult, _blocked = _execute_tool("desktop_inspect", {}, bot)
@@ -2497,6 +2571,7 @@ class BotCreate(BaseModel):
     routing: str = "off"
     talk_mode: str = "off"
     show_me_how: str = "off"
+    language: str = "auto"
     enabled_tools: list = []
     skills: list = []
 
@@ -2511,6 +2586,7 @@ class BotUpdate(BaseModel):
     routing: str = ""
     talk_mode: str = ""
     show_me_how: str = ""
+    language: str = ""
     enabled_tools: list = []
     skills: list = []
     persistent: bool = None
@@ -2520,6 +2596,7 @@ class ChatIn(BaseModel):
     workspace: str = "default"
     talk: bool = False
     show_me_how: bool | None = None
+    language: str | None = None
 
 class MemoryIn(BaseModel):
     fact: str = Field(min_length=1)
@@ -2806,6 +2883,7 @@ def create_bot(body: BotCreate):
            "routing": body.routing if body.routing in ("off", "auto") else "off",
            "talk_mode": body.talk_mode if body.talk_mode in ("on", "off") else "off",
            "show_me_how": body.show_me_how if body.show_me_how in ("on", "off") else "off",
+           "language": _validate_language(body.language),
            "persistent": False,
            "created_at": int(time.time())}
     # A template can turn Talk / Show-me-how on (e.g. Desktop Helper).
@@ -2838,6 +2916,8 @@ def update_bot(bot_id: str, body: BotUpdate):
         bot["talk_mode"] = body.talk_mode
     if body.show_me_how in ("on", "off"):
         bot["show_me_how"] = body.show_me_how
+    if body.language:
+        bot["language"] = _validate_language(body.language)
     if body.enabled_tools is not None:
         bot["enabled_tools"] = body.enabled_tools
     if body.skills is not None:
@@ -4347,9 +4427,11 @@ def post_chat(bot_id: str, body: ChatIn):
     if not bot:
         raise HTTPException(404, "Bot not found")
     ws_id = (body.workspace or "default").strip() or "default"
+    lang_override = _validate_language(body.language) if body.language not in (None, "") else None
     reply, trace, extra = run_agent(bot, body.message.strip(), workspace_id=ws_id,
                                     talk=bool(body.talk),
-                                    show_me_how=body.show_me_how)
+                                    show_me_how=body.show_me_how,
+                                    language=lang_override)
     out = {"reply": reply, "tools": trace, "bot": bot["id"], "workspace": ws_id}
     out.update(extra or {})
     return out
@@ -6174,6 +6256,8 @@ def update_settings(body: dict):
         st["onboarding_done"] = True
     if body.get("run_mode") in ("computer", "subscriptions", "rent"):
         st["run_mode"] = body["run_mode"]
+    if body.get("default_language") is not None:
+        st["default_language"] = _validate_language(body.get("default_language"))
     if body.get("autostart") is not None:
         ok, msg = _set_autostart(bool(body["autostart"]))
         if not ok:
@@ -6199,6 +6283,47 @@ def reset_settings():
     globals()["DEFAULT_PROVIDER"] = _default_settings()["default_provider"]
     globals()["DEFAULT_MODEL"] = _default_settings()["default_model"]
     return get_settings()
+
+# ---------- Languages endpoints --------------------------------------------
+@app.get("/api/languages")
+def list_languages(q: str = ""):
+    """The whole catalogue: countries + languages + common list.
+    ?q= filters both lists by name, native name or code."""
+    cat = load_languages()
+    needle = (q or "").strip().lower()
+    if not needle:
+        return cat
+    langs = [l for l in cat.get("languages", [])
+             if needle in l.get("name", "").lower()
+             or needle in l.get("native_name", "").lower()
+             or needle in l.get("code", "")]
+    codes = {l["code"] for l in langs}
+    countries = [c for c in cat.get("countries", [])
+                 if needle in c.get("name", "").lower()
+                 or needle in c.get("code", "").lower()
+                 or any(code in codes for code in c.get("languages", []))]
+    return {"note": cat.get("note", ""), "countries": countries,
+            "languages": langs, "common": cat.get("common", [])}
+
+@app.get("/api/languages/{code}")
+def get_language(code: str):
+    lang = _language(code)
+    if not lang:
+        raise HTTPException(404, f"Unknown language: {code}")
+    countries = [c for c in load_languages().get("countries", [])
+                 if code.lower() in (c.get("languages") or [])]
+    return {**lang, "countries": countries}
+
+@app.get("/api/countries")
+def list_countries(q: str = ""):
+    """All countries with their official language(s). ?q= searches names."""
+    needle = (q or "").strip().lower()
+    countries = load_languages().get("countries", [])
+    if needle:
+        countries = [c for c in countries
+                     if needle in c.get("name", "").lower()
+                     or needle in c.get("code", "").lower()]
+    return {"countries": countries, "count": len(countries)}
 
 @app.get("/api/connectors")
 def list_connectors():

@@ -513,6 +513,22 @@ needs internet and a Gemini key in Secure store — live usage is
 billed to the key owner. Without a key the page says so honestly and
 refuses to start. Full details: `docs/live-voice.md`.
 
+## Languages — every country, every language
+
+LocalBotz knows **199 countries and 186 languages** (`languages.json`:
+ISO 3166 countries with their official languages, ISO 639-1 languages
+with native names). Pick a language per bot (Make a bot), per chat (the
+language menu at the top of the chat), or as the global default
+(Settings → General). “Auto” replies in the language the user wrote in.
+Talk follows the language too — the mic listens in it, and spoken
+replies use a matching voice when the browser has one. The 🌍 Languages
+page lists every country and language with search, and “Use” sets the
+open bot's language. Honest limits: a language being listed means
+LocalBotz knows it — not that every model speaks it equally well.
+Local Qwen3.5 is strong in English, Chinese, Arabic and many others;
+speech recognition and voices depend on the browser and OS, not on
+LocalBotz. See `docs/languages.md`.
+
 ## Clients & Deals — deal workflows
 
 A small local CRM for sales work. A **deal** is a client, a value,

@@ -86,6 +86,7 @@
     <button class="navbtn" data-view="runs">📋 Runs — what the team did</button>
     <button class="navbtn" data-view="desktop">🖥️ Desktop — use the computer</button>
     <button class="navbtn" data-view="live">🔴 Live Voice — talk in real time</button>
+    <button class="navbtn" data-view="languages">🌍 Languages — every country, every language</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -116,6 +117,7 @@
         <button class="ghost small" id="talk-btn" title="Talk to your bot — tap, speak in plain words, and it types what you said">🎙️ Talk</button>
         <button class="ghost small" id="speak-toggle" title="Read the bot's replies out loud">🔊 Listen: off</button>
         <button class="ghost small" id="showhow-toggle" title="Show me how — the bot explains each step in plain words before it does it, and shows you a picture of each step">👀 Show me how: off</button>
+        <select id="chat-lang" style="width:auto" title="Reply language for this chat — Auto follows the bot, or pick a language just for this chat"></select>
         <button class="ghost" id="reset">Clear chat</button>
       </header>
       <div id="chat"><div class="empty">Select a bot on the left, then ask it something.<br>Try: “Search the web for today’s weather in Doha” or “List the files in my workspace”.</div></div>
@@ -147,6 +149,7 @@
         <div><label>Model</label><input id="mb-model" type="text" value="qwen3.5" title="Model for this bot — type your own, or pick from the Available models list below"></div>
         <div><label>Available models</label><select id="mb-model-list" title="Only models that can actually work right now, grouped by source"></select></div>
         <div><label>Smart routing</label><select id="mb-routing" title="Auto: simple questions answered free on the local model, hard work goes to this provider. Off: always use this provider."><option value="off">Off — always this provider</option><option value="auto">Auto — simple free on local, hard to premium</option></select></div>
+        <div><label>Language</label><select id="mb-language" title="Reply language — Auto replies in the language the user wrote in"></select></div>
         <div><label>Talk mode</label><label style="display:block;margin-top:6px"><input type="checkbox" id="mb-talk"> Talk — plain words, short sentences, no jargon. For talking, not typing.</label></div>
         <div><label>Show me how</label><label style="display:block;margin-top:6px"><input type="checkbox" id="mb-showhow"> Show me how — explain each step in plain words before doing it, with a picture of each step.</label></div>
       </div>
@@ -207,7 +210,7 @@ function showView(name){
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
   $('view-wizard').classList.toggle('hidden', name!=='wizard');
-  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live'].includes(name);
+  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live','languages'].includes(name);
   if(name!=='live' && typeof stopLive==='function') stopLive('You left the Live Voice page — the mic is off.');
   $('view-page').classList.toggle('hidden', !_isPage);
   if(_isPage) renderPage(name);
@@ -298,6 +301,7 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
   if(!msgs.length){c.innerHTML='<div class="empty">No messages yet. Say hello to your bot.</div>';return;}
   msgs.forEach(m=>{const d=document.createElement('div'); d.className='msg '+m.role;
     d.textContent=m.content||'';
+    if(m.role==='assistant'){ const c=effLangCode(); if(langIsRTL(c)) d.dir='rtl'; }
     if(m.role==='assistant' && m.cost_usd!==undefined){
       const f=document.createElement('div');
       f.style.cssText='font-size:12px;color:#888;margin-top:8px';
@@ -331,7 +335,7 @@ async function selectBot(id){current=bots.find(b=>b.id===id); if(!current) retur
   $('botmeta').textContent=(current.provider||'')+' · '+(current.model||'')+(current.schedule&&current.schedule!=='on_demand'?' · '+current.schedule:'');
   $('botprovider').value=current.provider||'lmstudio'; $('botmodel').value=current.model||'';
   fillModelList($('botmodel-list'), current.model||'', current.provider||'lmstudio');
-  showHowOn=(current.show_me_how||'off')==='on'; syncTalkButtons();
+  showHowOn=(current.show_me_how||'off')==='on'; syncTalkButtons(); chatLangOverride=null; fillChatLang();
   document.querySelectorAll('.botlist li').forEach((li,i)=>li.classList.toggle('active',bots[i].id===id));
   showView('chat'); renderChat(await api(`/api/bots/${id}/chat`)); loadMemory(); loadTasks(); loadStatus();
 }
@@ -339,7 +343,7 @@ async function send(){const inp=$('input'); const text=inp.value.trim(); if(!tex
   inp.value=''; const msgs=await api(`/api/bots/${current.id}/chat`);
   msgs.push({role:'user',content:text}); renderChat(msgs);
   $('chat').insertAdjacentHTML('beforeend','<div class="msg assistant">Thinking… (may use tools — up to 8 steps)</div>');
-  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace(), talk:talkUsed||speakOn, show_me_how:showHowOn})});
+  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace(), talk:talkUsed||speakOn, show_me_how:showHowOn, language:chatLangOverride})});
     talkUsed=false;
     renderChat(await api(`/api/bots/${current.id}/chat`));
     if(res.reply) speakText(res.reply);
@@ -372,6 +376,21 @@ document.querySelectorAll('.navbtn[data-view]').forEach(b=>b.onclick=()=>showVie
 let speakOn=localStorage.getItem('localbotz-speak')==='on';
 let showHowOn=false;
 let recognising=false, recog=null;
+let chatLangOverride=null; // per-chat language override ("ar", "fr", …) — null = follow the bot
+let LANGCAT=null;
+async function loadLanguages(){ if(LANGCAT) return LANGCAT; try{ LANGCAT=await api('/api/languages'); }catch(e){ LANGCAT={languages:[],countries:[],common:[]}; } return LANGCAT; }
+function langName(code){ if(!LANGCAT) return code; const l=(LANGCAT.languages||[]).find(x=>x.code===code); return l?`${l.name} (${l.native_name})`:code; }
+function langOptions(selected){ // Auto + the most common languages
+  const common=(LANGCAT&&LANGCAT.common)||['en','ar','hi','ur','fr','es','pt','de','it','tr','fa','ms','id','bn','ta','te','pa','ps','tl','vi','th','zh','ja','ko','ru','uk','pl','nl','sv','no','da','fi','el','he','sw'];
+  let opts=`<option value="auto" ${selected==='auto'?'selected':''}>Auto — reply in your language</option>`;
+  common.forEach(c=>{ opts+=`<option value="${c}" ${selected===c?'selected':''}>${esc(langName(c))}</option>`; });
+  return opts;
+}
+const LANG_TAG={en:'en-GB',zh:'zh-CN',yue:'yue-Hant-HK',fil:'fil-PH'};
+function effLangCode(){ if(chatLangOverride) return chatLangOverride; if(current&&current.language&&current.language!=='auto') return current.language; if(settings.default_language&&settings.default_language!=='auto') return settings.default_language; return null; }
+function speechLangTag(){ const c=effLangCode(); if(!c) return navigator.language||'en-GB'; return LANG_TAG[c]||c; }
+function langIsRTL(code){ if(!LANGCAT||!code) return false; const l=(LANGCAT.languages||[]).find(x=>x.code===code); return !!(l&&l.rtl); }
+async function fillChatLang(){ const sel=$('chat-lang'); if(!sel) return; await loadLanguages(); const cur=(current&&current.language)||'auto'; sel.innerHTML=langOptions(cur)+`<option value="__all__">🌍 All languages…</option>`; sel.value=cur; }
 function speakText(text){
   if(!speakOn || !('speechSynthesis' in window)) return;
   try{
@@ -380,7 +399,8 @@ function speakText(text){
     if(!clean) return;
     // Short plain replies only: first two sentences, max ~600 chars.
     const short=clean.split(/(?<=[.!?])\s+/).slice(0,2).join(' ').slice(0,600);
-    const u=new SpeechSynthesisUtterance(short); u.lang='en-GB';
+    const u=new SpeechSynthesisUtterance(short); u.lang=speechLangTag();
+    try{const vs=window.speechSynthesis.getVoices()||[]; const c=(effLangCode()||'en').toLowerCase(); const v=vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c))||vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c.slice(0,2))); if(v) u.voice=v;}catch(e){}
     window.speechSynthesis.speak(u);
   }catch(e){ /* speech is a nicety — never break the chat */ }
 }
@@ -393,7 +413,7 @@ function startTalk(){
   if(!SR){ alert('Talk needs Chrome or Edge — your browser has no speech recognition. You can still type, or use the speaker button to hear replies.'); return; }
   if(recognising){ try{recog.stop();}catch(e){} return; }
   try{
-    recog=new SR(); recog.lang='en-GB'; recog.interimResults=true; recog.continuous=false;
+    recog=new SR(); recog.lang=speechLangTag(); recog.interimResults=true; recog.continuous=false;
     const btn=$('talk-btn'); if(btn) btn.textContent='🎙️ Listening… tap to stop';
     recognising=true;
     recog.onresult=e=>{
@@ -414,6 +434,7 @@ function startTalk(){
 let talkUsed=false;
 if($('talk-btn')) $('talk-btn').onclick=startTalk;
 if($('speak-toggle')) $('speak-toggle').onclick=()=>{ speakOn=!speakOn; localStorage.setItem('localbotz-speak', speakOn?'on':'off'); if(!speakOn && 'speechSynthesis' in window) window.speechSynthesis.cancel(); syncTalkButtons(); };
+if($('chat-lang')) $('chat-lang').onchange=()=>{ const v=$('chat-lang').value; if(v==='__all__'){ showView('languages'); fillChatLang(); return; } chatLangOverride=(v==='auto')?null:v; };
 if($('showhow-toggle')) $('showhow-toggle').onclick=async()=>{ showHowOn=!showHowOn; syncTalkButtons(); if(current){ try{ await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({show_me_how:showHowOn?'on':'off'})}); await loadBots(); current=bots.find(b=>b.id===current.id); }catch(e){ /* toggle still works for this chat */ } } };
 syncTalkButtons();
 
@@ -627,6 +648,7 @@ async function initMakeBot(){
     l.innerHTML=`<input type="checkbox" value="${t.name}" ${mbTools.includes(t.name)?'checked':''}> ${t.name}`;
     l.querySelector('input').onchange=e=>{mbTools=e.target.checked?[...mbTools,t.name]:mbTools.filter(x=>x!==t.name);};
     $('mb-tools').appendChild(l);});
+  if($('mb-language')){ await loadLanguages(); $('mb-language').innerHTML=langOptions('auto'); }
   renderTabs(); renderCards();
 }
 function renderTabs(){
@@ -663,7 +685,7 @@ $('mb-create').onclick=async()=>{
   const b=await api('/api/bots',{method:'POST',body:JSON.stringify({
     name, job:$('mb-job').value.trim(), instructions:$('mb-instructions').value.trim(),
     template:mbTemplate, avatar:mbAvatar, provider:$('mb-provider').value, model:$('mb-model').value.trim()||'qwen3.5',
-    routing:$('mb-routing').value, talk_mode:$('mb-talk')&&$('mb-talk').checked?'on':'off', show_me_how:$('mb-showhow')&&$('mb-showhow').checked?'on':'off', schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
+    routing:$('mb-routing').value, language:$('mb-language')?$('mb-language').value:'auto', talk_mode:$('mb-talk')&&$('mb-talk').checked?'on':'off', show_me_how:$('mb-showhow')&&$('mb-showhow').checked?'on':'off', schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
   $('mb-msg').textContent='Created ✓';
   mbTemplate=''; mbTools=[]; await loadBots(); selectBot(b.id);
 };
@@ -681,6 +703,7 @@ async function renderPage(name){
     else if(name==='runs') el.innerHTML=await runsHtml();
     else if(name==='desktop') el.innerHTML=await desktopHtml();
     else if(name==='live') el.innerHTML=await liveHtml();
+    else if(name==='languages') el.innerHTML=await languagesHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -1084,14 +1107,35 @@ async function toolsHtml(){
   return `<h2>🛠 Tools</h2><p>Built-in tools. Toggles here are global and are enforced in the agent loop; per-bot toggles live in each bot's template / Tools settings.</p>
   <table><tr><th>Tool</th><th>Description</th><th>Global</th><th>Bots using it</th><th></th></tr>${rows}</table><div id="page-msg"></div>`;
 }
+async function languagesHtml(){
+  await loadLanguages();
+  const langs=LANGCAT.languages||[], countries=LANGCAT.countries||[];
+  const byCode={}; langs.forEach(l=>byCode[l.code]=l);
+  const langLabel=c=>{ const l=byCode[c]; return l?`${esc(l.name)} (${esc(l.native_name)})`:esc(c); };
+  const rows=countries.map(c=>{
+    const cells=(c.languages||[]).map(code=>`${langLabel(code)} <button class="small" data-lang-use="${code}" title="This bot replies in ${esc(byCode[code]?byCode[code].name:code)}">Use</button>`).join('<br>');
+    return `<tr><td><b>${esc(c.name)}</b> <span class="note">${esc(c.code)}</span></td><td>${cells||'<span class="note">—</span>'}</td></tr>`;
+  }).join('');
+  return `<h2>🌍 Languages — every country, every language</h2>
+  <p>${esc(LANGCAT.note||'')}</p>
+  <p class="note"><b>${countries.length} countries · ${langs.length} languages.</b> The AI understands a language as well as the model behind it does: local Qwen3.5 is strong in English, Chinese, Arabic and many others, but not equally fluent in every language — online providers vary too. Speech recognition and voices depend on your browser and operating system, not on LocalBotz, so Talk may not work in every language. Right-to-left languages (Arabic, Hebrew, Urdu, Persian) display right-to-left in chat. “Auto” means the bot replies in the language you wrote in.</p>
+  <label>Search a country or language</label><input id="lang-q" type="text" placeholder="e.g. Qatar, Arabic, العربية…">
+  <table id="lang-table"><thead><tr><th>Country</th><th>Official language(s)</th></tr></thead><tbody>${rows}</tbody></table>
+  <p class="note">“Use” sets the language of the bot you have open (left sidebar). Or pick a language in Make a bot, or just for one chat from the language menu at the top of the chat.</p>
+  <div id="page-msg"></div>`;
+}
 async function generalHtml(){
   settings=await api('/api/settings');
+  await loadLanguages();
+  const langOpts=langOptions(settings.default_language||'auto');
   const provOpts=providers.map(p=>`<option value="${p.id}" ${p.id===settings.default_provider?'selected':''}>${esc(p.label)}</option>`).join('');
   return `<h2>⚙️ General</h2>
   <label>Default provider</label><select id="set-provider">${provOpts}</select>
   <label>Default model</label><input id="set-model" type="text" value="${esc(settings.default_model||'qwen3.5')}">
   <label>Workspace folder (relative to the app folder)</label><input id="set-ws" type="text" value="${esc(settings.workspace_folder||'workspace')}">
   <label>Theme</label><select id="set-theme"><option value="light" ${settings.theme==='light'?'selected':''}>Light</option><option value="dark" ${settings.theme==='dark'?'selected':''}>Dark</option></select>
+  <label>Default language</label><select id="set-language">${langOpts}</select>
+  <p class="note">Bots reply in this language unless they have their own language set. Auto = reply in the language the user wrote in. Every language is on the 🌍 Languages page.</p>
   <label style="display:inline"><input type="checkbox" id="set-autostart" ${settings.autostart?'checked':''}> Start LocalBotz when the computer starts</label>
   <p class="note">Runs LocalBotz in the background when you sign in, so routines, jobs and workflows keep working while the computer is on. ${settings.autostart_path?`Startup entry: <code>${esc(settings.autostart_path)}</code>`:''}</p>
   <p>Data location: <code>${esc(settings.data_location||'')}</code><br>Workspace: <code>${esc(settings.workspace_absolute||'')}</code><br>App version: <b>${esc(settings.app_version||'')}</b></p>
@@ -1171,11 +1215,13 @@ function bindPage(name){
   if(q('skill-add')) q('skill-add').onclick=async()=>{await api('/api/skills',{method:'POST',body:JSON.stringify({name:q('skill-name').value,instructions:q('skill-inst').value,source:q('skill-src').value})}); renderPage(name);};
   if(q('skill-enable')) q('skill-enable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:true})}); msg('Skill enabled for bot.');};
   if(q('skill-disable')) q('skill-disable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:false})}); msg('Skill disabled for bot.');};
-  if(q('set-save')) q('set-save').onclick=async()=>{try{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value,autostart:q('set-autostart').checked})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');}catch(e){msg(e.message);}};
+  if(q('set-save')) q('set-save').onclick=async()=>{try{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value,default_language:q('set-language').value,autostart:q('set-autostart').checked})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');}catch(e){msg(e.message);}};
   if(q('run-local')) q('run-local').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'computer',default_provider:'lmstudio',default_model:'qwen3.5'})}); await loadProviders(); msg('Running on your computer — local model (LM Studio / Qwen3.5).');};
   if(q('run-subs')) q('run-subs').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'subscriptions'})}); showView('set-connectors');};
   if(q('run-rent')) q('run-rent').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'rent'})}); showView('set-connectors');};
   if(q('set-reset')) q('set-reset').onclick=async()=>{await api('/api/settings/reset',{method:'POST'}); document.body.classList.remove('dark'); renderPage(name);};
+  if(q('lang-q')) q('lang-q').oninput=()=>{const needle=q('lang-q').value.trim().toLowerCase(); document.querySelectorAll('#lang-table tbody tr').forEach(tr=>{ tr.style.display=(!needle||tr.textContent.toLowerCase().includes(needle))?'':'none'; });};
+  document.querySelectorAll('[data-lang-use]').forEach(el=>el.onclick=async()=>{ if(!current){msg('Pick a bot first (left sidebar), then use a language for it.'); return;} const code=el.dataset.langUse; try{ await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({language:code})}); await loadBots(); current=bots.find(b=>b.id===current.id); chatLangOverride=null; fillChatLang(); msg(`This bot now replies in ${langName(code)}.`);}catch(e){msg(e.message);} });
   if(q('wal-save')) q('wal-save').onclick=async()=>{await api('/api/wallet/budget',{method:'POST',body:JSON.stringify({monthly_budget_usd:parseFloat(q('wal-budget').value)||0,alert_enabled:q('wal-alert').checked})}); renderPage(name);};
   if(q('wal-reset')) q('wal-reset').onclick=async()=>{await api('/api/wallet/reset',{method:'POST'}); renderPage(name);};
   if(q('sec-save')) q('sec-save').onclick=async()=>{await api('/api/secure-store',{method:'POST',body:JSON.stringify({provider:q('sec-id').value,api_key:q('sec-key').value})}); q('sec-key').value=''; loadStatus(); renderPage(name);};
@@ -1314,6 +1360,6 @@ if(q('wiz-next-2')) q('wiz-next-2').onclick=()=>{$('wiz-2').classList.add('hidde
 if(q('wiz-back-3')) q('wiz-back-3').onclick=()=>{$('wiz-3').classList.add('hidden'); $('wiz-2').classList.remove('hidden');};
 if(q('wiz-finish')) q('wiz-finish').onclick=wizFinish;
 if(q('wiz-skip')) q('wiz-skip').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})}); showView('chat');};
-loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); if(!s.onboarding_done) showWizard();})(); setInterval(loadStatus,15000);
+loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; if(!s.onboarding_done) showWizard(); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };
 </script>

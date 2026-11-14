@@ -1,0 +1,3096 @@
+{
+  "note": "Compiled from public ISO 3166 country codes, ISO 639-1 language codes and Unicode CLDR territory-language data, November 2026. Country languages are the official languages (national, de facto or regional) listed by CLDR. Language understanding depends on the model in use — see docs/languages.md. Browser speech support (stt_likely / tts_likely) means the language is commonly supported by Chrome/Edge speech features; it is not a guarantee on every browser or device.",
+  "countries": [
+    {
+      "code": "AF",
+      "name": "Afghanistan",
+      "languages": [
+        "fa",
+        "ps",
+        "tk",
+        "uz"
+      ]
+    },
+    {
+      "code": "AL",
+      "name": "Albania",
+      "languages": [
+        "sq"
+      ]
+    },
+    {
+      "code": "DZ",
+      "name": "Algeria",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "AD",
+      "name": "Andorra",
+      "languages": [
+        "ca"
+      ]
+    },
+    {
+      "code": "AO",
+      "name": "Angola",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "AG",
+      "name": "Antigua and Barbuda",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "AR",
+      "name": "Argentina",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "AM",
+      "name": "Armenia",
+      "languages": [
+        "hy"
+      ]
+    },
+    {
+      "code": "AU",
+      "name": "Australia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "AT",
+      "name": "Austria",
+      "languages": [
+        "de",
+        "hr",
+        "hu",
+        "sl"
+      ]
+    },
+    {
+      "code": "AZ",
+      "name": "Azerbaijan",
+      "languages": [
+        "az"
+      ]
+    },
+    {
+      "code": "BS",
+      "name": "Bahamas",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "BH",
+      "name": "Bahrain",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "BD",
+      "name": "Bangladesh",
+      "languages": [
+        "bn"
+      ]
+    },
+    {
+      "code": "BB",
+      "name": "Barbados",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "BY",
+      "name": "Belarus",
+      "languages": [
+        "be",
+        "ru"
+      ]
+    },
+    {
+      "code": "BE",
+      "name": "Belgium",
+      "languages": [
+        "de",
+        "fr",
+        "nl"
+      ]
+    },
+    {
+      "code": "BZ",
+      "name": "Belize",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "BJ",
+      "name": "Benin",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "BT",
+      "name": "Bhutan",
+      "languages": [
+        "dz"
+      ]
+    },
+    {
+      "code": "BO",
+      "name": "Bolivia",
+      "languages": [
+        "ay",
+        "es",
+        "qu"
+      ]
+    },
+    {
+      "code": "BA",
+      "name": "Bosnia and Herzegovina",
+      "languages": [
+        "bs",
+        "hr",
+        "sr"
+      ]
+    },
+    {
+      "code": "BW",
+      "name": "Botswana",
+      "languages": [
+        "en",
+        "tn"
+      ]
+    },
+    {
+      "code": "BR",
+      "name": "Brazil",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "BN",
+      "name": "Brunei Darussalam",
+      "languages": [
+        "ms"
+      ]
+    },
+    {
+      "code": "BG",
+      "name": "Bulgaria",
+      "languages": [
+        "bg"
+      ]
+    },
+    {
+      "code": "BF",
+      "name": "Burkina Faso",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "BI",
+      "name": "Burundi",
+      "languages": [
+        "en",
+        "fr",
+        "rn"
+      ]
+    },
+    {
+      "code": "CV",
+      "name": "Cabo Verde",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "KH",
+      "name": "Cambodia",
+      "languages": [
+        "km"
+      ]
+    },
+    {
+      "code": "CM",
+      "name": "Cameroon",
+      "languages": [
+        "en",
+        "fr"
+      ]
+    },
+    {
+      "code": "CA",
+      "name": "Canada",
+      "languages": [
+        "en",
+        "fr",
+        "iu"
+      ]
+    },
+    {
+      "code": "CF",
+      "name": "Central African Republic",
+      "languages": [
+        "fr",
+        "sg"
+      ]
+    },
+    {
+      "code": "TD",
+      "name": "Chad",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "CL",
+      "name": "Chile",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "CN",
+      "name": "China",
+      "languages": [
+        "bo",
+        "ko",
+        "mn",
+        "ug",
+        "za",
+        "zh"
+      ]
+    },
+    {
+      "code": "CO",
+      "name": "Colombia",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "KM",
+      "name": "Comoros",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "CG",
+      "name": "Congo",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "CD",
+      "name": "Congo, The Democratic Republic of the",
+      "languages": [
+        "fr",
+        "kg",
+        "ln",
+        "sw"
+      ]
+    },
+    {
+      "code": "CR",
+      "name": "Costa Rica",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "HR",
+      "name": "Croatia",
+      "languages": [
+        "hr",
+        "it"
+      ]
+    },
+    {
+      "code": "CU",
+      "name": "Cuba",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "CY",
+      "name": "Cyprus",
+      "languages": [
+        "el",
+        "tr"
+      ]
+    },
+    {
+      "code": "CZ",
+      "name": "Czechia",
+      "languages": [
+        "cs"
+      ]
+    },
+    {
+      "code": "CI",
+      "name": "Côte d'Ivoire",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "DK",
+      "name": "Denmark",
+      "languages": [
+        "da",
+        "de",
+        "kl"
+      ]
+    },
+    {
+      "code": "DJ",
+      "name": "Djibouti",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "DM",
+      "name": "Dominica",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "DO",
+      "name": "Dominican Republic",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "EC",
+      "name": "Ecuador",
+      "languages": [
+        "es",
+        "qu"
+      ]
+    },
+    {
+      "code": "EG",
+      "name": "Egypt",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "SV",
+      "name": "El Salvador",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "GQ",
+      "name": "Equatorial Guinea",
+      "languages": [
+        "es",
+        "fr",
+        "pt"
+      ]
+    },
+    {
+      "code": "ER",
+      "name": "Eritrea",
+      "languages": [
+        "ar",
+        "en",
+        "ti"
+      ]
+    },
+    {
+      "code": "EE",
+      "name": "Estonia",
+      "languages": [
+        "et"
+      ]
+    },
+    {
+      "code": "SZ",
+      "name": "Eswatini",
+      "languages": [
+        "en",
+        "ss"
+      ]
+    },
+    {
+      "code": "ET",
+      "name": "Ethiopia",
+      "languages": [
+        "am"
+      ]
+    },
+    {
+      "code": "FJ",
+      "name": "Fiji",
+      "languages": [
+        "en",
+        "fj"
+      ]
+    },
+    {
+      "code": "FI",
+      "name": "Finland",
+      "languages": [
+        "fi",
+        "sv"
+      ]
+    },
+    {
+      "code": "FR",
+      "name": "France",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "GA",
+      "name": "Gabon",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "GM",
+      "name": "Gambia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "GE",
+      "name": "Georgia",
+      "languages": [
+        "ab",
+        "ka",
+        "os"
+      ]
+    },
+    {
+      "code": "DE",
+      "name": "Germany",
+      "languages": [
+        "de"
+      ]
+    },
+    {
+      "code": "GH",
+      "name": "Ghana",
+      "languages": [
+        "ak",
+        "ee",
+        "en"
+      ]
+    },
+    {
+      "code": "GR",
+      "name": "Greece",
+      "languages": [
+        "el"
+      ]
+    },
+    {
+      "code": "GD",
+      "name": "Grenada",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "GT",
+      "name": "Guatemala",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "GN",
+      "name": "Guinea",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "GW",
+      "name": "Guinea-Bissau",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "GY",
+      "name": "Guyana",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "HT",
+      "name": "Haiti",
+      "languages": [
+        "fr",
+        "ht"
+      ]
+    },
+    {
+      "code": "VA",
+      "name": "Holy See (Vatican City State)",
+      "languages": [
+        "it"
+      ]
+    },
+    {
+      "code": "HN",
+      "name": "Honduras",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "HK",
+      "name": "Hong Kong",
+      "languages": [
+        "en",
+        "zh"
+      ]
+    },
+    {
+      "code": "HU",
+      "name": "Hungary",
+      "languages": [
+        "hu"
+      ]
+    },
+    {
+      "code": "IS",
+      "name": "Iceland",
+      "languages": [
+        "is"
+      ]
+    },
+    {
+      "code": "IN",
+      "name": "India",
+      "languages": [
+        "as",
+        "bn",
+        "en",
+        "gu",
+        "hi",
+        "kn",
+        "ks",
+        "ml",
+        "mr",
+        "ne",
+        "or",
+        "pa",
+        "sa",
+        "sd",
+        "ta",
+        "te",
+        "ur"
+      ]
+    },
+    {
+      "code": "ID",
+      "name": "Indonesia",
+      "languages": [
+        "id"
+      ]
+    },
+    {
+      "code": "IR",
+      "name": "Iran",
+      "languages": [
+        "fa"
+      ]
+    },
+    {
+      "code": "IQ",
+      "name": "Iraq",
+      "languages": [
+        "ar",
+        "az"
+      ]
+    },
+    {
+      "code": "IE",
+      "name": "Ireland",
+      "languages": [
+        "en",
+        "ga"
+      ]
+    },
+    {
+      "code": "IL",
+      "name": "Israel",
+      "languages": [
+        "ar",
+        "he"
+      ]
+    },
+    {
+      "code": "IT",
+      "name": "Italy",
+      "languages": [
+        "fr",
+        "it"
+      ]
+    },
+    {
+      "code": "JM",
+      "name": "Jamaica",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "JP",
+      "name": "Japan",
+      "languages": [
+        "ja"
+      ]
+    },
+    {
+      "code": "JO",
+      "name": "Jordan",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "KZ",
+      "name": "Kazakhstan",
+      "languages": [
+        "kk",
+        "ru"
+      ]
+    },
+    {
+      "code": "KE",
+      "name": "Kenya",
+      "languages": [
+        "en",
+        "sw"
+      ]
+    },
+    {
+      "code": "KI",
+      "name": "Kiribati",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "KW",
+      "name": "Kuwait",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "KG",
+      "name": "Kyrgyzstan",
+      "languages": [
+        "ky",
+        "ru"
+      ]
+    },
+    {
+      "code": "LA",
+      "name": "Laos",
+      "languages": [
+        "lo"
+      ]
+    },
+    {
+      "code": "LV",
+      "name": "Latvia",
+      "languages": [
+        "lv"
+      ]
+    },
+    {
+      "code": "LB",
+      "name": "Lebanon",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "LS",
+      "name": "Lesotho",
+      "languages": [
+        "en",
+        "st"
+      ]
+    },
+    {
+      "code": "LR",
+      "name": "Liberia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "LY",
+      "name": "Libya",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "LI",
+      "name": "Liechtenstein",
+      "languages": [
+        "de"
+      ]
+    },
+    {
+      "code": "LT",
+      "name": "Lithuania",
+      "languages": [
+        "lt"
+      ]
+    },
+    {
+      "code": "LU",
+      "name": "Luxembourg",
+      "languages": [
+        "de",
+        "fr",
+        "lb"
+      ]
+    },
+    {
+      "code": "MO",
+      "name": "Macao",
+      "languages": [
+        "pt",
+        "yue",
+        "zh"
+      ]
+    },
+    {
+      "code": "MG",
+      "name": "Madagascar",
+      "languages": [
+        "en",
+        "fr",
+        "mg"
+      ]
+    },
+    {
+      "code": "MW",
+      "name": "Malawi",
+      "languages": [
+        "en",
+        "ny"
+      ]
+    },
+    {
+      "code": "MY",
+      "name": "Malaysia",
+      "languages": [
+        "ms"
+      ]
+    },
+    {
+      "code": "MV",
+      "name": "Maldives",
+      "languages": [
+        "dv"
+      ]
+    },
+    {
+      "code": "ML",
+      "name": "Mali",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "MT",
+      "name": "Malta",
+      "languages": [
+        "en",
+        "mt"
+      ]
+    },
+    {
+      "code": "MH",
+      "name": "Marshall Islands",
+      "languages": [
+        "en",
+        "mh"
+      ]
+    },
+    {
+      "code": "MR",
+      "name": "Mauritania",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "MU",
+      "name": "Mauritius",
+      "languages": [
+        "en",
+        "fr"
+      ]
+    },
+    {
+      "code": "MX",
+      "name": "Mexico",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "FM",
+      "name": "Micronesia, Federated States of",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "MD",
+      "name": "Moldova",
+      "languages": [
+        "ro"
+      ]
+    },
+    {
+      "code": "MC",
+      "name": "Monaco",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "MN",
+      "name": "Mongolia",
+      "languages": [
+        "mn"
+      ]
+    },
+    {
+      "code": "ME",
+      "name": "Montenegro",
+      "languages": [
+        "sr"
+      ]
+    },
+    {
+      "code": "MA",
+      "name": "Morocco",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "MZ",
+      "name": "Mozambique",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "MM",
+      "name": "Myanmar",
+      "languages": [
+        "my"
+      ]
+    },
+    {
+      "code": "NA",
+      "name": "Namibia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "NR",
+      "name": "Nauru",
+      "languages": [
+        "en",
+        "na"
+      ]
+    },
+    {
+      "code": "NP",
+      "name": "Nepal",
+      "languages": [
+        "ne"
+      ]
+    },
+    {
+      "code": "NL",
+      "name": "Netherlands",
+      "languages": [
+        "fy",
+        "nl"
+      ]
+    },
+    {
+      "code": "NZ",
+      "name": "New Zealand",
+      "languages": [
+        "en",
+        "mi"
+      ]
+    },
+    {
+      "code": "NI",
+      "name": "Nicaragua",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "NE",
+      "name": "Niger",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "NG",
+      "name": "Nigeria",
+      "languages": [
+        "en",
+        "yo"
+      ]
+    },
+    {
+      "code": "KP",
+      "name": "North Korea",
+      "languages": [
+        "ko"
+      ]
+    },
+    {
+      "code": "MK",
+      "name": "North Macedonia",
+      "languages": [
+        "mk",
+        "sq"
+      ]
+    },
+    {
+      "code": "NO",
+      "name": "Norway",
+      "languages": [
+        "nb",
+        "nn",
+        "no",
+        "se"
+      ]
+    },
+    {
+      "code": "OM",
+      "name": "Oman",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "PK",
+      "name": "Pakistan",
+      "languages": [
+        "en",
+        "ur"
+      ]
+    },
+    {
+      "code": "PW",
+      "name": "Palau",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "PS",
+      "name": "Palestine, State of",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "PA",
+      "name": "Panama",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "PG",
+      "name": "Papua New Guinea",
+      "languages": [
+        "en",
+        "ho"
+      ]
+    },
+    {
+      "code": "PY",
+      "name": "Paraguay",
+      "languages": [
+        "es",
+        "gn"
+      ]
+    },
+    {
+      "code": "PE",
+      "name": "Peru",
+      "languages": [
+        "es",
+        "qu"
+      ]
+    },
+    {
+      "code": "PH",
+      "name": "Philippines",
+      "languages": [
+        "en",
+        "fil"
+      ]
+    },
+    {
+      "code": "PL",
+      "name": "Poland",
+      "languages": [
+        "de",
+        "lt",
+        "pl"
+      ]
+    },
+    {
+      "code": "PT",
+      "name": "Portugal",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "QA",
+      "name": "Qatar",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "RO",
+      "name": "Romania",
+      "languages": [
+        "ro"
+      ]
+    },
+    {
+      "code": "RU",
+      "name": "Russian Federation",
+      "languages": [
+        "av",
+        "az",
+        "ba",
+        "ce",
+        "kv",
+        "ru",
+        "tt"
+      ]
+    },
+    {
+      "code": "RW",
+      "name": "Rwanda",
+      "languages": [
+        "en",
+        "fr",
+        "rw"
+      ]
+    },
+    {
+      "code": "KN",
+      "name": "Saint Kitts and Nevis",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "LC",
+      "name": "Saint Lucia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "PM",
+      "name": "Saint Pierre and Miquelon",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "VC",
+      "name": "Saint Vincent and the Grenadines",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "WS",
+      "name": "Samoa",
+      "languages": [
+        "en",
+        "sm"
+      ]
+    },
+    {
+      "code": "SM",
+      "name": "San Marino",
+      "languages": [
+        "it"
+      ]
+    },
+    {
+      "code": "ST",
+      "name": "Sao Tome and Principe",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "SA",
+      "name": "Saudi Arabia",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "SN",
+      "name": "Senegal",
+      "languages": [
+        "ff",
+        "fr",
+        "wo"
+      ]
+    },
+    {
+      "code": "RS",
+      "name": "Serbia",
+      "languages": [
+        "hr",
+        "hu",
+        "ro",
+        "sk",
+        "sr",
+        "uk"
+      ]
+    },
+    {
+      "code": "SC",
+      "name": "Seychelles",
+      "languages": [
+        "en",
+        "fr"
+      ]
+    },
+    {
+      "code": "SL",
+      "name": "Sierra Leone",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "SG",
+      "name": "Singapore",
+      "languages": [
+        "en",
+        "ms",
+        "ta",
+        "zh"
+      ]
+    },
+    {
+      "code": "SK",
+      "name": "Slovakia",
+      "languages": [
+        "sk"
+      ]
+    },
+    {
+      "code": "SI",
+      "name": "Slovenia",
+      "languages": [
+        "sl"
+      ]
+    },
+    {
+      "code": "SB",
+      "name": "Solomon Islands",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "SO",
+      "name": "Somalia",
+      "languages": [
+        "ar",
+        "so"
+      ]
+    },
+    {
+      "code": "ZA",
+      "name": "South Africa",
+      "languages": [
+        "af",
+        "en",
+        "nr",
+        "ss",
+        "st",
+        "tn",
+        "ts",
+        "ve",
+        "xh",
+        "zu"
+      ]
+    },
+    {
+      "code": "KR",
+      "name": "South Korea",
+      "languages": [
+        "ko"
+      ]
+    },
+    {
+      "code": "SS",
+      "name": "South Sudan",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "ES",
+      "name": "Spain",
+      "languages": [
+        "ca",
+        "es",
+        "eu",
+        "gl",
+        "oc"
+      ]
+    },
+    {
+      "code": "LK",
+      "name": "Sri Lanka",
+      "languages": [
+        "si",
+        "ta"
+      ]
+    },
+    {
+      "code": "SD",
+      "name": "Sudan",
+      "languages": [
+        "ar",
+        "en"
+      ]
+    },
+    {
+      "code": "SR",
+      "name": "Suriname",
+      "languages": [
+        "nl"
+      ]
+    },
+    {
+      "code": "SE",
+      "name": "Sweden",
+      "languages": [
+        "fi",
+        "sv"
+      ]
+    },
+    {
+      "code": "CH",
+      "name": "Switzerland",
+      "languages": [
+        "de",
+        "fr",
+        "it",
+        "rm"
+      ]
+    },
+    {
+      "code": "SY",
+      "name": "Syria",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "TW",
+      "name": "Taiwan",
+      "languages": [
+        "zh"
+      ]
+    },
+    {
+      "code": "TJ",
+      "name": "Tajikistan",
+      "languages": [
+        "tg"
+      ]
+    },
+    {
+      "code": "TZ",
+      "name": "Tanzania",
+      "languages": [
+        "en",
+        "sw"
+      ]
+    },
+    {
+      "code": "TH",
+      "name": "Thailand",
+      "languages": [
+        "th"
+      ]
+    },
+    {
+      "code": "TL",
+      "name": "Timor-Leste",
+      "languages": [
+        "pt"
+      ]
+    },
+    {
+      "code": "TG",
+      "name": "Togo",
+      "languages": [
+        "fr"
+      ]
+    },
+    {
+      "code": "TO",
+      "name": "Tonga",
+      "languages": [
+        "en",
+        "to"
+      ]
+    },
+    {
+      "code": "TT",
+      "name": "Trinidad and Tobago",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "TN",
+      "name": "Tunisia",
+      "languages": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "code": "TM",
+      "name": "Turkmenistan",
+      "languages": [
+        "tk"
+      ]
+    },
+    {
+      "code": "TV",
+      "name": "Tuvalu",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "TR",
+      "name": "Türkiye",
+      "languages": [
+        "tr"
+      ]
+    },
+    {
+      "code": "UG",
+      "name": "Uganda",
+      "languages": [
+        "en",
+        "sw"
+      ]
+    },
+    {
+      "code": "UA",
+      "name": "Ukraine",
+      "languages": [
+        "ru",
+        "uk"
+      ]
+    },
+    {
+      "code": "AE",
+      "name": "United Arab Emirates",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "GB",
+      "name": "United Kingdom",
+      "languages": [
+        "cy",
+        "en",
+        "ga",
+        "gd"
+      ]
+    },
+    {
+      "code": "US",
+      "name": "United States",
+      "languages": [
+        "en",
+        "es"
+      ]
+    },
+    {
+      "code": "UY",
+      "name": "Uruguay",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "UZ",
+      "name": "Uzbekistan",
+      "languages": [
+        "uz"
+      ]
+    },
+    {
+      "code": "VU",
+      "name": "Vanuatu",
+      "languages": [
+        "bi",
+        "en",
+        "fr"
+      ]
+    },
+    {
+      "code": "VE",
+      "name": "Venezuela",
+      "languages": [
+        "es"
+      ]
+    },
+    {
+      "code": "VN",
+      "name": "Vietnam",
+      "languages": [
+        "vi"
+      ]
+    },
+    {
+      "code": "YE",
+      "name": "Yemen",
+      "languages": [
+        "ar"
+      ]
+    },
+    {
+      "code": "ZM",
+      "name": "Zambia",
+      "languages": [
+        "en"
+      ]
+    },
+    {
+      "code": "ZW",
+      "name": "Zimbabwe",
+      "languages": [
+        "en",
+        "nd",
+        "sn"
+      ]
+    }
+  ],
+  "languages": [
+    {
+      "code": "aa",
+      "name": "Afar",
+      "native_name": "Qafar",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ab",
+      "name": "Abkhazian",
+      "native_name": "Аԥсшәа",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ae",
+      "name": "Avestan",
+      "native_name": "Avestan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "af",
+      "name": "Afrikaans",
+      "native_name": "Afrikaans",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ak",
+      "name": "Akan",
+      "native_name": "Akan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "am",
+      "name": "Amharic",
+      "native_name": "አማርኛ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "an",
+      "name": "Aragonese",
+      "native_name": "aragonés",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ar",
+      "name": "Arabic",
+      "native_name": "العربية",
+      "rtl": true,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "as",
+      "name": "Assamese",
+      "native_name": "অসমীয়া",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "av",
+      "name": "Avaric",
+      "native_name": "Avaric",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ay",
+      "name": "Aymara",
+      "native_name": "Aymara",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "az",
+      "name": "Azerbaijani",
+      "native_name": "azərbaycan",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ba",
+      "name": "Bashkir",
+      "native_name": "башҡорт теле",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "be",
+      "name": "Belarusian",
+      "native_name": "беларуская",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "bg",
+      "name": "Bulgarian",
+      "native_name": "български",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "bi",
+      "name": "Bislama",
+      "native_name": "Bislama",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "bm",
+      "name": "Bambara",
+      "native_name": "bamanakan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "bn",
+      "name": "Bangla",
+      "native_name": "বাংলা",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "bo",
+      "name": "Tibetan",
+      "native_name": "བོད་སྐད་",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "br",
+      "name": "Breton",
+      "native_name": "brezhoneg",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "bs",
+      "name": "Bosnian",
+      "native_name": "bosanski",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ca",
+      "name": "Catalan",
+      "native_name": "català",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ce",
+      "name": "Chechen",
+      "native_name": "нохчийн",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ch",
+      "name": "Chamorro",
+      "native_name": "Chamorro",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "co",
+      "name": "Corsican",
+      "native_name": "corsu",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "cr",
+      "name": "Cree",
+      "native_name": "Cree",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "cs",
+      "name": "Czech",
+      "native_name": "čeština",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "cu",
+      "name": "Church Slavic",
+      "native_name": "церковнослове́нскїй",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "cv",
+      "name": "Chuvash",
+      "native_name": "чӑваш",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "cy",
+      "name": "Welsh",
+      "native_name": "Cymraeg",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "da",
+      "name": "Danish",
+      "native_name": "dansk",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "native_name": "Deutsch",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "dv",
+      "name": "Divehi",
+      "native_name": "ދިވެހިބަސް",
+      "rtl": true,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "dz",
+      "name": "Dzongkha",
+      "native_name": "རྫོང་ཁ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ee",
+      "name": "Ewe",
+      "native_name": "eʋegbe",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "el",
+      "name": "Greek",
+      "native_name": "Ελληνικά",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "en",
+      "name": "English",
+      "native_name": "English",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "eo",
+      "name": "Esperanto",
+      "native_name": "Esperanto",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "native_name": "español",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "et",
+      "name": "Estonian",
+      "native_name": "eesti",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "eu",
+      "name": "Basque",
+      "native_name": "euskara",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "fa",
+      "name": "Persian",
+      "native_name": "فارسی",
+      "rtl": true,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ff",
+      "name": "Fula",
+      "native_name": "Pulaar",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "fi",
+      "name": "Finnish",
+      "native_name": "suomi",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "fil",
+      "name": "Filipino",
+      "native_name": "Filipino",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true,
+      "note": "ISO 639-2/3 code — no ISO 639-1 code exists for this language."
+    },
+    {
+      "code": "fj",
+      "name": "Fijian",
+      "native_name": "Fijian",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "fo",
+      "name": "Faroese",
+      "native_name": "føroyskt",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "fr",
+      "name": "French",
+      "native_name": "français",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "fy",
+      "name": "Western Frisian",
+      "native_name": "Frysk",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ga",
+      "name": "Irish",
+      "native_name": "Gaeilge",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "gd",
+      "name": "Scottish Gaelic",
+      "native_name": "Gàidhlig",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "gl",
+      "name": "Galician",
+      "native_name": "galego",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "gn",
+      "name": "Guarani",
+      "native_name": "avañe’ẽ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "gu",
+      "name": "Gujarati",
+      "native_name": "ગુજરાતી",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "gv",
+      "name": "Manx",
+      "native_name": "Gaelg",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ha",
+      "name": "Hausa",
+      "native_name": "Hausa",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "he",
+      "name": "Hebrew",
+      "native_name": "עברית",
+      "rtl": true,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "hi",
+      "name": "Hindi",
+      "native_name": "हिन्दी",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ho",
+      "name": "Hiri Motu",
+      "native_name": "Hiri Motu",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "hr",
+      "name": "Croatian",
+      "native_name": "hrvatski",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ht",
+      "name": "Haitian Creole",
+      "native_name": "Kreyòl Ayisyen",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "hu",
+      "name": "Hungarian",
+      "native_name": "magyar",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "hy",
+      "name": "Armenian",
+      "native_name": "հայերեն",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "hz",
+      "name": "Herero",
+      "native_name": "Herero",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ia",
+      "name": "Interlingua",
+      "native_name": "interlingua",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "id",
+      "name": "Indonesian",
+      "native_name": "Indonesia",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ie",
+      "name": "Interlingue",
+      "native_name": "Interlingue",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ig",
+      "name": "Igbo",
+      "native_name": "Igbo",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ii",
+      "name": "Sichuan Yi",
+      "native_name": "ꆈꌠꉙ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ik",
+      "name": "Inupiaq",
+      "native_name": "Inupiaq",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "io",
+      "name": "Ido",
+      "native_name": "Ido",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "is",
+      "name": "Icelandic",
+      "native_name": "íslenska",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "it",
+      "name": "Italian",
+      "native_name": "italiano",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "iu",
+      "name": "Inuktitut",
+      "native_name": "ᐃᓄᒃᑎᑐᑦ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ja",
+      "name": "Japanese",
+      "native_name": "日本語",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "jv",
+      "name": "Javanese",
+      "native_name": "Jawa",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ka",
+      "name": "Georgian",
+      "native_name": "ქართული",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "kg",
+      "name": "Kongo",
+      "native_name": "Kongo",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ki",
+      "name": "Kikuyu",
+      "native_name": "Gikuyu",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "kj",
+      "name": "Kuanyama",
+      "native_name": "Kuanyama",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "kk",
+      "name": "Kazakh",
+      "native_name": "қазақ тілі",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "kl",
+      "name": "Kalaallisut",
+      "native_name": "kalaallisut",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "km",
+      "name": "Khmer",
+      "native_name": "ខ្មែរ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "kn",
+      "name": "Kannada",
+      "native_name": "ಕನ್ನಡ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ko",
+      "name": "Korean",
+      "native_name": "한국어",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "kr",
+      "name": "Kanuri",
+      "native_name": "Kanuri",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ks",
+      "name": "Kashmiri",
+      "native_name": "کٲشُر",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ku",
+      "name": "Kurdish",
+      "native_name": "kurdî (kurmancî)",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "kv",
+      "name": "Komi",
+      "native_name": "Komi",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "kw",
+      "name": "Cornish",
+      "native_name": "kernewek",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ky",
+      "name": "Kyrgyz",
+      "native_name": "кыргызча",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "la",
+      "name": "Latin",
+      "native_name": "Latina",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "lb",
+      "name": "Luxembourgish",
+      "native_name": "Lëtzebuergesch",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "lg",
+      "name": "Ganda",
+      "native_name": "Luganda",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "li",
+      "name": "Limburgan",
+      "native_name": "Limburgan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ln",
+      "name": "Lingala",
+      "native_name": "lingála",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "lo",
+      "name": "Lao",
+      "native_name": "ລາວ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "lt",
+      "name": "Lithuanian",
+      "native_name": "lietuvių",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "lu",
+      "name": "Luba-Katanga",
+      "native_name": "Tshiluba",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "lv",
+      "name": "Latvian",
+      "native_name": "latviešu",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "mg",
+      "name": "Malagasy",
+      "native_name": "Malagasy",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "mh",
+      "name": "Marshallese",
+      "native_name": "Marshallese",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "mi",
+      "name": "Māori",
+      "native_name": "Māori",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "mk",
+      "name": "Macedonian",
+      "native_name": "македонски",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ml",
+      "name": "Malayalam",
+      "native_name": "മലയാളം",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "mn",
+      "name": "Mongolian",
+      "native_name": "монгол",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "mr",
+      "name": "Marathi",
+      "native_name": "मराठी",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ms",
+      "name": "Malay",
+      "native_name": "Melayu",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "mt",
+      "name": "Maltese",
+      "native_name": "Malti",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "my",
+      "name": "Burmese",
+      "native_name": "မြန်မာ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "na",
+      "name": "Nauru",
+      "native_name": "Nauru",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "nb",
+      "name": "Norwegian Bokmål",
+      "native_name": "norsk bokmål",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "nd",
+      "name": "North Ndebele",
+      "native_name": "isiNdebele",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ne",
+      "name": "Nepali",
+      "native_name": "नेपाली",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ng",
+      "name": "Ndonga",
+      "native_name": "Ndonga",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "nl",
+      "name": "Dutch",
+      "native_name": "Nederlands",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "nn",
+      "name": "Norwegian Nynorsk",
+      "native_name": "norsk nynorsk",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "no",
+      "name": "Norwegian",
+      "native_name": "norsk",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "nr",
+      "name": "South Ndebele",
+      "native_name": "isiNdebele",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "nv",
+      "name": "Navajo",
+      "native_name": "Diné Bizaad",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ny",
+      "name": "Nyanja",
+      "native_name": "Nyanja",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "oc",
+      "name": "Occitan",
+      "native_name": "occitan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "oj",
+      "name": "Ojibwa",
+      "native_name": "Ojibwa",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "om",
+      "name": "Oromo",
+      "native_name": "Oromoo",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "or",
+      "name": "Odia",
+      "native_name": "ଓଡ଼ିଆ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "os",
+      "name": "Ossetic",
+      "native_name": "ирон",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "pa",
+      "name": "Punjabi",
+      "native_name": "ਪੰਜਾਬੀ",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "pi",
+      "name": "Pali",
+      "native_name": "Pali",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "pl",
+      "name": "Polish",
+      "native_name": "polski",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ps",
+      "name": "Pashto",
+      "native_name": "پښتو",
+      "rtl": true,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "native_name": "português",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "qu",
+      "name": "Quechua",
+      "native_name": "Runasimi",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "rm",
+      "name": "Romansh",
+      "native_name": "rumantsch",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "rn",
+      "name": "Rundi",
+      "native_name": "Ikirundi",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ro",
+      "name": "Romanian",
+      "native_name": "română",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ru",
+      "name": "Russian",
+      "native_name": "русский",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "rw",
+      "name": "Kinyarwanda",
+      "native_name": "Ikinyarwanda",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sa",
+      "name": "Sanskrit",
+      "native_name": "संस्कृत भाषा",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sc",
+      "name": "Sardinian",
+      "native_name": "sardu",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sd",
+      "name": "Sindhi",
+      "native_name": "سنڌي",
+      "rtl": true,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "se",
+      "name": "Northern Sami",
+      "native_name": "davvisámegiella",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sg",
+      "name": "Sango",
+      "native_name": "Sängö",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sh",
+      "name": "Serbo-Croatian",
+      "native_name": "Serbo-Croatian",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "si",
+      "name": "Sinhala",
+      "native_name": "සිංහල",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sk",
+      "name": "Slovak",
+      "native_name": "slovenčina",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sl",
+      "name": "Slovenian",
+      "native_name": "slovenščina",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sm",
+      "name": "Samoan",
+      "native_name": "Samoan",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sn",
+      "name": "Shona",
+      "native_name": "chiShona",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "so",
+      "name": "Somali",
+      "native_name": "Soomaali",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sq",
+      "name": "Albanian",
+      "native_name": "shqip",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sr",
+      "name": "Serbian",
+      "native_name": "српски",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ss",
+      "name": "Swati",
+      "native_name": "siSwati",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "st",
+      "name": "Southern Sotho",
+      "native_name": "Sesotho",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "su",
+      "name": "Sundanese",
+      "native_name": "Basa Sunda",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "sv",
+      "name": "Swedish",
+      "native_name": "svenska",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "sw",
+      "name": "Swahili",
+      "native_name": "Kiswahili",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ta",
+      "name": "Tamil",
+      "native_name": "தமிழ்",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "te",
+      "name": "Telugu",
+      "native_name": "తెలుగు",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "tg",
+      "name": "Tajik",
+      "native_name": "тоҷикӣ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "th",
+      "name": "Thai",
+      "native_name": "ไทย",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ti",
+      "name": "Tigrinya",
+      "native_name": "ትግርኛ",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "tk",
+      "name": "Turkmen",
+      "native_name": "türkmen dili",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "tl",
+      "name": "Tagalog",
+      "native_name": "Tagalog",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "tn",
+      "name": "Tswana",
+      "native_name": "Setswana",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "to",
+      "name": "Tongan",
+      "native_name": "lea fakatonga",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "tr",
+      "name": "Turkish",
+      "native_name": "Türkçe",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ts",
+      "name": "Tsonga",
+      "native_name": "Xitsonga",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "tt",
+      "name": "Tatar",
+      "native_name": "татар",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "tw",
+      "name": "Twi",
+      "native_name": "Twi",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ty",
+      "name": "Tahitian",
+      "native_name": "Tahitian",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "ug",
+      "name": "Uyghur",
+      "native_name": "ئۇيغۇرچە",
+      "rtl": true,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "uk",
+      "name": "Ukrainian",
+      "native_name": "українська",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ur",
+      "name": "Urdu",
+      "native_name": "اردو",
+      "rtl": true,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "uz",
+      "name": "Uzbek",
+      "native_name": "o‘zbek",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "ve",
+      "name": "Venda",
+      "native_name": "Tshivenḓa",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "vi",
+      "name": "Vietnamese",
+      "native_name": "Tiếng Việt",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "vo",
+      "name": "Volapük",
+      "native_name": "Volapük",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "wa",
+      "name": "Walloon",
+      "native_name": "walon",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "wo",
+      "name": "Wolof",
+      "native_name": "Wolof",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "xh",
+      "name": "Xhosa",
+      "native_name": "IsiXhosa",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "yi",
+      "name": "Yiddish",
+      "native_name": "ייִדיש",
+      "rtl": true,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "yo",
+      "name": "Yoruba",
+      "native_name": "Èdè Yorùbá",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "yue",
+      "name": "Cantonese",
+      "native_name": "廣東話",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true,
+      "note": "ISO 639-2/3 code — no ISO 639-1 code exists for this language."
+    },
+    {
+      "code": "za",
+      "name": "Zhuang",
+      "native_name": "Vahcuengh",
+      "rtl": false,
+      "stt_likely": false,
+      "tts_likely": false
+    },
+    {
+      "code": "zh",
+      "name": "Chinese",
+      "native_name": "中文",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    },
+    {
+      "code": "zu",
+      "name": "Zulu",
+      "native_name": "isiZulu",
+      "rtl": false,
+      "stt_likely": true,
+      "tts_likely": true
+    }
+  ],
+  "common": [
+    "en",
+    "ar",
+    "hi",
+    "ur",
+    "fr",
+    "es",
+    "pt",
+    "de",
+    "it",
+    "tr",
+    "fa",
+    "ms",
+    "id",
+    "bn",
+    "ta",
+    "te",
+    "pa",
+    "ps",
+    "tl",
+    "vi",
+    "th",
+    "zh",
+    "yue",
+    "ja",
+    "ko",
+    "ru",
+    "uk",
+    "pl",
+    "nl",
+    "sv",
+    "no",
+    "da",
+    "fi",
+    "el",
+    "he",
+    "sw",
+    "ha",
+    "yo",
+    "am",
+    "so",
+    "ne",
+    "si",
+    "km",
+    "lo",
+    "my",
+    "mn",
+    "kk",
+    "uz",
+    "az",
+    "ka",
+    "hy"
+  ]
+}
