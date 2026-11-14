@@ -108,6 +108,24 @@ dependencies, install Playwright Chromium, then run the app.
 Then open **http://localhost:8000**. LM Studio must be running first
 (see step 2 in your OS section below).
 
+**First time you open it**, a short setup wizard asks three things:
+how LocalBotz should run (on your computer, with your subscriptions,
+or rented from us), your first bot, and your first office — and
+whether LocalBotz should start when the computer starts, so routines,
+jobs and workflows keep running while the computer is on. You can
+skip it and change everything later in Settings → General.
+
+---
+
+## Smart routing — simple questions free, hard work premium
+
+In **Make a bot**, set **Smart routing** to Auto and the bot answers
+simple questions (short, and asking for no drafting, research,
+analysis or quotations) free on the local model, and only sends hard
+work to its configured premium provider — so the wallet lasts longer.
+The chat footer says when a question was routed ("routed free to
+local (from claude)"). See `docs/routing.md`.
+
 ---
 
 ## Windows
@@ -391,6 +409,19 @@ pass with fixes, or fail) and held as a draft until you approve it;
 only an approved job goes into the memory. Runs on the local model
 by default. See `docs/office.md`.
 
+## Office documents — real Word, Excel and PowerPoint files
+
+A finished job can be exported as a real file: **Word (.docx)** —
+title, Auditor verdict, one headed section per team member, and any
+`| pipe |` tables as real Word tables; **Excel (.xlsx)** — a Summary
+sheet plus one sheet per member, with money kept as numbers so you
+can sum a column; **PowerPoint (.pptx)** — a title slide plus one
+slide per step, up to 12 slides. Files live under
+`data/documents/<office_id>/<job_id>/` and are listed on the Office
+page with download links. Nothing is invented in them — only what
+the job actually produced, and an empty step says so. See
+`docs/documents.md`.
+
 15 of the templates, 5 office roles and 6 skills come from
 [awesome-llm-apps](https://github.com/shubhamsaboo/awesome-llm-apps)
 (100+ open-source AI agents, Apache-2.0) — rebuilt as LocalBotz-native
@@ -442,7 +473,9 @@ one department, or any. Write the steps with `{deal}`, `{client}`,
 deal. Every department ships with two starter workflows (a handover
 draft when a deal is won, a note when one is lost), plus a ready-made
 chase chain for General. Nothing is sent out by a workflow on its
-own — drafts stay drafts until you send them. See
+own — drafts stay drafts until you send them. **📋 Runs** lists
+every chain and routine that ran, with its steps — a finished chain
+can be re-run from step 1 on the same deal. See
 `docs/deal-workflows.md`.
 
 ## Document workroom — documents with proof

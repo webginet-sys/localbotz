@@ -71,7 +71,63 @@ def _default_settings():
     return {"default_provider": (os.getenv("PROVIDER") or os.getenv("LLM_PROVIDER") or "lmstudio"),
             "default_model": (os.getenv("MODEL") or os.getenv("LLM_MODEL") or "qwen3.5"),
             "workspace_folder": "workspace", "theme": "light",
+            "onboarding_done": False, "run_mode": "computer", "autostart": False,
             "data_location": str(DATA_DIR), "app_version": APP_VERSION}
+
+
+def _autostart_path():
+    """Where the start-with-computer entry lives on this OS."""
+    system = platform.system()
+    if system == "Windows":
+        start = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        return start / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "LocalBotz.bat"
+    if system == "Darwin":
+        return Path.home() / "Library" / "LaunchAgents" / "io.localbotz.plist"
+    return Path.home() / ".config" / "autostart" / "localbotz.desktop"
+
+
+def _autostart_enabled():
+    try:
+        return _autostart_path().is_file()
+    except Exception:
+        return False
+
+
+def _set_autostart(enabled):
+    """Start LocalBotz when the computer starts (so routines, jobs and
+    workflows keep running while the computer is on), or stop it.
+    Writes one small file in the OS's own startup place — nothing
+    else. Returns (ok, message)."""
+    path = _autostart_path()
+    try:
+        if not enabled:
+            if path.is_file():
+                path.unlink()
+            return True, "Start with computer off."
+        system = platform.system()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if system == "Windows":
+            path.write_text(f"@echo off\r\ncd /d \"{BASE_DIR}\"\r\n"
+                            f"start \"\" /min \"LocalBotz\" \"{BASE_DIR}\\start.bat\"\r\n",
+                            encoding="utf-8")
+        elif system == "Darwin":
+            path.write_text(f"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
+                            "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+                            "<plist version=\"1.0\"><dict>\n"
+                            "  <key>Label</key><string>io.localbotz</string>\n"
+                            "  <key>ProgramArguments</key><array><string>/bin/sh</string>"
+                            "<string>-c</string><string>cd \"" + str(BASE_DIR) +
+                            "\" &amp;&amp; ./start.sh</string></array>\n"
+                            "  <key>RunAtLoad</key><true/>\n</dict></plist>\n",
+                            encoding="utf-8")
+        else:
+            path.write_text("[Desktop Entry]\nType=Application\nName=LocalBotz\n"
+                            f"Exec={BASE_DIR}/start.sh\nX-GNOME-Autostart-enabled=true\n",
+                            encoding="utf-8")
+        return True, f"LocalBotz will start with the computer ({path})."
+    except Exception as e:
+        return False, f"Could not change start-with-computer: {e}"
 
 def load_settings():
     try:
@@ -373,6 +429,7 @@ def load_bots():
         if b["provider"] not in PROVIDERS:
             b["provider"] = DEFAULT_PROVIDER
         b.setdefault("model", PROVIDERS[b["provider"]]["default_model"])
+        b.setdefault("routing", "off")
     return bots
 
 def save_bots(bots):
@@ -1310,6 +1367,26 @@ def llm_chat(messages, model: str, provider_id: str = None, api_key=None):
         return _llm_chat_anthropic(messages, model, cfg, api_key=api_key)
     return _llm_chat_openai(messages, model, cfg, api_key=api_key)
 
+# Smart model routing (PicoClaw idea): a bot set to Auto answers simple
+# questions free on the local model and only sends hard work to its
+# configured premium provider, so the wallet lasts longer. A question
+# is "simple" when it is short and asks for none of the hard-work
+# words below — drafting, research, analysis, quotations, plans.
+ROUTING_HARD_WORDS = ("draft", "write", "proposal", "quotation", "quote",
+                      "tender", "boq", "contract", "analys", "research",
+                      "compare", "plan", "strategy", "review", "audit",
+                      "summar", "explain", "design", "build", "code",
+                      "calculat", "estimat", "translate", "legal")
+
+
+def _is_simple_question(text):
+    t = (text or "").strip()
+    if not t or len(t) > 300:
+        return False
+    low = t.lower()
+    return not any(k in low for k in ROUTING_HARD_WORDS)
+
+
 def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
     # Tool loop, max 8 turns. Returns (reply, tool_trace, extra).
     # extra carries error/fallback info for the UI; the loop itself is
@@ -1329,6 +1406,16 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
         model = bot.get("model") or ""
     if provider_id not in PROVIDERS:
         provider_id = DEFAULT_PROVIDER
+    # Smart routing: Auto + a paid online provider + a simple question
+    # → answer free on the local model instead. Never overrides the
+    # Master Fixed model, and never routes a bot that is already local.
+    routed_from = None
+    if (bot.get("routing") == "auto" and mode != "fixed"
+            and provider_id not in ("lmstudio", "ollama")
+            and _is_simple_question(user_text)):
+        routed_from = {"provider": provider_id, "model": model}
+        provider_id = "lmstudio"
+        model = ""
     cfg = get_provider_config(provider_id)
     if not model:
         model = cfg["default_model"]
@@ -1371,10 +1458,13 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
                      f"start the local server (Developer tab), set MODEL to that model's exact id, "
                      f"and restart without --mock for real local-model replies. I can still search the web, "
                      f"browse, and read/write files in ./workspace.")
-        history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time())})
+        history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time()),
+                        "routed_from": routed_from, "routed_to": provider_id})
         save_chat(bot["id"], history)
         return reply, trace, {"mode": mode, "key_source": key_source,
                               "workspace": ws["id"], "cost_usd": 0.0,
+                              "routed_from": routed_from,
+                              "routed_to": provider_id,
                               "wallet_balance": wallet_balance(ws["id"])}
 
     # Pre-check: provider disabled in Library/Settings > Connectors.
@@ -1565,10 +1655,12 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
                   "cost_usd": metered["cost_usd"], "billed": metered["billed"],
                   "tokens_in": metered["tokens_in"], "tokens_out": metered["tokens_out"],
                   "wallet_balance": metered["balance_usd"],
+                  "routed_from": routed_from, "routed_to": provider_id,
                   "low_balance_warning": bool(low_warn)})
     history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time()),
                     "cost_usd": metered["cost_usd"], "wallet_balance": metered["balance_usd"],
-                    "mode": mode, "key_source": key_source})
+                    "mode": mode, "key_source": key_source,
+                    "routed_from": routed_from, "routed_to": provider_id})
     save_chat(bot["id"], history)
     return reply, trace, extra
 
@@ -1841,6 +1933,7 @@ class BotCreate(BaseModel):
     template: str = ""
     avatar: str = ""
     schedule: str = ""
+    routing: str = "off"
     enabled_tools: list = []
     skills: list = []
 
@@ -1852,6 +1945,7 @@ class BotUpdate(BaseModel):
     model: str = ""
     avatar: str = ""
     schedule: str = ""
+    routing: str = ""
     enabled_tools: list = []
     skills: list = []
     persistent: bool = None
@@ -2142,6 +2236,7 @@ def create_bot(body: BotCreate):
            "schedule": body.schedule or (tpl["schedule"] if tpl else "on_demand"),
            "enabled_tools": body.enabled_tools or (tpl["default_tools"] if tpl else []),
            "skills": body.skills or ["research", "file-help", "browser-help"],
+           "routing": body.routing if body.routing in ("off", "auto") else "off",
            "persistent": False,
            "created_at": int(time.time())}
     bots.append(bot); save_bots(bots)
@@ -2163,6 +2258,8 @@ def update_bot(bot_id: str, body: BotUpdate):
             bot["model"] = get_provider_config(bot["provider"])["default_model"]
     if body.model:
         bot["model"] = body.model.strip()
+    if body.routing in ("off", "auto"):
+        bot["routing"] = body.routing
     if body.enabled_tools is not None:
         bot["enabled_tools"] = body.enabled_tools
     if body.skills is not None:
@@ -2816,6 +2913,361 @@ def request_office_job_changes(office_id: str, job_id: str, body: dict):
     append_blackboard(office_id, "You", "Boss",
                       f"Changes requested on '{job['title']}': {note}")
     return job
+
+
+# ---- Office documents: real Word / Excel / PowerPoint exports ----
+# A team job is text on a page until it leaves the computer. These
+# exporters turn a finished job into a real file — .docx, .xlsx or
+# .pptx — built from the job's own text only. Nothing is invented:
+# no price, measurement or date is added, and a step with no output
+# says so instead of being padded out. Tables the team wrote with
+# | pipes | become real tables in Word and real sheets in Excel.
+# Files live under data/documents/<office_id>/<job_id>/.
+DOCUMENTS_DIR = DATA_DIR / "documents"
+DOCUMENT_FORMATS = ("docx", "xlsx", "pptx")
+
+
+def _document_libs(fmt):
+    """Import the library a format needs, lazily, so a missing
+    optional library never stops the rest of the app starting."""
+    try:
+        if fmt == "docx":
+            from docx import Document
+            return Document
+        if fmt == "xlsx":
+            import openpyxl
+            return openpyxl
+        if fmt == "pptx":
+            from pptx import Presentation
+            return Presentation
+    except ImportError:
+        raise HTTPException(500, f"The {fmt} library is not installed — run pip install -r requirements.txt and restart LocalBotz.")
+    raise HTTPException(400, f"Unknown document format '{fmt}' — use docx, xlsx or pptx.")
+
+
+def _parse_pipe_blocks(text):
+    """Split step text into blocks: {"type": "text", "text": ...} or
+    {"type": "table", "rows": [[cell, ...], ...]}. A table is two or
+    more consecutive lines made of | cells; separator lines like
+    |---|---| are skipped, not shown as data."""
+    blocks = []
+    buf = []
+    table = []
+
+    def flush_text():
+        if buf:
+            blocks.append({"type": "text", "text": "\n".join(buf).strip()})
+            buf.clear()
+
+    def flush_table():
+        if len(table) >= 2:
+            # Copy: the block must keep its own rows — table is cleared below.
+            blocks.append({"type": "table", "rows": [list(r) for r in table]})
+        elif table:
+            buf.extend(" | ".join(r) for r in table)
+        table.clear()
+
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if all(set(c) <= set("-: ") and c for c in cells):
+                continue  # separator row: |---|---|---|
+            if buf:
+                flush_text()
+            table.append(cells)
+        else:
+            if table:
+                flush_table()
+            buf.append(line)
+    if table:
+        flush_table()
+    flush_text()
+    return blocks
+
+
+def _money_number(cell, header=""):
+    """A cell that looks like money (or a number in a money/quantity
+    column) as a float, so Excel keeps it a number, not text.
+    Returns None when the cell is not numeric — it stays text.
+    Currency marks and thousands separators are stripped; bare
+    integers stay text unless the column is a quantity/amount one,
+    so codes and years (2024, 001) are never mangled."""
+    raw = (cell or "").strip()
+    if not raw:
+        return None
+    cleaned = re.sub(r"(AED|QAR|USD|SAR|EUR|GBP|\$|£|€)", "", raw, flags=re.IGNORECASE).strip()
+    if not re.fullmatch(r"-?[\d,]+(?:\.\d+)?", cleaned):
+        return None
+    has_mark = bool(re.search(r"(AED|QAR|USD|SAR|EUR|GBP|\$|£|€)", raw, flags=re.IGNORECASE))
+    has_sep = ("," in cleaned) or ("." in cleaned)
+    header = (header or "").lower()
+    qty_col = any(w in header for w in ("qty", "quantity", "amount", "price", "total", "cost", "value", "unit"))
+    if has_mark or has_sep or qty_col:
+        try:
+            return float(cleaned.replace(",", ""))
+        except ValueError:
+            return None
+    return None
+
+
+def _job_doc_filename(job, fmt):
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", job.get("title") or "job").strip("-")[:60] or "job"
+    return f"{slug}.{fmt}"
+
+
+def _job_doc_date(job):
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(job.get("created_at") or int(time.time())))
+
+
+def _step_role_label(step):
+    return (OFFICE_ROLES.get(step.get("role") or "") or {}).get("label") or (step.get("role") or "Team member")
+
+
+def _export_docx(office, job):
+    Document = _document_libs("docx")
+    doc = Document()
+    doc.add_heading(job["title"], level=0)
+    doc.add_paragraph(f"Office: {office['name']}  •  Date: {_job_doc_date(job)}  •  Status: {job.get('status')}")
+    doc.add_paragraph(f"Brief: {job.get('brief')}")
+    audit = job.get("audit") or {}
+    if audit:
+        doc.add_heading("Auditor", level=1)
+        doc.add_paragraph(f"Verdict: {audit.get('verdict')}")
+        if audit.get("summary"):
+            doc.add_paragraph(audit["summary"])
+        for issue in audit.get("issues") or []:
+            doc.add_paragraph(issue, style="List Bullet")
+    for step in job.get("steps") or []:
+        doc.add_heading(f"{step.get('member')} — {_step_role_label(step)}", level=1)
+        output = (step.get("output") or "").strip()
+        if not output:
+            p = doc.add_paragraph("No output from this step.")
+            p.runs[0].italic = True
+            continue
+        for block in _parse_pipe_blocks(output):
+            if block["type"] == "text":
+                for para in block["text"].split("\n"):
+                    para = para.strip()
+                    if not para:
+                        continue
+                    style = "List Bullet" if para.startswith(("- ", "• ")) else None
+                    doc.add_paragraph(para[2:].strip() if style else para, style=style)
+            else:
+                rows = block["rows"]
+                table = doc.add_table(rows=1, cols=len(rows[0]))
+                table.style = "Table Grid"
+                for i, cell in enumerate(rows[0]):
+                    run = table.rows[0].cells[i].paragraphs[0].add_run(cell)
+                    run.bold = True
+                for row in rows[1:]:
+                    cells = table.add_row().cells
+                    for i, cell in enumerate(row):
+                        if i < len(cells):
+                            cells[i].text = cell
+    path = DOCUMENTS_DIR / office["id"] / job["id"] / _job_doc_filename(job, "docx")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(path))
+    return path
+
+
+def _export_xlsx(office, job):
+    openpyxl = _document_libs("xlsx")
+    wb = openpyxl.Workbook()
+    summary = wb.active
+    summary.title = "Summary"
+    audit = job.get("audit") or {}
+    summary_rows = [
+        ("Job", job["title"]),
+        ("Office", office["name"]),
+        ("Date", _job_doc_date(job)),
+        ("Status", job.get("status")),
+        ("Brief", job.get("brief")),
+        ("Audit verdict", audit.get("verdict") or "not audited"),
+        ("Team members", ", ".join(s.get("member", "") for s in job.get("steps") or [])),
+    ]
+    for row in summary_rows:
+        summary.append(list(row))
+    for cell in summary["A"]:
+        cell.font = openpyxl.styles.Font(bold=True)
+    summary.column_dimensions["A"].width = 18
+    summary.column_dimensions["B"].width = 90
+    used_names = {"Summary"}
+    for step in job.get("steps") or []:
+        base = re.sub(r"[\[\]:*?/\\]", "", step.get("member") or "Step")[:28].strip() or "Step"
+        name = base
+        n = 2
+        while name in used_names:
+            name = f"{base[:26]} {n}"
+            n += 1
+        used_names.add(name)
+        ws = wb.create_sheet(name)
+        ws.append([f"{step.get('member')} — {_step_role_label(step)}"])
+        ws["A1"].font = openpyxl.styles.Font(bold=True, size=14)
+        output = (step.get("output") or "").strip()
+        if not output:
+            ws.append(["No output from this step."])
+            continue
+        row_no = 3
+        for block in _parse_pipe_blocks(output):
+            if block["type"] == "text":
+                for para in block["text"].split("\n"):
+                    para = para.strip()
+                    if para:
+                        ws.cell(row=row_no, column=1, value=para)
+                        row_no += 1
+                row_no += 1
+            else:
+                rows = block["rows"]
+                header = rows[0]
+                for i, cell in enumerate(header, start=1):
+                    c = ws.cell(row=row_no, column=i, value=cell)
+                    c.font = openpyxl.styles.Font(bold=True)
+                row_no += 1
+                for row in rows[1:]:
+                    for i, cell in enumerate(row, start=1):
+                        num = _money_number(cell, header[i - 1] if i - 1 < len(header) else "")
+                        c = ws.cell(row=row_no, column=i, value=num if num is not None else cell)
+                        if num is not None:
+                            c.number_format = "#,##0.00"
+                    row_no += 1
+                row_no += 1
+        for col in range(1, ws.max_column + 1):
+            width = 0
+            for r in range(1, ws.max_row + 1):
+                v = ws.cell(row=r, column=col).value
+                if v is not None:
+                    width = max(width, len(str(v)))
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max(width + 2, 12), 60)
+    path = DOCUMENTS_DIR / office["id"] / job["id"] / _job_doc_filename(job, "xlsx")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(str(path))
+    return path
+
+
+def _export_pptx(office, job):
+    Presentation = _document_libs("pptx")
+    prs = Presentation()
+    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+    title_slide.shapes.title.text = job["title"]
+    title_slide.placeholders[1].text = (
+        f"{office['name']}  •  {_job_doc_date(job)}  •  Status: {job.get('status')}")
+    steps = job.get("steps") or []
+    max_content = 11  # title slide + 11 = 12 slides at most
+    shown = steps[:max_content]
+    for step in shown:
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = f"{step.get('member')} — {_step_role_label(step)}"
+        tf = slide.placeholders[1].text_frame
+        tf.word_wrap = True
+        output = (step.get("output") or "").strip()
+        if not output:
+            tf.paragraphs[0].text = "No output from this step."
+            continue
+        lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+        # Pipe tables become one line per row; cap the slide so it
+        # stays readable — the full text lives in the Word/Excel file.
+        bullets = []
+        for ln in lines:
+            if ln.startswith("|") and ln.endswith("|"):
+                bullets.append(" | ".join(c.strip() for c in ln.strip("|").split("|") if c.strip()))
+            elif ln.startswith(("- ", "• ")):
+                bullets.append(ln[2:].strip())
+            else:
+                bullets.append(ln)
+        bullets = bullets[:8]
+        for i, b in enumerate(bullets):
+            para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            para.text = b[:220]
+            para.level = 0
+        if len(lines) > 8:
+            para = tf.add_paragraph()
+            para.text = f"… {len(lines) - 8} more line(s) — see the Word or Excel export for the full text."
+            para.level = 1
+    if len(steps) > max_content:
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "More steps"
+        slide.placeholders[1].text_frame.paragraphs[0].text = (
+            f"{len(steps) - max_content} further step(s) — see the Word or Excel export for the full text.")
+    path = DOCUMENTS_DIR / office["id"] / job["id"] / _job_doc_filename(job, "pptx")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(path))
+    return path
+
+
+def _export_office_document(office, job, fmt):
+    if fmt == "docx":
+        return _export_docx(office, job)
+    if fmt == "xlsx":
+        return _export_xlsx(office, job)
+    if fmt == "pptx":
+        return _export_pptx(office, job)
+    raise HTTPException(400, f"Unknown document format '{fmt}' — use docx, xlsx or pptx.")
+
+
+@app.post("/api/offices/{office_id}/jobs/{job_id}/export")
+def export_office_job(office_id: str, job_id: str, body: dict):
+    """Export a finished job as a real Word, Excel or PowerPoint file.
+    Works for any job with steps — approved jobs especially, but a
+    draft awaiting approval can be exported too, to read or check
+    before you approve it."""
+    office = get_office(office_id)
+    if not office:
+        raise HTTPException(404, "Office not found")
+    job = next((j for j in office.get("jobs", []) if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    fmt = (body.get("format") or "").strip().lower()
+    if fmt not in DOCUMENT_FORMATS:
+        raise HTTPException(400, "Format must be docx, xlsx or pptx.")
+    path = _export_office_document(office, job, fmt)
+    return {"format": fmt, "filename": path.name,
+            "url": f"/api/documents/{office_id}/{job_id}/{path.name}",
+            "size_bytes": path.stat().st_size,
+            "created_at": int(path.stat().st_mtime)}
+
+
+@app.get("/api/documents")
+def list_documents(office_id: str = ""):
+    """Every generated document, newest first. Filter with
+    ?office_id= for one office's files."""
+    docs = []
+    if not DOCUMENTS_DIR.exists():
+        return docs
+    offices = {o["id"]: o for o in load_offices()}
+    for path in sorted(DOCUMENTS_DIR.rglob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if not path.is_file() or path.suffix.lstrip(".") not in DOCUMENT_FORMATS:
+            continue
+        parts = path.relative_to(DOCUMENTS_DIR).parts
+        if len(parts) != 3:
+            continue
+        oid, jid, filename = parts
+        if office_id and oid != office_id:
+            continue
+        office = offices.get(oid) or {}
+        job = next((j for j in office.get("jobs", []) if j.get("id") == jid), None)
+        docs.append({"office_id": oid, "office_name": office.get("name"),
+                     "job_id": jid, "job_title": (job or {}).get("title"),
+                     "format": path.suffix.lstrip("."),
+                     "filename": filename,
+                     "url": f"/api/documents/{oid}/{jid}/{filename}",
+                     "size_bytes": path.stat().st_size,
+                     "created_at": int(path.stat().st_mtime)})
+    return docs
+
+
+@app.get("/api/documents/{office_id}/{job_id}/{filename}")
+def download_document(office_id: str, job_id: str, filename: str):
+    """Download one generated document. The path is resolved inside
+    data/documents/ — anything trying to climb out gets a 404."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", office_id) or not re.fullmatch(r"[A-Za-z0-9_-]+", job_id):
+        raise HTTPException(404, "Document not found")
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.(docx|xlsx|pptx)", filename):
+        raise HTTPException(404, "Document not found")
+    path = (DOCUMENTS_DIR / office_id / job_id / filename).resolve()
+    if DOCUMENTS_DIR.resolve() not in path.parents or not path.is_file():
+        raise HTTPException(404, "Document not found")
+    return FileResponse(str(path), filename=filename)
 
 
 # ---- Document workroom ----
@@ -4188,6 +4640,25 @@ def _resume_chain_run(run):
     save_chain_runs(runs)
 
 
+def _record_chain_run(rule, deal, out):
+    """Record a finished chain (done / stopped / failed) in the
+    executions log. A chain that hit a wait step already has its run
+    record (created by _run_workflow_chain); this only covers chains
+    that finished without waiting."""
+    if out.get("run") is not None:
+        return out["run"]
+    run = {"id": uuid.uuid4().hex[:8], "rule_id": rule["id"],
+           "rule_name": rule.get("name"), "deal_id": deal["id"],
+           "deal_title": deal.get("title"),
+           "step_index": len(rule.get("steps") or []), "status": out["status"],
+           "resume_at": None, "created_at": int(time.time()),
+           "finished_at": int(time.time()), "history": list(out["results"])}
+    runs = load_chain_runs()
+    runs.append(run)
+    save_chain_runs(runs)
+    return run
+
+
 def _fire_deal_workflows(deal, old_stage, new_stage):
     """Run every enabled rule that fires on a move TO new_stage in
     this deal's department. Each rule is now a chain of steps.
@@ -4208,6 +4679,7 @@ def _fire_deal_workflows(deal, old_stage, new_stage):
                    "results": [{"step": "chain", "result": f"Chain failed: {e}"}],
                    "next_index": 0, "resume_at": None, "run": None}
         summary = " | ".join(r["result"] for r in out["results"])
+        _record_chain_run(rule, deal, out)
         deal.setdefault("events", []).append(
             {"at": int(time.time()), "kind": "workflow",
              "text": f"Workflow '{rule.get('name')}' ran ({out['status']}): {summary}"})
@@ -4375,6 +4847,39 @@ def cancel_chain_run(run_id: str):
     return run
 
 
+@app.post("/api/chain-runs/{run_id}/rerun")
+def rerun_chain_run(run_id: str):
+    """Re-run a finished chain from its first step, on the same deal,
+    with the deal's current values. A waiting chain cannot be re-run
+    — cancel it first, or let it resume. The re-run is recorded as a
+    new run in the executions log."""
+    runs = load_chain_runs()
+    run = next((x for x in runs if x["id"] == run_id), None)
+    if not run:
+        raise HTTPException(404, "Chain run not found")
+    if run.get("status") == "waiting":
+        raise HTTPException(400, "This chain is still waiting — cancel it first, or let it resume.")
+    rule = next((r for r in load_deal_workflows() if r["id"] == run["rule_id"]), None)
+    deals = load_deals()
+    deal = next((d for d in deals if d["id"] == run["deal_id"]), None)
+    if not rule or not deal:
+        raise HTTPException(400, "The deal or the workflow no longer exists — this chain cannot re-run.")
+    try:
+        out = _run_workflow_chain(rule, deal)
+    except Exception as e:
+        out = {"status": "failed",
+               "results": [{"step": "chain", "result": f"Chain failed: {e}"}],
+               "next_index": 0, "resume_at": None, "run": None}
+    summary = " | ".join(r["result"] for r in out["results"])
+    deal.setdefault("events", []).append(
+        {"at": int(time.time()), "kind": "workflow",
+         "text": f"Workflow '{rule.get('name')}' re-ran ({out['status']}): {summary}"})
+    save_deals(deals)
+    new_run = _record_chain_run(rule, deal, out)
+    return {"status": out["status"], "results": out["results"],
+            "resume_at": out.get("resume_at"), "run_id": new_run["id"]}
+
+
 @app.post("/api/deal-workflows", status_code=201)
 def create_deal_workflow(body: dict):
     name = (body.get("name") or "").strip()
@@ -4459,6 +4964,8 @@ def get_settings():
     st["data_location"] = str(DATA_DIR)
     st["app_version"] = APP_VERSION
     st["workspace_absolute"] = str(WORKSPACE_DIR)
+    st["autostart"] = _autostart_enabled()
+    st["autostart_path"] = str(_autostart_path())
     return st
 
 @app.post("/api/settings")
@@ -4467,6 +4974,15 @@ def update_settings(body: dict):
     for k in ("default_provider", "default_model", "workspace_folder", "theme"):
         if body.get(k):
             st[k] = str(body[k]).strip()
+    if body.get("onboarding_done") is True:
+        st["onboarding_done"] = True
+    if body.get("run_mode") in ("computer", "subscriptions", "rent"):
+        st["run_mode"] = body["run_mode"]
+    if body.get("autostart") is not None:
+        ok, msg = _set_autostart(bool(body["autostart"]))
+        if not ok:
+            raise HTTPException(500, msg)
+        st["autostart"] = bool(body["autostart"])
     if st.get("default_provider", "").lower() not in PROVIDERS:
         st["default_provider"] = "lmstudio"
     if st.get("theme") not in ("light", "dark"):

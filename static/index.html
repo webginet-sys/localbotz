@@ -83,6 +83,7 @@
     <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
     <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
     <button class="navbtn" data-view="deals">💼 Deals — clients & workflows</button>
+    <button class="navbtn" data-view="runs">📋 Runs — what the team did</button>
     <div class="navsec">Library</div>
     <button class="navbtn" data-view="lib-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="lib-messaging">💬 Messaging</button>
@@ -140,6 +141,7 @@
         <div><label>Provider</label><select id="mb-provider"></select></div>
         <div><label>Model</label><input id="mb-model" type="text" value="qwen3.5" title="Model for this bot — type your own, or pick from the Available models list below"></div>
         <div><label>Available models</label><select id="mb-model-list" title="Only models that can actually work right now, grouped by source"></select></div>
+        <div><label>Smart routing</label><select id="mb-routing" title="Auto: simple questions answered free on the local model, hard work goes to this provider. Off: always use this provider."><option value="off">Off — always this provider</option><option value="auto">Auto — simple free on local, hard to premium</option></select></div>
       </div>
       <label>Describe the job</label>
       <textarea id="mb-job" rows="3" placeholder="e.g. Every morning, summarise what happened overnight on the topics I care about."></textarea>
@@ -156,6 +158,34 @@
     </div>
     <!-- LIBRARY / SETTINGS VIEWS (filled by JS) -->
     <div id="view-page" class="view hidden"></div>
+    <!-- FIRST-RUN WIZARD -->
+    <div id="view-wizard" class="view hidden">
+      <h2>Welcome to LocalBotz 👋</h2>
+      <p>Three quick steps and your office is set up. You can change everything later in Settings.</p>
+      <div id="wiz-1">
+        <h3>Step 1 of 3 — How should LocalBotz run?</h3>
+        <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="computer" checked> <b>🖥️ On my computer</b> — free, on your downloaded local model (LM Studio / Qwen3.5). Nothing leaves the computer.</label>
+        <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="subscriptions"> <b>🔑 With my subscriptions</b> — Claude, ChatGPT, Grok, Gemini and more, using keys you already pay for.</label>
+        <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="rent"> <b>☁️ Rent one from us</b> — premium models from our server, metered to your wallet. No keys of your own.</label>
+        <button id="wiz-next-1">Next →</button> <button class="ghost" id="wiz-skip">Skip setup</button>
+      </div>
+      <div id="wiz-2" class="hidden">
+        <h3>Step 2 of 3 — Your first bot</h3>
+        <label>Bot name</label><input id="wiz-bot-name" type="text" value="Morning Brief" placeholder="e.g. Morning Brief">
+        <label>Start from a template</label><select id="wiz-bot-tpl"></select>
+        <p class="note">The template fills in the instructions — you can edit them later.</p>
+        <button id="wiz-back-2" class="ghost">← Back</button> <button id="wiz-next-2">Next →</button>
+      </div>
+      <div id="wiz-3" class="hidden">
+        <h3>Step 3 of 3 — Your first office</h3>
+        <label>Office name</label><input id="wiz-office-name" type="text" value="My Office" placeholder="e.g. My Office">
+        <label>First deal — title (optional)</label><input id="wiz-deal-title" type="text" placeholder="e.g. Villa fit-out">
+        <label>First deal — client (optional)</label><input id="wiz-deal-client" type="text" placeholder="e.g. Pearl Homes">
+        <label style="display:inline"><input type="checkbox" id="wiz-autostart" checked> Start LocalBotz when the computer starts — so routines, jobs and workflows keep running while the computer is on</label>
+        <div style="margin-top:10px"><button id="wiz-back-3" class="ghost">← Back</button> <button id="wiz-finish">Finish — open my office ✓</button></div>
+      </div>
+      <div id="wiz-msg"></div>
+    </div>
   </main>
 </div>
 <script>
@@ -169,6 +199,7 @@ function showView(name){
   $('view-chat').classList.toggle('hidden', name!=='chat');
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
+  $('view-wizard').classList.toggle('hidden', name!=='wizard');
   $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-') && name!=='admin' && name!=='office');
   if(name.startsWith('lib-')||name.startsWith('set-')||name==='admin'||name==='office') renderPage(name);
 }
@@ -261,7 +292,7 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
     if(m.role==='assistant' && m.cost_usd!==undefined){
       const f=document.createElement('div');
       f.style.cssText='font-size:12px;color:#888;margin-top:8px';
-      f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)} · Wallet $${Number(m.wallet_balance??NaN).toFixed(2)}${m.mode?` · ${m.mode} mode`:''}${m.key_source?` · key: ${m.key_source}`:''}`;
+      f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)} · Wallet $${Number(m.wallet_balance??NaN).toFixed(2)}${m.mode?` · ${m.mode} mode`:''}${m.key_source?` · key: ${m.key_source}`:''}${m.routed_from?` · routed free to local (from ${m.routed_from.provider})`:''}`;
       d.appendChild(f);}
     if(m.tools&&m.tools.length){const t=document.createElement('div'); t.className='tools';
       t.innerHTML='<strong>🛠 Tools used:</strong>';
@@ -452,7 +483,7 @@ $('mb-create').onclick=async()=>{
   const b=await api('/api/bots',{method:'POST',body:JSON.stringify({
     name, job:$('mb-job').value.trim(), instructions:$('mb-instructions').value.trim(),
     template:mbTemplate, avatar:mbAvatar, provider:$('mb-provider').value, model:$('mb-model').value.trim()||'qwen3.5',
-    schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
+    routing:$('mb-routing').value, schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
   $('mb-msg').textContent='Created ✓';
   mbTemplate=''; mbTools=[]; await loadBots(); selectBot(b.id);
 };
@@ -467,6 +498,7 @@ async function renderPage(name){
     else if(name==='workroom') el.innerHTML=await workroomHtml();
     else if(name==='routines') el.innerHTML=await routinesHtml();
     else if(name==='deals') el.innerHTML=await dealsHtml();
+    else if(name==='runs') el.innerHTML=await runsHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -545,6 +577,20 @@ function wfStepsClean(){
     if(s.type==='if') return {type:'if',condition:s.condition||'stage_is',value:(s.condition==='value_over'||s.condition==='value_under')?Number(s.value||0):String(s.value||'')};
     return {type:s.type,text:(s.text||'').trim(),bot_id:s.bot_id||undefined,office_id:s.office_id||undefined};
   });
+}
+async function runsHtml(){
+  const runs=await api('/api/chain-runs');
+  const routines=await api('/api/routines');
+  const fmt=ts=>ts?new Date(ts*1000).toLocaleString():'—';
+  const runRows=runs.map(r=>`<tr><td>${esc(r.rule_name||'')}</td><td>${esc(r.deal_title||'')}</td><td>${esc(r.status)}</td><td>${fmt(r.created_at)}${r.status==='waiting'&&r.resume_at?`<br><span class="note">resumes ${fmt(r.resume_at)}</span>`:''}${r.finished_at?`<br><span class="note">finished ${fmt(r.finished_at)}</span>`:''}</td><td>${(r.history||[]).map(h=>esc(h.result)).join('<br>')||'—'}</td><td>${r.status==='waiting'?`<button class="small" data-run-cancel="${r.id}">Cancel</button>`:`<button class="small" data-run-rerun="${r.id}">Re-run</button>`}</td></tr>`).join('');
+  const rtRows=routines.flatMap(rt=>(rt.runs||[]).map(r=>`<tr><td>${esc(rt.name)}</td><td>${fmt(r.at)}</td><td>${esc(r.status)}</td><td>${esc(r.summary||'')}</td></tr>`)).sort((a,b)=>0).join('');
+  return `<h2>📋 Runs — what the team did</h2>
+  <p>Every workflow chain that ran, and every routine that ran. A chain that hit a wait step resumes on its own; a finished one can be re-run from its first step, on the same deal, with the deal's current values.</p>
+  <h3>Workflow chains</h3>
+  <table><tr><th>Workflow</th><th>Deal</th><th>Status</th><th>When</th><th>Steps</th><th></th></tr>${runRows||'<tr><td colspan="6">No chains yet — move a deal to a stage that has a workflow.</td></tr>'}</table>
+  <h3>Routine runs</h3>
+  <table><tr><th>Routine</th><th>When</th><th>Status</th><th>Result</th></tr>${rtRows||'<tr><td colspan="4">No routine has run yet.</td></tr>'}</table>
+  <div id="page-msg"></div>`;
 }
 async function dealsHtml(){
   const deals=await api('/api/deals');
@@ -626,6 +672,7 @@ async function officeHtml(){
     <div id="page-msg"></div>`;
   }
   const o=await api('/api/offices/'+currentOffice);
+  const officeDocs=await api('/api/documents?office_id='+currentOffice);
   const officeLearnings=await api('/api/learnings?office_id='+currentOffice);
   const officeRoles=await api('/api/office/roles');
   const roleLabel={boss:'Office Manager (boss)'};
@@ -640,8 +687,9 @@ async function officeHtml(){
     const apprHtml=j.status==='awaiting_approval'
       ?`<p><b>Draft — waiting for your approval.</b> Nothing from this job is in the office memory yet.</p><button class="small" data-job-approve="${j.id}">✓ Approve</button> <button class="small" data-job-changes="${j.id}">✎ Request changes</button>`
       :ap?`<p class="note">Approval: ${esc(ap.status)}${ap.note?` — ${esc(ap.note)}`:''}${ap.decided_at?` · ${new Date(ap.decided_at*1000).toLocaleString()}`:''}</p>`:'';
-    return `<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)}${a?` · audit: ${esc(a.verdict)}`:''} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${auditHtml}${apprHtml}${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}</details>`;
+    return `<details><summary><b>${esc(j.title)}</b> — ${esc(j.status)}${a?` · audit: ${esc(a.verdict)}`:''} · ${new Date(j.created_at*1000).toLocaleString()}</summary>${auditHtml}${apprHtml}${(j.steps||[]).map(s=>`<h4>${esc(s.member)} (${esc(roleLabel[s.role]||s.role)})</h4><p style="white-space:pre-wrap">${esc(s.output)}</p>`).join('')||'<p>No steps ran.</p>'}<p><b>Export as a real file:</b> <button class="small" data-job-export="${j.id}" data-fmt="docx">Word (.docx)</button> <button class="small" data-job-export="${j.id}" data-fmt="xlsx">Excel (.xlsx)</button> <button class="small" data-job-export="${j.id}" data-fmt="pptx">PowerPoint (.pptx)</button></p></details>`;
   }).join('');
+  const docRows=officeDocs.map(d=>`<tr><td><a href="${esc(d.url)}" download>${esc(d.filename)}</a></td><td>${esc(d.job_title||'')}</td><td>${esc(d.format)}</td><td>${(d.size_bytes/1024).toFixed(1)} KB</td><td>${new Date(d.created_at*1000).toLocaleString()}</td></tr>`).join('');
   const board=(o.blackboard||[]).slice().reverse().map(b=>`<tr><td>${new Date(b.ts*1000).toLocaleTimeString()}</td><td>${esc(b.from)} → ${esc(b.to)}</td><td>${esc(b.text)}</td></tr>`).join('');
   return `<h2>🏢 ${esc(o.name)}</h2><p class="note">${esc(o.description||'')}</p>
   <p><button class="ghost small" id="off-back">← All offices</button> <button class="ghost small" data-office-del="${o.id}">Delete this office</button></p>
@@ -658,6 +706,9 @@ async function officeHtml(){
   <label><input type="checkbox" id="off-audit" checked> Audit this job and hold it for my approval — an independent Auditor checks prices, dates and facts before it counts as done</label>
   <div style="margin:8px 0"><button id="off-run-job">Run job with the team</button></div>
   <h3>Jobs</h3>${jobRows||'<p class="note">No jobs yet.</p>'}
+  <h3>Documents — exported files</h3>
+  <p class="note">Real Word, Excel and PowerPoint files made from finished jobs — title, each member's work, and any tables the team wrote, as real tables. Nothing is invented in them; a step with no output says so.</p>
+  ${docRows?`<table><tr><th>File</th><th>Job</th><th>Format</th><th>Size</th><th>Made</th></tr>${docRows}</table>`:'<p class="note">No documents yet. Export a job above — Word, Excel or PowerPoint.</p>'}
   <h3>Shared office memory</h3>
   <p class="note">Memory the whole team shares — it survives sessions. Job summaries are added here automatically.</p>
   <pre style="white-space:pre-wrap;background:#faf7ff;border:1px solid #e9e4f2;border-radius:12px;padding:14px;max-height:220px;overflow:auto">${esc(o.memory||'(empty)')}</pre>
@@ -800,6 +851,8 @@ async function generalHtml(){
   <label>Default model</label><input id="set-model" type="text" value="${esc(settings.default_model||'qwen3.5')}">
   <label>Workspace folder (relative to the app folder)</label><input id="set-ws" type="text" value="${esc(settings.workspace_folder||'workspace')}">
   <label>Theme</label><select id="set-theme"><option value="light" ${settings.theme==='light'?'selected':''}>Light</option><option value="dark" ${settings.theme==='dark'?'selected':''}>Dark</option></select>
+  <label style="display:inline"><input type="checkbox" id="set-autostart" ${settings.autostart?'checked':''}> Start LocalBotz when the computer starts</label>
+  <p class="note">Runs LocalBotz in the background when you sign in, so routines, jobs and workflows keep working while the computer is on. ${settings.autostart_path?`Startup entry: <code>${esc(settings.autostart_path)}</code>`:''}</p>
   <p>Data location: <code>${esc(settings.data_location||'')}</code><br>Workspace: <code>${esc(settings.workspace_absolute||'')}</code><br>App version: <b>${esc(settings.app_version||'')}</b></p>
   <button id="set-save">Save settings</button> <button id="set-reset" class="ghost">Reset settings</button>
   <h3 style="margin-top:28px">How LocalBotz runs</h3>
@@ -876,10 +929,10 @@ function bindPage(name){
   if(q('skill-add')) q('skill-add').onclick=async()=>{await api('/api/skills',{method:'POST',body:JSON.stringify({name:q('skill-name').value,instructions:q('skill-inst').value,source:q('skill-src').value})}); renderPage(name);};
   if(q('skill-enable')) q('skill-enable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:true})}); msg('Skill enabled for bot.');};
   if(q('skill-disable')) q('skill-disable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:false})}); msg('Skill disabled for bot.');};
-  if(q('set-save')) q('set-save').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');};
-  if(q('run-local')) q('run-local').onclick=async()=>{q('set-provider').value='lmstudio'; q('set-model').value='qwen3.5'; q('set-save').click(); msg('Running on your computer — local model (LM Studio / Qwen3.5).');};
-  if(q('run-subs')) q('run-subs').onclick=()=>{showView('set-connectors');};
-  if(q('run-rent')) q('run-rent').onclick=()=>{showView('set-connectors');};
+  if(q('set-save')) q('set-save').onclick=async()=>{try{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value,autostart:q('set-autostart').checked})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');}catch(e){msg(e.message);}};
+  if(q('run-local')) q('run-local').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'computer',default_provider:'lmstudio',default_model:'qwen3.5'})}); await loadProviders(); msg('Running on your computer — local model (LM Studio / Qwen3.5).');};
+  if(q('run-subs')) q('run-subs').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'subscriptions'})}); showView('set-connectors');};
+  if(q('run-rent')) q('run-rent').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:'rent'})}); showView('set-connectors');};
   if(q('set-reset')) q('set-reset').onclick=async()=>{await api('/api/settings/reset',{method:'POST'}); document.body.classList.remove('dark'); renderPage(name);};
   if(q('wal-save')) q('wal-save').onclick=async()=>{await api('/api/wallet/budget',{method:'POST',body:JSON.stringify({monthly_budget_usd:parseFloat(q('wal-budget').value)||0,alert_enabled:q('wal-alert').checked})}); renderPage(name);};
   if(q('wal-reset')) q('wal-reset').onclick=async()=>{await api('/api/wallet/reset',{method:'POST'}); renderPage(name);};
@@ -940,6 +993,7 @@ function bindPage(name){
   if(q('off-run-job')) q('off-run-job').onclick=async()=>{const b=q('off-run-job'); b.disabled=true; b.textContent='Team is working…'; try{await api(`/api/offices/${currentOffice}/jobs`,{method:'POST',body:JSON.stringify({title:q('off-job-title').value,brief:q('off-job-brief').value,audit:q('off-audit')?q('off-audit').checked:true})}); msg('Job finished — check the audit and approve it below.'); renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Run job with the team';}};
   document.querySelectorAll('[data-job-approve]').forEach(el=>el.onclick=async()=>{try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobApprove}/approve`,{method:'POST',body:JSON.stringify({})}); msg('Job approved — it is now in the office memory.'); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-job-changes]').forEach(el=>el.onclick=async()=>{const note=prompt('What should the team fix?'); if(note===null) return; try{await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobChanges}/request-changes`,{method:'POST',body:JSON.stringify({note})}); msg('Changes requested — the job stays a draft. Run it again with the fix in the brief.'); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-job-export]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobExport}/export`,{method:'POST',body:JSON.stringify({format:el.dataset.fmt})}); msg(`Exported as ${d.filename} (${(d.size_bytes/1024).toFixed(1)} KB) — it is in Documents below. Click it to download.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('rt-kind')) q('rt-kind').onchange=()=>{const k=q('rt-kind').value; q('rt-time-row').style.display=(k==='interval')?'none':'block'; q('rt-weekday-row').style.display=(k==='weekly')?'block':'none'; q('rt-interval-row').style.display=(k==='interval')?'block':'none';};
   if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value)})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
@@ -969,6 +1023,7 @@ function bindPage(name){
   if(q('wf-dept')) q('wf-dept').onchange=()=>{const dept=q('wf-dept').value; const sel=q('wf-stage'); const pipes=dept?{[dept]:dealPipelines[dept]}:dealPipelines; sel.innerHTML=Object.entries(pipes).map(([id,p])=>`<optgroup label="${esc(p.label)}">${p.stages.map(([s,l])=>`<option value="${s}">${esc(l)}</option>`).join('')}</optgroup>`).join('');};
   if(q('wf-create')) q('wf-create').onclick=async()=>{try{const steps=wfStepsClean(); await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,department:q('wf-dept').value,stage:q('wf-stage').value,steps})}); wfSteps=[{type:'note',text:''}]; msg(`Workflow created with ${steps.length} step${steps.length>1?'s':''} — it will run when a deal moves to that stage.`); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-run-cancel]').forEach(el=>el.onclick=async()=>{await api(`/api/chain-runs/${el.dataset.runCancel}/cancel`,{method:'POST'}); renderPage(name);});
+  document.querySelectorAll('[data-run-rerun]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/chain-runs/${el.dataset.runRerun}/rerun`,{method:'POST'}); msg(`Re-ran — ${r.status}.`);}catch(e){msg(e.message);} renderPage(name);});
   document.querySelectorAll('[data-wf-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/deal-workflows/${el.dataset.wfToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-wf-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workflow?')) return; await api(`/api/deal-workflows/${el.dataset.wfDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom
@@ -985,6 +1040,36 @@ function bindPage(name){
   if(q('wr-note-add')) q('wr-note-add').onclick=async()=>{try{await api(`/api/workrooms/${currentWorkroom}/notes`,{method:'POST',body:JSON.stringify({text:q('wr-note-text').value})}); renderPage(name);}catch(e){msg(e.message);}};
   if(q('wr-save')) q('wr-save').onclick=async()=>{try{await api('/api/workrooms/'+currentWorkroom,{method:'PATCH',body:JSON.stringify({provider:q('wr-provider').value,model:q('wr-model').value,redact_terms:q('wr-terms-edit').value.split(',').map(s=>s.trim()).filter(Boolean)})}); msg('Workroom settings saved.'); renderPage(name);}catch(e){msg(e.message);}};
 }
-loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
+// ---------- First-run wizard ----------
+let wizRunMode='computer';
+async function showWizard(){
+  const tpls=await api('/api/templates');
+  $('wiz-bot-tpl').innerHTML=tpls.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $('wiz-1').classList.remove('hidden'); $('wiz-2').classList.add('hidden'); $('wiz-3').classList.add('hidden');
+  showView('wizard');
+}
+async function wizFinish(){
+  const runMode=document.querySelector('input[name="wiz-run"]:checked').value;
+  const botName=$('wiz-bot-name').value.trim()||'Morning Brief';
+  const tpl=$('wiz-bot-tpl').value;
+  const officeName=$('wiz-office-name').value.trim()||'My Office';
+  try{
+    await api('/api/settings',{method:'POST',body:JSON.stringify({run_mode:runMode, autostart:$('wiz-autostart').checked})});
+    const b=await api('/api/bots',{method:'POST',body:JSON.stringify({name:botName, template:tpl, provider:'lmstudio', model:'qwen3.5'})});
+    await api('/api/offices',{method:'POST',body:JSON.stringify({name:officeName, description:'Set up by the first-run wizard', boss_name:'Office Manager'})});
+    const dt=$('wiz-deal-title').value.trim(), dc=$('wiz-deal-client').value.trim();
+    if(dt&&dc) await api('/api/deals',{method:'POST',body:JSON.stringify({department:'general', title:dt, client:dc, value:null, currency:'QAR'})});
+    await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})});
+    await loadBots(); selectBot(b.id);
+    msg('Welcome to LocalBotz — your office is set up. ✓');
+  }catch(e){$('wiz-msg').textContent=e.message;}
+}
+if(q('wiz-next-1')) q('wiz-next-1').onclick=()=>{wizRunMode=document.querySelector('input[name="wiz-run"]:checked').value; $('wiz-1').classList.add('hidden'); $('wiz-2').classList.remove('hidden');};
+if(q('wiz-back-2')) q('wiz-back-2').onclick=()=>{$('wiz-2').classList.add('hidden'); $('wiz-1').classList.remove('hidden');};
+if(q('wiz-next-2')) q('wiz-next-2').onclick=()=>{$('wiz-2').classList.add('hidden'); $('wiz-3').classList.remove('hidden');};
+if(q('wiz-back-3')) q('wiz-back-3').onclick=()=>{$('wiz-3').classList.add('hidden'); $('wiz-2').classList.remove('hidden');};
+if(q('wiz-finish')) q('wiz-finish').onclick=wizFinish;
+if(q('wiz-skip')) q('wiz-skip').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})}); showView('chat');};
+loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); if(!s.onboarding_done) showWizard();})(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };
 </script>

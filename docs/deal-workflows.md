@@ -88,6 +88,17 @@ ended while the app was closed resumes once on the next start
 (catch-up, like routines). One chain resumes per 30-second worker
 tick.
 
+### Executions log — Runs
+
+**📋 Runs — what the team did** lists every workflow chain that ran
+(with its steps, status, start and finish times) and every routine
+that ran. A finished chain (done, stopped, failed or cancelled) can
+be **re-run** from its first step, on the same deal, with the deal's
+current values — useful when a chain stopped because the deal moved
+on, and you want it to run again now. A waiting chain cannot be
+re-run: cancel it first, or let it resume. The re-run is recorded as
+a new run in the log, and the deal's timeline gets a "re-ran" event.
+
 ### Old rules still work
 
 Rules made before chains existed had one action + text. They are
@@ -137,6 +148,7 @@ timeline.
 | `DELETE /api/deal-workflows/{id}` | Delete the rule |
 | `GET /api/chain-runs` | List chain runs (waiting first by recency) |
 | `POST /api/chain-runs/{id}/cancel` | Cancel a waiting chain |
+| `POST /api/chain-runs/{id}/rerun` | Re-run a finished chain from step 1, on the same deal (400 if it is still waiting) |
 
 Deals live in `data/deals.json`, rules in `data/deal_workflows.json`,
 chain runs in `data/chain_runs.json`.
