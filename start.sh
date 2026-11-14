@@ -5,31 +5,34 @@
 #   1. Python 3.11+ — installed if missing (brew on macOS, apt/dnf on Linux)
 #   2. LM Studio — installed if missing (official install script, gives `lms`)
 #   3. Qwen3.5 model — downloaded with `lms get`, loaded, server started
-#   4. LocalBotz — virtual environment, Python packages, then the app
+#   4. LocalBotz — virtual environment, ALL Python packages, then the app
 #      on http://127.0.0.1:8000
-# First run needs internet and takes a while (Qwen3.5 model ~6 GB).
-# Later runs are fast — everything already installed is skipped.
+#   5. Browser automation — Playwright + Chromium, installed upfront
+#      in this same install step, and verified (Chromium launches).
+#      There is no light / optional install: if the user needs to run
+#      browser automation, whatever they need is installed before,
+#      in the installation. Nothing is left to install later.
+# First run needs internet and takes a while (Qwen3.5 model ~6 GB,
+# Chromium ~150 MB). Later runs are fast — everything already
+# installed is skipped.
 # Usage:
 #   chmod +x start.sh   # first time only
-#   ./start.sh                    # normal — full auto-setup, then run
+#   ./start.sh                    # normal — full install, then run
 #   ./start.sh --mock             # test without a model
-#   ./start.sh --light            # lightweight: core only, no browser
-#   ./start.sh --no-browser       # same as --light
-#   ./start.sh --with-browser     # explicit: install browser deps too
 #   ./start.sh --skip-setup       # skip Python / LM Studio / model setup
-# The --light / --no-browser / --with-browser / --skip-setup flags are
-# consumed here and are NOT passed to app.py; other flags (--mock,
-# --port) are passed on.
+# NOTE: --light / --no-browser are no longer supported. They used to
+# skip browser automation; now the full install always includes it,
+# so those flags are ignored with a warning.
+# The --skip-setup flag is consumed here and is NOT passed to app.py;
+# other flags (--mock, --port) are passed on.
 set -e
 cd "$(dirname "$0")"
 
-BROWSER=1
 SKIPSETUP=0
 APP_ARGS=""
 for a in "$@"; do
   case "$a" in
-    --light|--no-browser) BROWSER=0 ;;
-    --with-browser) BROWSER=1 ;;
+    --light|--no-browser) echo "[LocalBotz] NOTE: $a is no longer supported — the full install always includes browser automation." ;;
     --skip-setup) SKIPSETUP=1 ;;
     *) APP_ARGS="$APP_ARGS $a" ;;
   esac
@@ -92,15 +95,22 @@ echo "[LocalBotz] Installing core dependencies (lightweight)..."
 .venv/bin/python -m pip install -q --upgrade pip
 .venv/bin/python -m pip install -q -r requirements.txt
 
-if [ "$BROWSER" = "1" ]; then
-  echo "[LocalBotz] Installing browser dependencies (Playwright + Chromium)..."
-  .venv/bin/python -m pip install -q -r requirements-browser.txt
-  echo "[LocalBotz] Installing Playwright Chromium (skipped if already installed)..."
-  .venv/bin/playwright install chromium || echo "[LocalBotz] NOTE: Chromium install failed — browser tools will report 'not installed'. The rest of the app still works."
-else
-  echo "[LocalBotz] Lightweight install: browser automation skipped."
-  echo "[LocalBotz] Browser tools will say 'Playwright is not installed' until you run ./start.sh --with-browser"
+# Browser automation — always installed upfront, in the full install.
+echo "[LocalBotz] Installing browser automation (Playwright + Chromium)..."
+echo "[LocalBotz] This is part of the full install, so browser automation"
+echo "[LocalBotz] is ready before you need it — nothing to install later."
+.venv/bin/python -m pip install -q -r requirements-browser.txt
+echo "[LocalBotz] Installing Playwright Chromium (skipped if already installed)..."
+.venv/bin/playwright install chromium
+# On Linux, Chromium also needs system libraries; try to install them.
+# stdin is closed and a timeout is used so this can never hang waiting
+# for a sudo password — if it cannot install them, the check below
+# reports whether Chromium still launches, and the app still starts.
+if [ "$(uname)" = "Linux" ]; then
+  (timeout 180 .venv/bin/playwright install-deps chromium </dev/null >/dev/null 2>&1 || echo "[LocalBotz] NOTE: could not install Chromium system libraries automatically — if Chromium fails to launch, run: .venv/bin/playwright install-deps chromium") || true
 fi
+echo "[LocalBotz] Verifying the full install (Python, packages, Chromium)..."
+.venv/bin/python scripts/check_install.py || echo "[LocalBotz] Install check reported a problem above — browser automation may not work yet. The app will still start."
 
 echo "[LocalBotz] Starting on http://127.0.0.1:8000 — open that in your browser."
 echo "[LocalBotz] Python, LM Studio and Qwen3.5 were set up by this script —"

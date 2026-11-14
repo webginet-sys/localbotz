@@ -9,36 +9,38 @@ REM      no admin needed, added to PATH)
 REM   2. LM Studio — installed if missing (winget, per-user)
 REM   3. Qwen3.5 model — downloaded with LM Studio's own `lms` tool,
 REM      then loaded, then the local server started on port 1234
-REM   4. LocalBotz — virtual environment, Python packages, then the
+REM   4. LocalBotz — virtual environment, ALL Python packages, then the
 REM      app on http://127.0.0.1:8000
+REM   5. Browser automation — Playwright + Chromium, installed upfront
+REM      in this same install step, and verified (Chromium launches).
+REM      There is no light / optional install: if the user needs to run
+REM      browser automation, whatever they need is installed before,
+REM      in the installation. Nothing is left to install later.
 REM
 REM First run needs internet and takes a while (Python ~30 MB,
-REM LM Studio several hundred MB, Qwen3.5 model ~6 GB). Later runs
-REM are fast — everything already installed is skipped.
+REM LM Studio several hundred MB, Qwen3.5 model ~6 GB, Chromium ~150 MB).
+REM Later runs are fast — everything already installed is skipped.
 REM
-REM Usage:  start.bat                 (normal — full auto-setup, then run)
+REM Usage:  start.bat                 (normal — full install, then run)
 REM         start.bat --mock          (test without a model)
-REM         start.bat --light         (lightweight: core only, no browser)
-REM         start.bat --no-browser    (same as --light)
-REM         start.bat --with-browser  (explicit: install browser deps too)
 REM         start.bat --skip-setup    (skip Python / LM Studio / model setup,
 REM                                    just start the app — use only if you
 REM                                    already set Python + LM Studio up)
-REM The --light / --no-browser / --with-browser / --skip-setup flags are
-REM consumed here and are NOT passed to app.py; other flags (--mock,
-REM --port) are passed on.
+REM NOTE: --light / --no-browser are no longer supported. They used to
+REM skip browser automation; now the full install always includes it,
+REM so those flags are ignored with a warning.
+REM The --skip-setup flag is consumed here and is NOT passed to app.py;
+REM other flags (--mock, --port) are passed on.
 REM In PowerShell, run:  .\start.bat  -- or double-click it in Explorer.
 
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-set BROWSER=1
 set SKIPSETUP=0
 set APP_ARGS=
 for %%A in (%*) do (
-  if "%%A"=="--light" set BROWSER=0
-  if "%%A"=="--no-browser" set BROWSER=0
-  if "%%A"=="--with-browser" set BROWSER=1
+  if "%%A"=="--light" echo [LocalBotz] NOTE: --light is no longer supported — the full install always includes browser automation.
+  if "%%A"=="--no-browser" echo [LocalBotz] NOTE: --no-browser is no longer supported — the full install always includes browser automation.
   if "%%A"=="--skip-setup" set SKIPSETUP=1
   if not "%%A"=="--light" if not "%%A"=="--no-browser" if not "%%A"=="--with-browser" if not "%%A"=="--skip-setup" set APP_ARGS=!APP_ARGS! %%A
 )
@@ -166,15 +168,31 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if "%BROWSER%"=="1" (
-  echo [LocalBotz] Installing browser dependencies (Playwright + Chromium)...
-  ".venv\Scripts\python.exe" -m pip install -q -r requirements-browser.txt
-  echo [LocalBotz] Installing Playwright Chromium (skipped if already installed)...
-  ".venv\Scripts\playwright.exe" install chromium
-  if errorlevel 1 echo [LocalBotz] NOTE: Chromium install failed — browser tools will report 'not installed'. The rest of the app still works.
-) else (
-  echo [LocalBotz] Lightweight install: browser automation skipped.
-  echo [LocalBotz] Browser tools will say 'Playwright is not installed' until you run start.bat --with-browser
+REM ---------- Browser automation — always installed upfront ----------
+echo [LocalBotz] Installing browser automation (Playwright + Chromium)...
+echo [LocalBotz] This is part of the full install, so browser automation
+echo [LocalBotz] is ready before you need it — nothing to install later.
+".venv\Scripts\python.exe" -m pip install -q -r requirements-browser.txt
+if errorlevel 1 (
+  echo [LocalBotz] Playwright install failed. See the error above.
+  pause
+  exit /b 1
+)
+echo [LocalBotz] Installing Playwright Chromium (skipped if already installed)...
+".venv\Scripts\playwright.exe" install chromium
+if errorlevel 1 (
+  echo [LocalBotz] Chromium install failed. Browser automation will not work.
+  echo [LocalBotz] Try running start.bat again, then check your internet.
+  pause
+  exit /b 1
+)
+echo [LocalBotz] Verifying the full install (Python, packages, Chromium)...
+".venv\Scripts\python.exe" scripts\check_install.py
+if errorlevel 1 (
+  echo [LocalBotz] Install check reported a problem above. Fix it and
+  echo [LocalBotz] run start.bat again, or continue anyway — the app
+  echo [LocalBotz] will start, but browser automation may not work.
+  pause
 )
 
 echo [LocalBotz] Starting on http://127.0.0.1:8000 — open that in your browser.

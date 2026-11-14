@@ -45,17 +45,12 @@ git clone https://github.com/webginet-sys/localbotz.git
 cd localbotz
 ```
 
-**Lightweight install** (core only, no browser automation — smaller and
-faster to download, and the app still runs; browser tools just say
-"Playwright is not installed" until you add it):
-
-```bash
-./start.sh --light        # macOS / Linux
-start.bat --light         # Windows
-```
-
-Add browser automation later with `./start.sh --with-browser`
-(or `pip install -r requirements-browser.txt && playwright install chromium`).
+**Full install — everything upfront.** There is no lightweight install
+any more. The installer always installs browser automation (Playwright
++ Chromium) in the same step, and verifies Chromium launches, so it is
+ready before you need it. Nothing is left to install later — if you
+need to run browser automation, whatever it needs is already there.
+`--light` / `--no-browser` are no longer supported and are ignored.
 
 **Works on Windows, macOS and Linux.** The code uses `pathlib` throughout,
 no hardcoded OS paths and no OS-only shell commands — the file commands in
@@ -598,7 +593,7 @@ assets/logo-animated.mp4  Animated logo, 4 s video (also .webm) for social / REA
 templates.json         15 shipped bot templates (copied to data/templates.json)
 start.bat              Windows starter (venv + core deps, browser optional + run)
 start.sh               macOS/Linux starter (venv + core deps, browser optional + run)
-requirements.txt       Core only: fastapi, uvicorn, httpx (lightweight install)
+requirements.txt       Core: fastapi, uvicorn, httpx (full install also adds requirements-browser.txt: Playwright + Chromium)
 requirements-browser.txt  Optional: playwright (browser automation)
 server/                VPS Premium gateway (FastAPI): app.py, requirements.txt,
                        Dockerfile, .env.example, README.md (SSH/Tailscale deploy)

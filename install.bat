@@ -9,6 +9,10 @@ REM   1. Python 3.12 (if not already installed)
 REM   2. LM Studio (if not already installed)
 REM   3. The Qwen3.5 model, downloaded with LM Studio's own `lms` tool
 REM   4. LocalBotz itself (Python packages, then the app on localhost:8000)
+REM   5. Browser automation — Playwright + Chromium, installed upfront
+REM      and verified, so it is ready before you need it. There is no
+REM      light / optional install any more: everything is installed
+REM      in this one step, nothing is left to install later.
 REM
 REM Just double-click install.bat. It needs internet the first time:
 REM Python is ~30 MB, LM Studio is several hundred MB, and the Qwen3.5

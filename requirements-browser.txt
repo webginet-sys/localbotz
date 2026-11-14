@@ -1,6 +1,9 @@
-# Local Bot — browser automation (optional).
+# LocalBotz — browser automation. Installed by default, upfront,
+# as part of the one full install (install.bat / start.bat / start.sh).
+# There is no light / optional install any more: if the user needs to
+# run browser automation, whatever they need is installed before,
+# in the installation step. Without this, browser tools reply with
+# a clear "Playwright is not installed" message instead of crashing.
 # Install with: pip install -r requirements-browser.txt
 # Then: playwright install chromium
-# Without this, the app still runs; browser tools reply with a clear
-# "Playwright is not installed" message instead of crashing.
 playwright>=1.48
