@@ -49,6 +49,11 @@ git clone https://github.com/webginet-sys/localbotz.git
 cd localbotz
 ```
 
+If `git clone` says `'git' is not recognized as an internal or external
+command`, Git is simply not installed on that computer — that is normal,
+and it is not a problem with LocalBotz. **Do not install Git to fix it:**
+use the ZIP download above instead. LocalBotz runs without Git.
+
 **Full install — everything upfront.** There is no lightweight install
 any more. The installer always installs browser automation (Playwright
 + Chromium) in the same step, and verifies Chromium launches, so it is

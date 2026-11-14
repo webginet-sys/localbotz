@@ -42,6 +42,17 @@ REM In PowerShell, run:  .\start.bat  -- or double-click it in Explorer.
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
+REM If this file was run from inside the ZIP without extracting, the app
+REM files are not really here — tell the user to extract first.
+if not exist "requirements.txt" (
+  echo [LocalBotz] The app files are not here — the ZIP was not extracted.
+  echo [LocalBotz] Right-click the LocalBotz ZIP, choose "Extract All",
+  echo [LocalBotz] then double-click install.bat inside the extracted folder.
+  pause
+  exit /b 1
+)
+echo [LocalBotz] %DATE% %TIME% - start.bat started %* >> install.log
+
 set SKIPSETUP=0
 set APP_ARGS=
 for %%A in (%*) do (
@@ -54,11 +65,22 @@ for %%A in (%*) do (
 if "%SKIPSETUP%"=="1" goto :have_python
 
 REM ---------- Step 1: Python (auto-install if missing) ----------
-where python >nul 2>&1
-if not errorlevel 1 goto :have_python
+REM A real Python 3.11+ is required, and `where python` alone is not
+REM enough to prove it: on Windows the Microsoft Store shim answers
+REM `where python` but is not Python at all (it just opens the Store),
+REM and an old Python (3.9/3.10) cannot run the app — it crashes on
+REM start and the window closes before you can read the error.
+set PYOK=0
+set PYVER=
+for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PYVER=%%v
+if defined PYVER (
+  for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do set PYMAJ=%%a& set PYMIN=%%b
+  if "!PYMAJ!"=="3" if defined PYMIN if !PYMIN! GEQ 11 set PYOK=1
+)
+if "%PYOK%"=="1" goto :have_python
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" goto :have_python
 if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" goto :have_python
-echo [LocalBotz] Python was not found — installing it for you now.
+echo [LocalBotz] Python 3.11 or newer was not found — installing Python 3.12 for you now.
 echo [LocalBotz] This is part of the LocalBotz install. No separate download.
 where winget >nul 2>&1
 if not errorlevel 1 (
@@ -99,6 +121,7 @@ if errorlevel 1 (
 
 :have_python
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [LocalBotz] %%v
+for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [LocalBotz] %%v >> install.log
 
 if "%SKIPSETUP%"=="1" goto :venv
 
@@ -218,5 +241,26 @@ if errorlevel 1 (
   pause
 )
 
-echo [LocalBotz] Starting on http://127.0.0.1:8000 — open that in your browser.
+REM If port 8000 is already in use by another program, start on 8001
+REM instead of crashing. Only when the user did not pass their own --port.
+set APP_URL=http://127.0.0.1:8000
+set HAVEPORT=0
+for %%A in (%*) do if "%%A"=="--port" set HAVEPORT=1
+if "%HAVEPORT%"=="0" (
+  netstat -ano 2>nul | findstr /R /C:"TCP.*:8000 .*LISTENING" >nul
+  if not errorlevel 1 (
+    echo [LocalBotz] Port 8000 is already in use — starting on port 8001 instead.
+    set APP_ARGS=!APP_ARGS! --port 8001
+    set APP_URL=http://127.0.0.1:8001
+  )
+)
+echo [LocalBotz] Starting on %APP_URL% — open that in your browser.
 ".venv\Scripts\python.exe" app.py %APP_ARGS%
+set APP_EXIT=%ERRORLEVEL%
+echo [LocalBotz] %DATE% %TIME% - LocalBotz stopped, exit code %APP_EXIT% >> install.log
+echo.
+echo [LocalBotz] LocalBotz stopped (exit code %APP_EXIT%).
+echo [LocalBotz] If it stopped with an error, the error is above — send a
+echo [LocalBotz] screenshot of it, or the file install.log, and it can be fixed.
+echo [LocalBotz] To start LocalBotz again, double-click start.bat.
+pause
