@@ -404,6 +404,93 @@ client only sends its own user token. If the VPS is unreachable or the
 token is wrong, the app shows a clear error and falls back to the
 local model (LM Studio).
 
+## Operating models (Super Admin)
+
+LocalBotz can run as a small platform, not just a single-user app.
+There are three operating modes. The Super Admin (the owner) picks the
+global default; each workspace can inherit it or override it.
+
+Set `ADMIN_TOKEN` in `.env` (a long random token) to enable the
+**👑 Super Admin** panel in the sidebar. Without it, the panel is
+disabled and the app behaves as a single-user app in Selectable mode.
+
+### Mode 1 — Master Managed Fixed (zero-configuration)
+
+- The Super Admin enters the master platform API keys (Anthropic,
+  OpenAI, DeepSeek, Gemini, OpenRouter, Groq, Mistral, Cerebras, VPS)
+  in **Super Admin → Master platform keys** (stored in `.env`, masked),
+  and assigns **one fixed default LLM** (+ one fixed Voice model).
+- Tenants in this mode see **no provider/model picker at all** — every
+  chat uses the fixed model. Zero configuration for the tenant.
+- Usage is metered and billed to the workspace wallet (see below).
+
+### Mode 2 — Master User-Selectable (curated roster)
+
+- The Super Admin supplies the master keys (as above) and curates an
+  allowed roster of LLM + Voice models (Super Admin → Model roster).
+- Tenants can freely pick any model from that enabled roster, without
+  entering any API key of their own.
+- Usage is metered and billed to the workspace wallet, as in Mode 1.
+
+### Mode 3 — BYOK (Bring Your Own Key)
+
+- The tenant connects their **own** personal API keys in their
+  workspace's Secure store (per provider).
+- The host incurs **zero third-party API cost** for that workspace —
+  usage is tracked only, at $0 host cost, and no wallet billing applies
+  to API usage.
+- A BYOK workspace with no key for a provider cannot use that provider
+  until the tenant adds their own key.
+
+**Local models (LM Studio / Ollama) are always free in all three modes**
+— no key, no wallet, no metering charge.
+
+### Workspaces / tenants
+
+Workspaces live in `data/workspaces.json` and are switched from the
+sidebar dropdown. Each workspace has: a name, an operating mode
+(`inherit` = follow the global mode, or its own `fixed` / `selectable` /
+`byok`), a wallet balance, and members (names only in v1). Bots are
+shared across workspaces in v1; the mode, wallet, roster and keys are
+what change per workspace.
+
+### Wallets + metering
+
+- Each workspace has its own wallet: balance, transaction log and usage
+  history (`data/wallets/<workspace>.json`, plus `data/metering.jsonl`).
+- The Super Admin tops a wallet up manually (Super Admin → Workspaces →
+  Top up; no real payments in v0.3 — it is a recorded manual balance).
+- Metering: tokens from the provider's usage counts when returned,
+  otherwise estimated as characters ÷ 4; characters are counted too.
+  Prices are per 1,000 tokens in/out per model (and per character for
+  voice) in `data/pricing.json`, editable in Super Admin → Pricing.
+- When a workspace wallet is **empty ($0.00)**, paid chats are blocked
+  with a clear message (local models still work). Below the low-balance
+  threshold (default $1.00, in pricing) the chat shows a warning.
+- Every chat footer shows its cost, the wallet balance after the chat,
+  the mode, and which key paid for it (`master` / `byok` / `local`) —
+  the key itself is never logged or shown.
+
+### Voice models
+
+Roster entries have a type: `llm` or `voice`, plus provider, model id
+and an enabled flag. Voice models (e.g. OpenAI `tts-1`, `tts-1-hd`,
+`gpt-4o-mini-tts`) are selectable in the roster. TTS works through
+`POST /api/voice/tts` via the provider's OpenAI-compatible endpoint
+when a key is present (master or BYOK, per the workspace mode); when
+no key is configured the endpoint returns an honest "not configured"
+error — audio is never faked.
+
+### Switching a workspace between modes
+
+- **Globally:** Super Admin → Operating mode → pick Fixed, Selectable
+  or BYOK → Save. Workspaces set to `inherit` follow it immediately.
+- **Per workspace:** Super Admin → Workspaces → change that workspace's
+  mode (or `PATCH /api/workspaces/<id>` with `{"mode": "byok"}`).
+- The agent and the model picker enforce the mode on every chat:
+  Fixed hides the picker, Selectable limits it to the roster, BYOK
+  requires the tenant's own key for that provider (or a local model).
+
 ## If LM Studio is not running
 
 The status indicator in the UI turns red and chat replies explain how to

@@ -73,6 +73,9 @@
     <img class="logo" src="/logo.png" alt="LocalBotz">
     <p class="sub">Personal agent · local model · browser tools · no cloud</p>
     <div class="status" id="status">Checking model…</div>
+    <div class="navsec">Workspace</div>
+    <div style="margin:0 16px 12px"><select id="ws-select" title="Active workspace — mode, wallet and keys follow this workspace"></select>
+    <div id="ws-info" style="font-size:13px;color:#666;margin-top:6px"></div></div>
     <div class="navsec">Bots</div>
     <ul class="botlist" id="botlist"></ul>
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
@@ -90,6 +93,7 @@
     <button class="navbtn" data-view="set-permissions">🛡️ Permissions</button>
     <button class="navbtn" data-view="set-messaging">💬 Messaging channels</button>
     <button class="navbtn" data-view="set-devices">💻 Devices</button>
+    <button class="navbtn" data-view="admin">👑 Super Admin</button>
   </aside>
   <main>
     <!-- CHAT VIEW -->
@@ -154,8 +158,8 @@ function showView(name){
   $('view-chat').classList.toggle('hidden', name!=='chat');
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
-  $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-'));
-  if(name.startsWith('lib-')||name.startsWith('set-')) renderPage(name);
+  $('view-page').classList.toggle('hidden', !name.startsWith('lib-') && !name.startsWith('set-') && name!=='admin');
+  if(name.startsWith('lib-')||name.startsWith('set-')||name==='admin') renderPage(name);
 }
 async function loadStatus(){
   try{const s=await api('/api/status'+(current?('?provider='+encodeURIComponent(current.provider||'lmstudio')):''));
@@ -198,7 +202,9 @@ function fillModelList(sel, currentModel, providerId){
     o.textContent='⚠ Could not load the model list — press ↻ Models to retry';
     sel.appendChild(o); return;
   }
+  const allowed=EFFECTIVE?EFFECTIVE.allowed_providers:null;
   (availableModels.sources||[]).forEach(src=>{
+    if(allowed && !allowed.includes(src.provider)) return;
     const group=document.createElement('optgroup');
     group.label=sourceLabel(src)+(src.status==='available'?' ✓':' — '+(src.reason||'unavailable'));
     if(src.status==='available'){
@@ -241,6 +247,11 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
   if(!msgs.length){c.innerHTML='<div class="empty">No messages yet. Say hello to your bot.</div>';return;}
   msgs.forEach(m=>{const d=document.createElement('div'); d.className='msg '+m.role;
     d.textContent=m.content||'';
+    if(m.role==='assistant' && m.cost_usd!==undefined){
+      const f=document.createElement('div');
+      f.style.cssText='font-size:12px;color:#888;margin-top:8px';
+      f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)} · Wallet $${Number(m.wallet_balance??NaN).toFixed(2)}${m.mode?` · ${m.mode} mode`:''}${m.key_source?` · key: ${m.key_source}`:''}`;
+      d.appendChild(f);}
     if(m.tools&&m.tools.length){const t=document.createElement('div'); t.className='tools';
       t.innerHTML='<strong>🛠 Tools used:</strong>';
       m.tools.forEach(tool=>{const det=document.createElement('details');
@@ -266,7 +277,7 @@ async function send(){const inp=$('input'); const text=inp.value.trim(); if(!tex
   inp.value=''; const msgs=await api(`/api/bots/${current.id}/chat`);
   msgs.push({role:'user',content:text}); renderChat(msgs);
   $('chat').insertAdjacentHTML('beforeend','<div class="msg assistant">Thinking… (may use tools — up to 8 steps)</div>');
-  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text})});
+  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace()})});
     renderChat(await api(`/api/bots/${current.id}/chat`));
     if(res.error==='model_unavailable'&&res.suggested_model){const b=document.createElement('button'); b.textContent=`Switch to ${res.suggested_model} (${res.suggested_provider}) — available now`; b.style.margin='10px 20px';
       b.onclick=async()=>{await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({provider:res.suggested_provider,model:res.suggested_model})}); await loadBots(); selectBot(current.id);};
@@ -286,6 +297,87 @@ $('memform').onsubmit=async e=>{e.preventDefault(); const f=new FormData(e.targe
 $('reset').onclick=async()=>{if(!current) return; await api(`/api/bots/${current.id}/chat/reset`,{method:'POST'}); renderChat([]);};
 $('newbotbtn').onclick=()=>{showView('makebot'); initMakeBot();};
 document.querySelectorAll('.navbtn[data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view));
+
+// ---------- Workspaces + operating mode (Super Admin) ----------
+let EFFECTIVE=null;
+function currentWorkspace(){ return ($('ws-select')&&$('ws-select').value) || localStorage.getItem('localbotz-ws') || 'default'; }
+async function loadWorkspaces(){
+  const list=await api('/api/workspaces');
+  const sel=$('ws-select'); const saved=localStorage.getItem('localbotz-ws')||'default';
+  sel.innerHTML=list.map(w=>`<option value="${w.id}">${esc(w.name)} — ${esc(w.mode||'inherit')}</option>`).join('');
+  sel.value=list.some(w=>w.id===saved)?saved:(list[0]?list[0].id:'default');
+  localStorage.setItem('localbotz-ws', sel.value);
+  await loadEffective();
+}
+async function loadEffective(){
+  try{ EFFECTIVE=await api('/api/platform/effective?workspace='+encodeURIComponent(currentWorkspace())); }
+  catch(e){ EFFECTIVE=null; return; }
+  const bal=Number(EFFECTIVE.wallet_balance||0);
+  $('ws-info').innerHTML=`Mode: <b>${esc(EFFECTIVE.mode)}</b> (${esc(EFFECTIVE.mode_source||'')}) · Wallet: <b>$${bal.toFixed(2)}</b>${bal>0&&bal<Number(EFFECTIVE.low_balance_warn_usd||1)?' <span style="color:#b45309">low balance</span>':''}${bal<=0?' <span style="color:#b91c1c">empty — paid chats blocked</span>':''}`;
+  applyPickerVisibility();
+  if(availableModels) { fillModelList($('botmodel-list'), current?current.model:'', $('botprovider')?$('botprovider').value:'lmstudio'); fillModelList($('mb-model-list'), $('mb-model')?$('mb-model').value:'', $('mb-provider')?$('mb-provider').value:'lmstudio'); }
+}
+function applyPickerVisibility(){
+  if(!EFFECTIVE) return;
+  const fixed=EFFECTIVE.mode==='fixed';
+  const fixedLabel=fixed?`Fixed model: ${EFFECTIVE.fixed_llm.provider}/${EFFECTIVE.fixed_llm.model} (set by Super Admin)`:'';
+  ['botprovider','botmodel','botmodel-list','refresh-models','applybot'].forEach(id=>{const el=$(id); if(el) el.style.display=fixed?'none':'';});
+  if(fixed && current) $('botmeta').textContent=fixedLabel;
+  const mbNote=$('mb-mode-note');
+  if(fixed && !mbNote){
+    const note=document.createElement('p'); note.id='mb-mode-note'; note.className='note';
+    note.textContent='Fixed mode: this workspace uses the Super Admin’s fixed model ('+EFFECTIVE.fixed_llm.provider+'/'+EFFECTIVE.fixed_llm.model+'). The provider/model pickers are hidden.';
+    $('view-makebot').insertBefore(note, $('view-makebot').querySelector('h3'));
+  } else if(!fixed && mbNote) mbNote.remove();
+  // Filter the provider dropdowns to what this workspace may use.
+  if(!fixed && EFFECTIVE.allowed_providers){
+    ['botprovider','mb-provider'].forEach(id=>{const sel=$(id); if(!sel) return;
+      [...sel.options].forEach(o=>{ o.disabled=!EFFECTIVE.allowed_providers.includes(o.value); });
+    });
+  }
+}
+function adminHeaders(){ const t=sessionStorage.getItem('localbotz-admin')||''; return t?{'X-Admin-Token':t}:{}; }
+async function adminApi(p,o={}){ const h={...(o.headers||{}), ...adminHeaders()}; const r=await fetch(p,{headers:{'Content-Type':'application/json',...h},...o}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+async function adminHtml(){
+  const token=sessionStorage.getItem('localbotz-admin')||'';
+  if(!token){
+    return `<h2>👑 Super Admin</h2><p class="note">The Super Admin owns the platform: master API keys, the global operating mode, the model roster and pricing, and workspace wallets. Set <code>ADMIN_TOKEN</code> in <code>.env</code> to enable this panel.</p>
+    <label>Admin token</label><input id="adm-token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN from .env">
+    <div style="margin-top:10px"><button id="adm-login">Log in as Super Admin</button></div><div id="page-msg"></div>`;
+  }
+  let plat, pricing, keys, wss;
+  try{
+    plat=await adminApi('/api/admin/platform');
+    pricing=await adminApi('/api/admin/pricing');
+    keys=await adminApi('/api/admin/master-keys');
+    wss=await api('/api/workspaces');
+  }catch(e){ return `<h2>👑 Super Admin</h2><p>Could not load the admin panel: ${esc(e.message)}</p><button id="adm-logout">Log out</button><div id="page-msg"></div>`; }
+  const modeOpts=['fixed','selectable','byok'].map(m=>`<option value="${m}" ${plat.global_mode===m?'selected':''}>${m==='fixed'?'1 — Master Managed Fixed':m==='selectable'?'2 — Master User-Selectable':'3 — BYOK (tenant keys)'}</option>`).join('');
+  const provOpts=(sel)=>providers.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.label)}</option>`).join('');
+  const rosterRows=(plat.roster||[]).map((e,i)=>`<tr><td>${esc(e.type||'')}</td><td>${esc(e.provider||'')}</td><td>${esc(e.model||'')}</td><td>${esc(e.label||'')}</td><td><label><input type="checkbox" data-roster="${i}" ${e.enabled?'checked':''}> enabled</label></td></tr>`).join('');
+  const keyRows=keys.map(k=>`<tr><td>${esc(k.label)}</td><td><code>${esc(k.key_env)}</code></td><td>${k.has_key?esc(k.masked):'—'}</td><td>${k.has_key?'<span class="tag ok">stored</span>':'<span class="tag">not set</span>'}</td></tr>`).join('');
+  const wsRows=wss.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.mode||'inherit')}</td><td>$${Number(w.wallet_balance||0).toFixed(2)}</td><td>${(w.byok_providers||[]).join(', ')||'—'}</td><td><input type="number" step="0.01" min="0" id="topup-${w.id}" placeholder="Amount USD" style="width:110px"> <button class="small" data-topup="${w.id}">Top up</button></td></tr>`).join('');
+  return `<h2>👑 Super Admin</h2><p class="note">Logged in as Super Admin. Master keys pay for Fixed / Selectable chats; BYOK workspaces pay with their own keys; local models are always free.</p>
+  <h3>Operating mode (global default)</h3><label>Global mode — workspaces set to “inherit” follow this</label><select id="adm-mode">${modeOpts}</select>
+  <div class="row"><div><label>Fixed LLM — provider</label><select id="adm-fixed-prov">${provOpts(plat.fixed_llm.provider)}</select></div><div><label>Fixed LLM — model</label><input id="adm-fixed-model" type="text" value="${esc(plat.fixed_llm.model||'qwen3.5')}"></div></div>
+  <div class="row"><div><label>Fixed Voice — provider</label><select id="adm-fixed-voice-prov">${provOpts(plat.fixed_voice.provider)}</select></div><div><label>Fixed Voice — model</label><input id="adm-fixed-voice-model" type="text" value="${esc(plat.fixed_voice.model||'tts-1')}"></div></div>
+  <p style="color:#666;font-size:14px">Fixed mode: every chat in a Fixed workspace uses the fixed LLM above, and tenants see no provider/model picker. Voice models below are the TTS roster.</p>
+  <div style="margin-top:10px"><button id="adm-save-platform">Save mode + fixed models</button> <button id="adm-logout" class="ghost">Log out</button></div>
+  <h3>Model roster (Selectable mode + Voice)</h3><p style="color:#666;font-size:14px">Tenants in Selectable mode can only pick enabled roster entries. Voice entries are TTS models (real audio only when a key is configured — otherwise “not configured”, never faked).</p>
+  <table><tr><th>Type</th><th>Provider</th><th>Model</th><th>Label</th><th></th></tr>${rosterRows}</table>
+  <div style="margin-top:10px"><button id="adm-save-roster">Save roster</button></div>
+  <h3>Pricing (USD, editable JSON)</h3><p style="color:#666;font-size:14px">Per 1,000 tokens in/out per model, plus per-character voice prices. Metering estimates tokens as chars ÷ 4 when the provider returns no usage counts.</p>
+  <textarea id="adm-pricing" rows="8">${esc(JSON.stringify(pricing,null,2))}</textarea>
+  <div style="margin-top:10px"><button id="adm-save-pricing">Save pricing</button></div>
+  <h3>Master platform keys</h3><p style="color:#666;font-size:14px">These keys pay for Fixed / Selectable chats. Stored in <code>.env</code>, shown masked only.</p>
+  <table><tr><th>Provider</th><th>Env var</th><th>Stored key</th><th></th></tr>${keyRows}</table>
+  <div class="row"><div><label>Provider</label><select id="adm-key-id">${keys.map(k=>`<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select></div><div><label>Master API key</label><input id="adm-key-val" type="password" autocomplete="off"></div></div>
+  <div style="margin-top:10px"><button id="adm-save-key">Save master key</button></div>
+  <h3>Workspaces / tenants + wallets</h3>
+  <table><tr><th>Workspace</th><th>Mode</th><th>Wallet</th><th>BYOK providers</th><th>Top up (manual, no real payment)</th></tr>${wsRows}</table>
+  <div class="row"><div><label>New workspace name</label><input id="adm-ws-name" type="text"></div><div><label>Mode</label><select id="adm-ws-mode"><option value="inherit">inherit (global)</option><option value="fixed">fixed</option><option value="selectable">selectable</option><option value="byok">byok</option></select></div></div>
+  <div style="margin-top:10px"><button id="adm-ws-add">Create workspace</button></div><div id="page-msg"></div>`;
+}
 
 // ---------- Make a Bot ----------
 const AVATARS=["🤖","👔","🔬","🌅","📰","📝","💬","👀"];
@@ -348,7 +440,8 @@ function fmtChecked(ts){ if(!ts) return ''; try{ return new Date(ts*1000).toLoca
 async function renderPage(name){
   const el=$('view-page'); el.innerHTML='<h2>Loading…</h2>';
   try{
-    if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
+    if(name==='admin') el.innerHTML=await adminHtml();
+    else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
     else if(name==='lib-skills') el.innerHTML=await skillsHtml();
@@ -498,9 +591,18 @@ function bindPage(name){
     await api('/api/permissions',{method:'POST',body:JSON.stringify({global:g,blocked_paths:q('perm-blocked').value.split('\n')})}); msg('Permissions saved and enforced in the agent loop.');};
   if(q('perm-savebot')) q('perm-savebot').onclick=async()=>{await api(`/api/permissions/bots/${q('perm-bot').value}`,{method:'POST',body:JSON.stringify({approval_mode:q('perm-mode').value})}); msg('Bot approval mode saved.');};
   if(q('dev-add')) q('dev-add').onclick=async()=>{await api('/api/devices',{method:'POST',body:JSON.stringify({name:q('dev-name').value,kind:q('dev-kind').value})}); renderPage(name);};
+  if(q('adm-login')) q('adm-login').onclick=async()=>{try{const r=await api('/api/admin/login',{method:'POST',body:JSON.stringify({token:q('adm-token').value})}); if(r.ok){sessionStorage.setItem('localbotz-admin',q('adm-token').value); renderPage(name);} else msg(r.error||'Wrong admin token.');}catch(e){msg('Login failed: '+e.message);}};
+  if(q('adm-logout')) q('adm-logout').onclick=()=>{sessionStorage.removeItem('localbotz-admin'); renderPage(name);};
+  if(q('adm-save-platform')) q('adm-save-platform').onclick=async()=>{const plat=await adminApi('/api/admin/platform'); await adminApi('/api/admin/platform',{method:'POST',body:JSON.stringify({global_mode:q('adm-mode').value, fixed_llm:{provider:q('adm-fixed-prov').value, model:q('adm-fixed-model').value.trim()}, fixed_voice:{provider:q('adm-fixed-voice-prov').value, model:q('adm-fixed-voice-model').value.trim()}})}); msg('Operating mode + fixed models saved.'); loadEffective();};
+  if(q('adm-save-roster')) q('adm-save-roster').onclick=async()=>{const plat=await adminApi('/api/admin/platform'); const roster=(plat.roster||[]).map((e,i)=>{const cb=document.querySelector(`[data-roster="${i}"]`); return {...e, enabled:cb?cb.checked:!!e.enabled};}); await adminApi('/api/admin/platform',{method:'POST',body:JSON.stringify({roster})}); msg('Roster saved.');};
+  if(q('adm-save-pricing')) q('adm-save-pricing').onclick=async()=>{try{const pr=JSON.parse(q('adm-pricing').value); await adminApi('/api/admin/pricing',{method:'POST',body:JSON.stringify(pr)}); msg('Pricing saved.');}catch(e){msg('Pricing must be valid JSON: '+e.message);}};
+  if(q('adm-save-key')) q('adm-save-key').onclick=async()=>{await adminApi('/api/admin/master-keys',{method:'POST',body:JSON.stringify({provider:q('adm-key-id').value, api_key:q('adm-key-val').value})}); q('adm-key-val').value=''; msg('Master key saved (masked).'); renderPage(name);};
+  if(q('adm-ws-add')) q('adm-ws-add').onclick=async()=>{await api('/api/workspaces',{method:'POST',body:JSON.stringify({name:q('adm-ws-name').value, mode:q('adm-ws-mode').value})}); msg('Workspace created.'); renderPage(name); loadWorkspaces();};
+  document.querySelectorAll('[data-topup]').forEach(el=>el.onclick=async()=>{const amt=parseFloat(($( 'topup-'+el.dataset.topup)||{}).value||'0'); if(!amt||amt<=0){msg('Enter a top-up amount greater than 0.');return;} await adminApi(`/api/workspaces/${el.dataset.topup}/wallet/topup`,{method:'POST',body:JSON.stringify({amount_usd:amt, note:'Manual top-up by Super Admin'})}); msg('Topped up $'+amt.toFixed(2)+'.'); renderPage(name); loadEffective();});
   if(q('vps-save')) q('vps-save').onclick=async()=>{const body={base_url:q('vps-url').value.trim()}; const tok=q('vps-token').value.trim(); if(tok) body.token=tok; await api('/api/vps/config',{method:'POST',body:JSON.stringify(body)}); q('vps-token').value=''; await loadProviders(); msg('VPS Premium saved. Pick provider “VPS Premium” per bot to use it.'); renderPage(name);};
   if(q('vps-test')) q('vps-test').onclick=async()=>{const r=await api('/api/connectors/provider/vps/test',{method:'POST'}); msg(`VPS Premium: ${r.status} — ${r.detail||''}`);};
   if(q('vps-models')) q('vps-models').onclick=async()=>{const r=await api('/api/vps/models'); const out=$('vps-models-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Premium models on your VPS:</p><ul>${(r.models||[]).map(m=>`<li><code>${esc(m)}</code></li>`).join('')||'<li>None listed by the gateway.</li>'}</ul>`; msg(r.error||`${(r.models||[]).length} premium model(s) listed.`);};
 }
-loadStatus(); loadProviders().then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
+loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); setInterval(loadStatus,15000);
+$('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };
 </script>

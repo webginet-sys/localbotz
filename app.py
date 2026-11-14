@@ -50,8 +50,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -1095,9 +1095,11 @@ def _lmstudio_fallback_available(provider_id: str) -> bool:
     reachable, _d, _c = check_provider("lmstudio")
     return reachable
 
-def _llm_chat_openai(messages, model: str, cfg: dict):
+def _llm_chat_openai(messages, model: str, cfg: dict, api_key=None):
+    # api_key: explicit key for this call (master key, or the tenant's BYOK
+    # key). None means "use the master key from .env" (existing behaviour).
     headers = {}
-    key = _provider_api_key(cfg["id"])
+    key = api_key if api_key is not None else _provider_api_key(cfg["id"])
     if key:
         headers["Authorization"] = f"Bearer {key}"
     with _http_client(timeout=120, external=not _is_local_url(cfg["base_url"])) as c:
@@ -1108,13 +1110,13 @@ def _llm_chat_openai(messages, model: str, cfg: dict):
         r.raise_for_status()
         return r.json()
 
-def _llm_chat_anthropic(messages, model: str, cfg: dict):
+def _llm_chat_anthropic(messages, model: str, cfg: dict, api_key=None):
     # Translate OpenAI-style messages/tools to Claude's Messages API,
     # then translate the reply back to OpenAI shape so the tool loop
     # in run_agent works identically for every provider.
-    key = _provider_api_key("anthropic")
+    key = api_key if api_key is not None else _provider_api_key("anthropic")
     if not key:
-        raise ValueError("ANTHROPIC_API_KEY is not set - add it to .env to use Claude.")
+        raise ValueError("No Claude key available - Super Admin (master key) or this workspace (BYOK key) needs to add one.")
     system = ""
     anthropic_msgs = []
     tool_results = []  # consecutive tool messages merge into one user turn
@@ -1167,22 +1169,39 @@ def _llm_chat_anthropic(messages, model: str, cfg: dict):
     return {"choices": [{"message": {"role": "assistant", "content": text,
                                      "tool_calls": tool_calls}}]}
 
-def llm_chat(messages, model: str, provider_id: str = None):
+def llm_chat(messages, model: str, provider_id: str = None, api_key=None):
     # One model call, in OpenAI shape. Raises on missing key / HTTP error.
+    # api_key: explicit key for this call (BYOK). None = master key from .env.
     cfg = get_provider_config(provider_id or DEFAULT_PROVIDER)
-    if cfg["requires_key"] and not cfg["configured"]:
+    if api_key is None and cfg["requires_key"] and not cfg["configured"]:
         raise ValueError(f"{cfg['key_env']} is not set - add it to .env to use {cfg['label']}.")
     if cfg["kind"] == "anthropic":
-        return _llm_chat_anthropic(messages, model, cfg)
-    return _llm_chat_openai(messages, model, cfg)
+        return _llm_chat_anthropic(messages, model, cfg, api_key=api_key)
+    return _llm_chat_openai(messages, model, cfg, api_key=api_key)
 
-def run_agent(bot: dict, user_text: str):
+def run_agent(bot: dict, user_text: str, workspace_id: str = "default"):
     # Tool loop, max 8 turns. Returns (reply, tool_trace, extra).
     # extra carries error/fallback info for the UI; the loop itself is
     # identical for every provider (see llm_chat translation).
-    provider_id = bot.get("provider") or DEFAULT_PROVIDER
+    # Operating-model enforcement (v0.3): the workspace's effective mode
+    # decides which provider/model and which key pays for the chat.
+    ws = get_workspace(workspace_id)
+    mode, mode_source = effective_mode(ws)
+    plat = load_platform()
+    low_warn = False
+    if mode == "fixed":
+        # Master Managed Fixed: every chat uses the Super Admin's fixed model.
+        provider_id = (plat.get("fixed_llm") or {}).get("provider") or "lmstudio"
+        model = (plat.get("fixed_llm") or {}).get("model") or "qwen3.5"
+    else:
+        provider_id = bot.get("provider") or DEFAULT_PROVIDER
+        model = bot.get("model") or ""
+    if provider_id not in PROVIDERS:
+        provider_id = DEFAULT_PROVIDER
     cfg = get_provider_config(provider_id)
-    model = bot.get("model") or cfg["default_model"]
+    if not model:
+        model = cfg["default_model"]
+    eff_key, key_source = resolve_key(provider_id, ws, mode)
     history = load_chat(bot["id"])
     mem = load_memory(bot["id"])
     mem_text = "\n".join(f"- {f}" for f in mem.get("facts", [])) or "(no memory yet)"
@@ -1219,7 +1238,9 @@ def run_agent(bot: dict, user_text: str):
                      f"browse, and read/write files in ./workspace.")
         history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time())})
         save_chat(bot["id"], history)
-        return reply, trace, {}
+        return reply, trace, {"mode": mode, "key_source": key_source,
+                              "workspace": ws["id"], "cost_usd": 0.0,
+                              "wallet_balance": wallet_balance(ws["id"])}
 
     # Pre-check: provider disabled in Library/Settings > Connectors.
     if not provider_enabled(provider_id):
@@ -1241,8 +1262,21 @@ def run_agent(bot: dict, user_text: str):
                            "fallback_provider": "lmstudio"}
 
     # Pre-check: online provider with no key - fail fast with a clear error.
-    if cfg["requires_key"] and not cfg["configured"]:
+    # The "key" here is the effective one: master key, or the tenant's own
+    # BYOK key for this workspace (see resolve_key). Local models need none.
+    if cfg["requires_key"] and not eff_key:
         fb = _lmstudio_fallback_available(provider_id)
+        if mode == "byok":
+            reply = (f"{cfg['label']} needs YOUR key in this workspace (BYOK mode): "
+                     "add your own API key for it in this workspace's Secure store. "
+                     "The host pays nothing for BYOK chats — your key is used instead. "
+                     + ("Local models are free: switch this bot to LM Studio to keep working offline."
+                        if fb else ""))
+            history.append({"role": "assistant", "content": reply, "tools": [], "ts": int(time.time())})
+            save_chat(bot["id"], history)
+            return reply, [], {"error": "missing_key", "provider": provider_id,
+                               "mode": mode, "key_source": key_source,
+                               "fallback_available": fb, "fallback_provider": "lmstudio"}
         if provider_id == "vps":
             reply = ("VPS Premium is not configured: set the VPS base URL and your "
                      "token in Settings > Connectors > VPS Premium (or VPS_BASE_URL / "
@@ -1261,6 +1295,43 @@ def run_agent(bot: dict, user_text: str):
         save_chat(bot["id"], history)
         return reply, [], {"error": "missing_key", "provider": provider_id,
                            "fallback_available": fb, "fallback_provider": "lmstudio"}
+
+    # Selectable mode: the model must be on the Super Admin's roster.
+    # Local models are exempt — any local model is always allowed (and free).
+    if (mode == "selectable" and provider_id not in ("lmstudio", "ollama")
+            and not roster_allows(provider_id, model)):
+        allowed = [f"{e['provider']}/{e['model']}" for e in roster_entries("llm")
+                   if e.get("enabled")]
+        first = next((e for e in roster_entries("llm") if e.get("enabled")), None)
+        reply = (f"Model {provider_id}/{model} is not on this workspace's allowed roster. "
+                 f"Allowed models: {', '.join(allowed) or '(none — ask the Super Admin)'}")
+        history.append({"role": "assistant", "content": reply, "tools": [], "ts": int(time.time())})
+        save_chat(bot["id"], history)
+        extra_roster = {"error": "model_not_in_roster", "provider": provider_id,
+                        "model": model, "allowed_models": allowed,
+                        "fallback_available": _lmstudio_fallback_available(provider_id),
+                        "fallback_provider": "lmstudio"}
+        if first:
+            extra_roster["suggested_provider"] = first["provider"]
+            extra_roster["suggested_model"] = first["model"]
+        return reply, [], extra_roster
+
+    # Wallet check (master-paid modes only; local + BYOK are $0 to the host).
+    if key_source == "master" and provider_id not in ("lmstudio", "ollama"):
+        _bal = wallet_balance(ws["id"])
+        _warn_at = float(load_pricing().get("low_balance_warn_usd", 1.0))
+        low_warn = _bal < _warn_at
+        if _bal <= 0:
+            reply = (f"Workspace wallet is empty ($0.00) — this chat needs a paid model. "
+                     f"Ask the Super Admin to top up the '{ws['name']}' workspace wallet, "
+                     "or switch this bot to a local model (LM Studio / Ollama), which is always free.")
+            history.append({"role": "assistant", "content": reply, "tools": [], "ts": int(time.time())})
+            save_chat(bot["id"], history)
+            return reply, [], {"error": "wallet_empty", "provider": provider_id,
+                               "mode": mode, "key_source": key_source,
+                               "wallet_balance": _bal,
+                               "fallback_available": _lmstudio_fallback_available(provider_id),
+                               "fallback_provider": "lmstudio"}
 
     # Availability check (local + VPS only): if the bot's saved model is
     # no longer offered by its provider, say so plainly and suggest the
@@ -1287,10 +1358,14 @@ def run_agent(bot: dict, user_text: str):
     # Real model loop
     reply = ""
     extra = {}
+    last_usage = None
+    succeeded = False
+    prompt_chars = sum(len(str(m.get("content") or "")) for m in messages)
     for _turn in range(8):
         try:
-            data = llm_chat(messages, model, provider_id)
+            data = llm_chat(messages, model, provider_id, api_key=eff_key)
         except Exception as e:
+            succeeded = False
             fb = _lmstudio_fallback_available(provider_id)
             extra = {"error": "provider_failed", "provider": provider_id,
                      "fallback_available": fb, "fallback_provider": "lmstudio"}
@@ -1309,8 +1384,10 @@ def run_agent(bot: dict, user_text: str):
                          + ("Fallback available: LM Studio is reachable - switch this bot to LM Studio."
                             if fb else "LM Studio is not reachable either, so there is no local fallback right now."))
             else:
-                reply = (f"{cfg['label']} failed: {e}. Check your internet connection and the "
-                         f"{cfg['key_env']} key in .env. "
+                _key_hint = ("Check the BYOK key saved for this workspace."
+                             if key_source == "byok" else
+                             f"Check your internet connection and the {cfg['key_env']} key in .env.")
+                reply = (f"{cfg['label']} failed: {e}. {_key_hint} "
                          + (f"Fallback available: LM Studio at "
                             f"{get_provider_config('lmstudio')['base_url']} is reachable - "
                             "switch this bot's provider to LM Studio to keep working offline."
@@ -1318,6 +1395,8 @@ def run_agent(bot: dict, user_text: str):
                             "LM Studio is not reachable either, so there is no local fallback right now."))
             break
         record_usage(provider_id, model, data.get("usage"))
+        last_usage = data.get("usage")
+        succeeded = True
         choice = (data.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
         tool_calls = msg.get("tool_calls") or []
@@ -1342,9 +1421,268 @@ def run_agent(bot: dict, user_text: str):
         reply = reply or "I used the maximum number of tool steps (8) — here's what I found so far."
     if not reply:
         reply = "(The model returned an empty reply.)"
-    history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time())})
+    metered = {"cost_usd": 0.0, "billed": False, "balance_usd": wallet_balance(ws["id"]),
+               "tokens_in": 0, "tokens_out": 0}
+    if succeeded:
+        metered = meter_usage(ws["id"], bot["id"], provider_id, model, last_usage,
+                              prompt_chars, len(reply or ""), key_source, mode)
+    extra.update({"mode": mode, "key_source": key_source, "workspace": ws["id"],
+                  "cost_usd": metered["cost_usd"], "billed": metered["billed"],
+                  "tokens_in": metered["tokens_in"], "tokens_out": metered["tokens_out"],
+                  "wallet_balance": metered["balance_usd"],
+                  "low_balance_warning": bool(low_warn)})
+    history.append({"role": "assistant", "content": reply, "tools": trace, "ts": int(time.time()),
+                    "cost_usd": metered["cost_usd"], "wallet_balance": metered["balance_usd"],
+                    "mode": mode, "key_source": key_source})
     save_chat(bot["id"], history)
     return reply, trace, extra
+
+
+# ---------- Operating models: Super Admin / workspaces / wallets ----------
+# Three modes (v0.3, no real payments — wallets are manual balances):
+#   fixed      — Master Managed Fixed: Super Admin assigns one fixed LLM
+#                (+ one fixed Voice model). Tenants see no picker.
+#   selectable — Master User-Selectable: tenants pick from the Super
+#                Admin's curated roster; master keys pay for it.
+#   byok       — Bring Your Own Key: the tenant's own keys pay; the host
+#                incurs zero third-party API cost for that workspace.
+# Local models (LM Studio / Ollama) are always free, in every mode.
+# Key source is logged per chat (master / byok / local) — never the key.
+PLATFORM_FILE = DATA_DIR / "platform.json"
+PRICING_FILE = DATA_DIR / "pricing.json"
+WORKSPACES_FILE = DATA_DIR / "workspaces.json"
+WALLETS_DIR = DATA_DIR / "wallets"
+BYOK_DIR = DATA_DIR / "byok"
+METERING_FILE = DATA_DIR / "metering.jsonl"
+MODES = ("fixed", "selectable", "byok")
+
+def _default_roster():
+    # LLM entries for every known provider + a few Voice (TTS) entries.
+    roster = []
+    for pid in PROVIDERS:
+        cfg = PROVIDERS[pid]
+        model = cfg["default_model"] or ""
+        if pid == "vps":
+            # VPS roster entries: the gateway's live list refines this at
+            # runtime (Available models); seed the known premium set here.
+            for m in ("claude-sonnet-4-5", "gpt-4o", "gpt-4o-mini",
+                      "gemini-2.5-flash", "gemini-2.5-pro"):
+                roster.append({"id": f"vps:{m}", "type": "llm", "provider": "vps",
+                               "model": m, "label": f"VPS Premium — {m}", "enabled": True})
+            continue
+        if model:
+            roster.append({"id": f"{pid}:{model}", "type": "llm", "provider": pid,
+                           "model": model, "label": f"{cfg['label']} — {model}",
+                           "enabled": True})
+    for model, label in (("tts-1", "OpenAI TTS (tts-1)"),
+                         ("tts-1-hd", "OpenAI TTS HD (tts-1-hd)"),
+                         ("gpt-4o-mini-tts", "OpenAI TTS Mini (gpt-4o-mini-tts)")):
+        roster.append({"id": f"openai:{model}", "type": "voice", "provider": "openai",
+                       "model": model, "label": label, "enabled": True})
+    return roster
+
+def _default_platform():
+    return {"global_mode": "selectable",
+            "fixed_llm": {"provider": "lmstudio", "model": "qwen3.5"},
+            "fixed_voice": {"provider": "openai", "model": "tts-1"},
+            "roster": _default_roster()}
+
+def load_platform():
+    d = _load_json(PLATFORM_FILE, None)
+    if not isinstance(d, dict) or "global_mode" not in d:
+        d = _default_platform()
+        _save_json(PLATFORM_FILE, d)
+    d.setdefault("global_mode", "selectable")
+    d.setdefault("fixed_llm", {"provider": "lmstudio", "model": "qwen3.5"})
+    d.setdefault("fixed_voice", {"provider": "openai", "model": "tts-1"})
+    d.setdefault("roster", _default_roster())
+    return d
+
+def save_platform(d):
+    _save_json(PLATFORM_FILE, d)
+    return d
+
+def _default_pricing():
+    # Prices in USD per 1,000 tokens (input / output), from PRICE_USD_PER_1M.
+    per_model = {}
+    for model, (pin, pout) in PRICE_USD_PER_1M.items():
+        per_model[model] = {"per_1k_input_usd": round(pin / 1000, 6),
+                            "per_1k_output_usd": round(pout / 1000, 6)}
+    per_model.setdefault("deepseek-chat", {"per_1k_input_usd": 0.00014, "per_1k_output_usd": 0.00028})
+    per_model.setdefault("deepseek-reasoner", {"per_1k_input_usd": 0.00055, "per_1k_output_usd": 0.00219})
+    per_model.setdefault("gpt-5-codex", {"per_1k_input_usd": 0.00125, "per_1k_output_usd": 0.01})
+    per_model.setdefault("codex-mini-latest", {"per_1k_input_usd": 0.00025, "per_1k_output_usd": 0.002})
+    per_model.setdefault("claude-opus-4-1", {"per_1k_input_usd": 0.015, "per_1k_output_usd": 0.075})
+    return {"currency": "USD",
+            "default_per_1k_input_usd": 0.001, "default_per_1k_output_usd": 0.003,
+            "low_balance_warn_usd": 1.0,
+            "per_char_usd": {"tts-1": 0.000015, "tts-1-hd": 0.00003,
+                             "gpt-4o-mini-tts": 0.000006},
+            "per_model": per_model}
+
+def load_pricing():
+    d = _load_json(PRICING_FILE, None)
+    if not isinstance(d, dict) or "per_model" not in d:
+        d = _default_pricing()
+        _save_json(PRICING_FILE, d)
+    return d
+
+def save_pricing(d):
+    _save_json(PRICING_FILE, d)
+    return d
+
+def load_workspaces():
+    ws = _load_json(WORKSPACES_FILE, None)
+    if not isinstance(ws, list) or not ws:
+        ws = [{"id": "default", "name": "Personal", "mode": "inherit",
+               "members": ["Thomas"], "created_at": int(time.time())}]
+        _save_json(WORKSPACES_FILE, ws)
+    return ws
+
+def save_workspaces(ws):
+    _save_json(WORKSPACES_FILE, ws)
+    return ws
+
+def get_workspace(ws_id: str):
+    ws_id = (ws_id or "default").strip() or "default"
+    for w in load_workspaces():
+        if w["id"] == ws_id:
+            return w
+    return load_workspaces()[0]
+
+def effective_mode(ws: dict):
+    """(mode, source): workspace override wins, else the global mode."""
+    mode = (ws.get("mode") or "inherit").lower()
+    if mode in MODES:
+        return mode, "workspace"
+    plat = load_platform()
+    gmode = (plat.get("global_mode") or "selectable").lower()
+    return (gmode if gmode in MODES else "selectable"), "global"
+
+def roster_entries(kind: str = None):
+    entries = load_platform().get("roster") or []
+    if kind:
+        entries = [e for e in entries if e.get("type") == kind]
+    return entries
+
+def roster_allows(provider: str, model: str, kind: str = "llm") -> bool:
+    for e in roster_entries(kind):
+        if e.get("enabled") and e.get("provider") == provider and e.get("model") == model:
+            return True
+    return False
+
+# ---- per-workspace wallet (manual balance, no real payments) ----
+def _wallet_path(ws_id: str) -> Path:
+    return WALLETS_DIR / f"{ws_id}.json"
+
+def load_wallet_ws(ws_id: str):
+    d = _load_json(_wallet_path(ws_id), {})
+    d.setdefault("workspace", ws_id)
+    d.setdefault("currency", "USD")
+    d.setdefault("balance_usd", 0.0)
+    d.setdefault("transactions", [])
+    d.setdefault("usage", [])
+    return d
+
+def save_wallet_ws(ws_id: str, d):
+    _save_json(_wallet_path(ws_id), d)
+    return d
+
+def wallet_balance(ws_id: str) -> float:
+    try:
+        return float(load_wallet_ws(ws_id).get("balance_usd") or 0)
+    except Exception:
+        return 0.0
+
+# ---- per-workspace BYOK keys (data/byok/<ws>.json, gitignored, masked) ----
+def _byok_path(ws_id: str) -> Path:
+    return BYOK_DIR / f"{ws_id}.json"
+
+def load_byok_keys(ws_id: str):
+    d = _load_json(_byok_path(ws_id), {})
+    return d if isinstance(d, dict) else {}
+
+def save_byok_keys(ws_id: str, d):
+    _save_json(_byok_path(ws_id), d)
+    return d
+
+def byok_key(ws_id: str, provider: str):
+    return (load_byok_keys(ws_id).get(provider) or "").strip() or None
+
+def _is_admin(request) -> bool:
+    token = (os.getenv("ADMIN_TOKEN") or "").strip()
+    if not token:
+        return False
+    return (request.headers.get("x-admin-token") or "").strip() == token
+
+def _require_admin(request):
+    if not (os.getenv("ADMIN_TOKEN") or "").strip():
+        raise HTTPException(403, "Super Admin is not enabled — set ADMIN_TOKEN in .env and restart the app.")
+    if not _is_admin(request):
+        raise HTTPException(401, "Admin token required — log in as Super Admin first.")
+
+def resolve_key(provider_id: str, ws: dict, mode: str):
+    """Which key pays for this chat? Returns (key or None, key_source).
+    key_source: local (free) | master (Super Admin's key) | byok (tenant's key)."""
+    if provider_id in ("lmstudio", "ollama"):
+        return None, "local"
+    if mode == "byok":
+        return byok_key(ws["id"], provider_id), "byok"
+    # fixed + selectable: the Super Admin's master key from .env.
+    if provider_id == "vps":
+        return os.getenv("VPS_API_TOKEN") or None, "master"
+    return _provider_api_key(provider_id), "master"
+
+def price_for(model: str, pricing: dict):
+    entry = (pricing.get("per_model") or {}).get(model) or {}
+    return (float(entry.get("per_1k_input_usd", pricing.get("default_per_1k_input_usd", 0.001))),
+            float(entry.get("per_1k_output_usd", pricing.get("default_per_1k_output_usd", 0.003))))
+
+def meter_usage(ws_id: str, bot_id: str, provider: str, model: str, usage,
+                prompt_chars: int, reply_chars: int, key_source: str, mode: str):
+    """Meter one chat turn and, for master-paid usage, charge the workspace
+    wallet. Returns {tokens_in, tokens_out, chars, cost_usd, billed,
+    balance_usd}. Local and BYOK usage costs the host $0 (tracked only)."""
+    try:
+        tin = int((usage or {}).get("input_tokens") or (usage or {}).get("prompt_tokens") or 0)
+        tout = int((usage or {}).get("output_tokens") or (usage or {}).get("completion_tokens") or 0)
+    except Exception:
+        tin = tout = 0
+    if tin == 0 and tout == 0:
+        # No token counts returned: estimate ~4 chars per token.
+        tin = max(1, int(prompt_chars / 4))
+        tout = max(1, int(reply_chars / 4))
+    pricing = load_pricing()
+    per_in, per_out = price_for(model, pricing)
+    cost = round((tin / 1000) * per_in + (tout / 1000) * per_out, 6)
+    billed = key_source == "master" and provider not in ("lmstudio", "ollama")
+    w = load_wallet_ws(ws_id)
+    if billed and cost:
+        w["balance_usd"] = round(float(w.get("balance_usd") or 0) - cost, 6)
+        w.setdefault("transactions", []).append(
+            {"ts": int(time.time()), "type": "charge", "amount_usd": -cost,
+             "note": f"Chat: {provider}/{model} ({tin}+{tout} tokens)", "bot": bot_id,
+             "model": model, "balance_after_usd": w["balance_usd"]})
+        w["transactions"] = w["transactions"][-500:]
+    entry = {"ts": int(time.time()), "bot": bot_id, "provider": provider, "model": model,
+             "mode": mode, "key_source": key_source,
+             "input_tokens": tin, "output_tokens": tout,
+             "chars": int(prompt_chars) + int(reply_chars),
+             "cost_usd": cost if billed else 0.0, "host_cost_usd": cost if billed else 0.0,
+             "billed": billed, "balance_after_usd": float(w.get("balance_usd") or 0)}
+    w.setdefault("usage", []).append(entry)
+    w["usage"] = w["usage"][-500:]
+    save_wallet_ws(ws_id, w)
+    try:
+        with METERING_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({k: v for k, v in entry.items()
+                                if k != "balance_after_usd"} | {"workspace": ws_id}) + "\n")
+    except Exception:
+        pass
+    return {"tokens_in": tin, "tokens_out": tout,
+            "chars": int(prompt_chars) + int(reply_chars),
+            "cost_usd": cost if billed else 0.0, "billed": billed,
+            "balance_usd": float(w.get("balance_usd") or 0)}
 
 # ---------- API ----------
 app = FastAPI(title="LocalBotz", version="0.1.0")
@@ -1375,6 +1713,7 @@ class BotUpdate(BaseModel):
 
 class ChatIn(BaseModel):
     message: str = Field(min_length=1)
+    workspace: str = "default"
 
 class MemoryIn(BaseModel):
     fact: str = Field(min_length=1)
@@ -1619,8 +1958,9 @@ def post_chat(bot_id: str, body: ChatIn):
     bot = get_bot(bot_id)
     if not bot:
         raise HTTPException(404, "Bot not found")
-    reply, trace, extra = run_agent(bot, body.message.strip())
-    out = {"reply": reply, "tools": trace, "bot": bot["id"]}
+    ws_id = (body.workspace or "default").strip() or "default"
+    reply, trace, extra = run_agent(bot, body.message.strip(), workspace_id=ws_id)
+    out = {"reply": reply, "tools": trace, "bot": bot["id"], "workspace": ws_id}
     out.update(extra or {})
     return out
 
@@ -2043,6 +2383,329 @@ def delete_device(did: str):
         raise HTTPException(400, "This device cannot be removed from here")
     save_devices_extra([x for x in load_devices_extra() if x["id"] != did])
     return {"deleted": did}
+
+
+# ---------- Operating models: platform / admin / workspaces / voice ----------
+@app.get("/api/platform")
+def get_platform():
+    # Public summary (no keys, no pricing): global mode, fixed models, roster.
+    plat = load_platform()
+    return {"global_mode": plat.get("global_mode"),
+            "fixed_llm": plat.get("fixed_llm"),
+            "fixed_voice": plat.get("fixed_voice"),
+            "roster": plat.get("roster") or [],
+            "modes": list(MODES),
+            "admin_enabled": bool((os.getenv("ADMIN_TOKEN") or "").strip())}
+
+@app.get("/api/platform/effective")
+def platform_effective(workspace: str = "default"):
+    # What the model picker and the agent must enforce for this workspace.
+    ws = get_workspace(workspace)
+    mode, mode_source = effective_mode(ws)
+    plat = load_platform()
+    roster = [e for e in (plat.get("roster") or []) if e.get("enabled")]
+    byok = load_byok_keys(ws["id"])
+    if mode == "fixed":
+        allowed_providers = [plat["fixed_llm"]["provider"]]
+        allowed_models = [{"provider": plat["fixed_llm"]["provider"],
+                           "model": plat["fixed_llm"]["model"]}]
+    elif mode == "selectable":
+        allowed_providers = sorted({e["provider"] for e in roster
+                                    if e.get("type") == "llm"} | {"lmstudio", "ollama"})
+        allowed_models = [{"provider": e["provider"], "model": e["model"]}
+                          for e in roster if e.get("type") == "llm"]
+    else:  # byok: local + providers this workspace has its own key for
+        allowed_providers = sorted({"lmstudio", "ollama"}
+                                   | {pid for pid, k in byok.items() if k})
+        allowed_models = [{"provider": pid, "model": get_provider_config(pid)["default_model"]}
+                          for pid in allowed_providers]
+    return {"workspace": {"id": ws["id"], "name": ws.get("name"), "mode": ws.get("mode")},
+            "mode": mode, "mode_source": mode_source,
+            "fixed_llm": plat.get("fixed_llm"), "fixed_voice": plat.get("fixed_voice"),
+            "allowed_providers": allowed_providers,
+            "allowed_models": allowed_models,
+            "roster": roster,
+            "byok_providers": sorted([pid for pid, k in byok.items() if k]),
+            "wallet_balance": wallet_balance(ws["id"]),
+            "low_balance_warn_usd": float(load_pricing().get("low_balance_warn_usd", 1.0))}
+
+# --- Super Admin (token login, v1) ---
+@app.post("/api/admin/login")
+def admin_login(body: dict):
+    token = (os.getenv("ADMIN_TOKEN") or "").strip()
+    if not token:
+        return {"ok": False, "admin_enabled": False,
+                "error": "Super Admin is not enabled — set ADMIN_TOKEN in .env and restart."}
+    ok = (body.get("token") or "").strip() == token
+    return {"ok": ok, "admin_enabled": True,
+            "error": "" if ok else "Wrong admin token."}
+
+@app.get("/api/admin/platform")
+def admin_get_platform(request: Request):
+    _require_admin(request)
+    return load_platform()
+
+@app.post("/api/admin/platform")
+def admin_set_platform(request: Request, body: dict):
+    _require_admin(request)
+    plat = load_platform()
+    if body.get("global_mode") in MODES:
+        plat["global_mode"] = body["global_mode"]
+    for key in ("fixed_llm", "fixed_voice"):
+        val = body.get(key)
+        if isinstance(val, dict) and val.get("provider") in PROVIDERS and val.get("model"):
+            plat[key] = {"provider": val["provider"], "model": str(val["model"]).strip()}
+    if isinstance(body.get("roster"), list):
+        clean = []
+        for e in body["roster"]:
+            if not isinstance(e, dict):
+                continue
+            if e.get("type") not in ("llm", "voice"):
+                continue
+            if e.get("provider") not in PROVIDERS or not str(e.get("model") or "").strip():
+                continue
+            clean.append({"id": str(e.get("id") or f"{e['provider']}:{e['model']}"),
+                          "type": e["type"], "provider": e["provider"],
+                          "model": str(e["model"]).strip(),
+                          "label": str(e.get("label") or f"{e['provider']} — {e['model']}"),
+                          "enabled": bool(e.get("enabled", True))})
+        plat["roster"] = clean
+    save_platform(plat)
+    return plat
+
+@app.get("/api/admin/pricing")
+def admin_get_pricing(request: Request):
+    _require_admin(request)
+    return load_pricing()
+
+@app.post("/api/admin/pricing")
+def admin_set_pricing(request: Request, body: dict):
+    _require_admin(request)
+    if not isinstance(body, dict) or "per_model" not in body:
+        raise HTTPException(400, "Pricing must be an object with a per_model map.")
+    pricing = load_pricing()
+    for k in ("default_per_1k_input_usd", "default_per_1k_output_usd",
+              "low_balance_warn_usd"):
+        if body.get(k) is not None:
+            pricing[k] = float(body[k])
+    if isinstance(body.get("per_model"), dict):
+        pricing["per_model"] = body["per_model"]
+    if isinstance(body.get("per_char_usd"), dict):
+        pricing["per_char_usd"] = body["per_char_usd"]
+    save_pricing(pricing)
+    return pricing
+
+@app.get("/api/admin/master-keys")
+def admin_master_keys(request: Request):
+    _require_admin(request)
+    return _secure_store_entries()
+
+@app.post("/api/admin/master-keys")
+def admin_set_master_key(request: Request, body: dict):
+    # Master platform keys go to .env via the Secure store (masked, never returned).
+    _require_admin(request)
+    return set_secure_key(body)
+
+# --- Workspaces / tenants ---
+@app.get("/api/workspaces")
+def list_workspaces():
+    out = []
+    for w in load_workspaces():
+        out.append({**w, "wallet_balance": wallet_balance(w["id"]),
+                    "byok_providers": sorted([pid for pid, k in load_byok_keys(w["id"]).items() if k])})
+    return out
+
+@app.post("/api/workspaces", status_code=201)
+def create_workspace(body: dict):
+    ws = load_workspaces()
+    name = (body.get("name") or "Workspace").strip()
+    mode = (body.get("mode") or "inherit").lower()
+    if mode not in ("inherit", *MODES):
+        mode = "inherit"
+    w = {"id": uuid.uuid4().hex[:8], "name": name, "mode": mode,
+         "members": [str(m).strip() for m in (body.get("members") or []) if str(m).strip()],
+         "created_at": int(time.time())}
+    ws.append(w)
+    save_workspaces(ws)
+    return {**w, "wallet_balance": 0.0}
+
+@app.get("/api/workspaces/{wid}")
+def get_one_workspace(wid: str):
+    w = get_workspace(wid)
+    return {**w, "wallet_balance": wallet_balance(w["id"])}
+
+@app.patch("/api/workspaces/{wid}")
+def update_workspace(wid: str, body: dict):
+    ws = load_workspaces()
+    w = next((x for x in ws if x["id"] == wid), None)
+    if not w:
+        raise HTTPException(404, "Workspace not found")
+    if body.get("name"):
+        w["name"] = str(body["name"]).strip()
+    if body.get("mode") in ("inherit", *MODES):
+        w["mode"] = body["mode"]
+    if isinstance(body.get("members"), list):
+        w["members"] = [str(m).strip() for m in body["members"] if str(m).strip()]
+    save_workspaces(ws)
+    return {**w, "wallet_balance": wallet_balance(w["id"])}
+
+@app.delete("/api/workspaces/{wid}")
+def delete_workspace(wid: str):
+    if wid == "default":
+        raise HTTPException(400, "The default workspace cannot be deleted")
+    ws = [w for w in load_workspaces() if w["id"] != wid]
+    save_workspaces(ws)
+    for p in (_wallet_path(wid), _byok_path(wid)):
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return {"deleted": wid}
+
+@app.get("/api/workspaces/{wid}/wallet")
+def workspace_wallet(wid: str):
+    w = get_workspace(wid)
+    d = load_wallet_ws(w["id"])
+    return {"workspace": w["id"], "name": w.get("name"), "currency": "USD",
+            "balance_usd": float(d.get("balance_usd") or 0),
+            "transactions": d.get("transactions", [])[-50:],
+            "usage": d.get("usage", [])[-50:]}
+
+@app.post("/api/workspaces/{wid}/wallet/topup")
+def workspace_topup(wid: str, request: Request, body: dict):
+    # Manual top-up by the Super Admin only. No real payments in v0.3.
+    _require_admin(request)
+    w = get_workspace(wid)
+    try:
+        amount = float(body.get("amount_usd") or 0)
+    except Exception:
+        raise HTTPException(400, "amount_usd must be a number")
+    if amount <= 0:
+        raise HTTPException(400, "Top-up amount must be greater than 0")
+    d = load_wallet_ws(w["id"])
+    d["balance_usd"] = round(float(d.get("balance_usd") or 0) + amount, 6)
+    d.setdefault("transactions", []).append(
+        {"ts": int(time.time()), "type": "topup", "amount_usd": amount,
+         "note": (body.get("note") or "Manual top-up by Super Admin").strip(),
+         "balance_after_usd": d["balance_usd"]})
+    d["transactions"] = d["transactions"][-500:]
+    save_wallet_ws(w["id"], d)
+    return {"workspace": w["id"], "balance_usd": d["balance_usd"]}
+
+@app.get("/api/workspaces/{wid}/usage")
+def workspace_usage(wid: str):
+    w = get_workspace(wid)
+    d = load_wallet_ws(w["id"])
+    usage = d.get("usage", [])
+    total = round(sum(x.get("cost_usd", 0) for x in usage), 6)
+    by_model = {}
+    for x in usage:
+        key = f"{x.get('provider')}/{x.get('model')}"
+        by_model.setdefault(key, {"calls": 0, "cost_usd": 0.0, "tokens": 0})
+        by_model[key]["calls"] += 1
+        by_model[key]["cost_usd"] = round(by_model[key]["cost_usd"] + x.get("cost_usd", 0), 6)
+        by_model[key]["tokens"] += int(x.get("input_tokens", 0)) + int(x.get("output_tokens", 0))
+    return {"workspace": w["id"], "total_cost_usd": total, "calls": len(usage),
+            "by_model": by_model, "usage": usage[-100:]}
+
+# --- BYOK keys (per workspace; masked, never returned in full) ---
+@app.get("/api/workspaces/{wid}/byok-keys")
+def list_byok_keys(wid: str):
+    w = get_workspace(wid)
+    keys = load_byok_keys(w["id"])
+    out = []
+    for pid in PROVIDERS:
+        cfg = get_provider_config(pid)
+        if not cfg.get("key_env"):
+            continue
+        k = keys.get(pid) or ""
+        out.append({"provider": pid, "label": cfg["label"], "key_env": cfg["key_env"],
+                    "has_key": bool(k), "masked": _mask_key(k)})
+    return out
+
+@app.post("/api/workspaces/{wid}/byok-keys")
+def set_byok_key(wid: str, body: dict):
+    w = get_workspace(wid)
+    pid = (body.get("provider") or "").strip().lower()
+    value = (body.get("api_key") or body.get("value") or "").strip()
+    if pid not in PROVIDERS or not get_provider_config(pid).get("key_env"):
+        raise HTTPException(400, "Unknown provider for BYOK keys")
+    if not value:
+        raise HTTPException(400, "No key provided")
+    keys = load_byok_keys(w["id"])
+    keys[pid] = value
+    save_byok_keys(w["id"], keys)
+    return {"provider": pid, "has_key": True, "masked": _mask_key(value)}
+
+@app.delete("/api/workspaces/{wid}/byok-keys/{pid}")
+def delete_byok_key(wid: str, pid: str):
+    w = get_workspace(wid)
+    keys = load_byok_keys(w["id"])
+    keys.pop(pid.lower(), None)
+    save_byok_keys(w["id"], keys)
+    return {"deleted": pid}
+
+# --- Voice (TTS): real call when a key is present, honest "not configured" otherwise ---
+@app.post("/api/voice/tts")
+def voice_tts(body: dict):
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "No text provided")
+    if len(text) > 4000:
+        raise HTTPException(400, "Text is too long for TTS in v1 (max 4000 characters)")
+    ws = get_workspace((body.get("workspace") or "default"))
+    mode, _src = effective_mode(ws)
+    plat = load_platform()
+    model = (body.get("model") or "").strip()
+    provider = (body.get("provider") or "").strip().lower()
+    if mode == "fixed":
+        provider = plat["fixed_voice"]["provider"]
+        model = plat["fixed_voice"]["model"]
+    if not model:
+        voice_entries = [e for e in roster_entries("voice") if e.get("enabled")]
+        if voice_entries:
+            provider = provider or voice_entries[0]["provider"]
+            model = voice_entries[0]["model"]
+    entry = next((e for e in roster_entries("voice")
+                  if e.get("model") == model and e.get("enabled")), None)
+    if not entry:
+        raise HTTPException(400, f"Voice model '{model}' is not on the enabled roster.")
+    provider = entry["provider"]
+    cfg = get_provider_config(provider)
+    if cfg["kind"] != "openai" or provider in ("lmstudio", "ollama"):
+        raise HTTPException(400, "Voice (TTS) is only supported via OpenAI-compatible providers in v1.")
+    key, key_source = resolve_key(provider, ws, mode)
+    if not key:
+        if mode == "byok":
+            raise HTTPException(400, f"Voice model '{model}' is not configured: add your own {cfg['label']} key in this workspace's Secure store (BYOK mode).")
+        raise HTTPException(400, f"Voice model '{model}' is not configured: the Super Admin has not added a {cfg['label']} key (master keys).")
+    per_char = float((load_pricing().get("per_char_usd") or {}).get(model, 0.000015))
+    cost = round(len(text) * per_char, 6)
+    try:
+        with _http_client(timeout=60, external=True) as c:
+            r = c.post(f"{cfg['base_url']}/audio/speech",
+                       headers={"Authorization": f"Bearer {key}"},
+                       json={"model": model, "input": text,
+                             "voice": (body.get("voice") or "alloy"),
+                             "response_format": "mp3"})
+            r.raise_for_status()
+            audio = r.content
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Voice provider failed: {e}")
+    if key_source == "master":
+        w = load_wallet_ws(ws["id"])
+        w["balance_usd"] = round(float(w.get("balance_usd") or 0) - cost, 6)
+        w.setdefault("transactions", []).append(
+            {"ts": int(time.time()), "type": "charge", "amount_usd": -cost,
+             "note": f"Voice: {provider}/{model} ({len(text)} chars)", "model": model,
+             "balance_after_usd": w["balance_usd"]})
+        save_wallet_ws(ws["id"], w)
+    return Response(content=audio, media_type="audio/mpeg",
+                    headers={"X-Voice-Cost-USD": str(cost if key_source == "master" else 0.0),
+                             "X-Voice-Key-Source": key_source})
+
 
 @app.get("/logo.png")
 def logo():

@@ -20,6 +20,10 @@ acknowledge it and fix it before disclosing anything.
 - **The client binds to `127.0.0.1` by default** — only the local
   computer can reach it. Do not expose it publicly without adding
   authentication in front of it.
+- **Super Admin is token-gated.** Set a long random `ADMIN_TOKEN` in
+  `.env` to enable the Super Admin panel; without it the admin
+  endpoints return 401/403. Rotate it if it leaks. BYOK keys live in
+  `data/byok/<workspace>.json` (gitignored) and are shown masked only.
 - **Bots are sandboxed:** files are restricted to `./workspace`,
   shell commands are allowlisted with shell metacharacters rejected
   and a 30 s timeout.
