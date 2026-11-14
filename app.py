@@ -742,7 +742,7 @@ MESSAGING_CHANNELS = {
     "whatsapp": {"label": "WhatsApp", "token_env": "WHATSAPP_ACCESS_TOKEN",
                  "setup": "1) Create a WhatsApp Business app / use the WhatsApp Business API. 2) Add its access token in Secure store (WHATSAPP_ACCESS_TOKEN). 3) Set the webhook URL in Meta's app dashboard to this app's /api/messaging/whatsapp/webhook. 4) Enable inbound replies here and add approved senders."},
     "telegram": {"label": "Telegram", "token_env": "TELEGRAM_BOT_TOKEN",
-                 "setup": "1) Talk to @BotFather on Telegram and create a bot to get a token. 2) Add it in Secure store (TELEGRAM_BOT_TOKEN). 3) Set the webhook to this app's /api/messaging/telegram/webhook (or use polling later). 4) Enable inbound replies here and add approved senders."},
+                 "setup": "1) Talk to @BotFather on Telegram and create a bot to get a token. 2) Add it in Secure store (TELEGRAM_BOT_TOKEN). 3) Enable this channel and inbound replies here, add approved senders (Telegram user id or username), and pick which bot answers. LocalBotz polls Telegram every few seconds — no webhook or public URL needed. Only approved senders get replies."},
     "discord": {"label": "Discord", "token_env": "DISCORD_BOT_TOKEN",
                 "setup": "1) Create an application in the Discord Developer Portal, add a bot and copy its token. 2) Add it in Secure store (DISCORD_BOT_TOKEN). 3) Invite the bot to your server. 4) Enable inbound replies here and add approved senders."},
 }
@@ -1756,6 +1756,8 @@ def _startup_heartbeat():
     # this install exists, so the owner's admin panel can show where the
     # software is used. Background thread, never blocks startup.
     threading.Thread(target=_send_vps_heartbeat, daemon=True).start()
+    threading.Thread(target=_persistent_worker, daemon=True).start()
+    threading.Thread(target=_telegram_listener, daemon=True).start()
 
 class BotCreate(BaseModel):
     name: str
@@ -1779,6 +1781,7 @@ class BotUpdate(BaseModel):
     schedule: str = ""
     enabled_tools: list = []
     skills: list = []
+    persistent: bool = None
 
 class ChatIn(BaseModel):
     message: str = Field(min_length=1)
@@ -2030,6 +2033,7 @@ def create_bot(body: BotCreate):
            "schedule": body.schedule or (tpl["schedule"] if tpl else "on_demand"),
            "enabled_tools": body.enabled_tools or (tpl["default_tools"] if tpl else []),
            "skills": body.skills or ["research", "file-help", "browser-help"],
+           "persistent": False,
            "created_at": int(time.time())}
     bots.append(bot); save_bots(bots)
     return bot
@@ -2054,6 +2058,8 @@ def update_bot(bot_id: str, body: BotUpdate):
         bot["enabled_tools"] = body.enabled_tools
     if body.skills is not None:
         bot["skills"] = body.skills
+    if body.persistent is not None:
+        bot["persistent"] = bool(body.persistent)
     save_bots(bots)
     return bot
 
@@ -2345,6 +2351,119 @@ def add_memory(bot_id: str, body: MemoryIn):
     mem.setdefault("facts", []).append(body.fact.strip())
     save_memory(bot_id, mem)
     return mem
+
+
+# ---------- Hermes-style persistent agents + autonomous tasks ----------
+# A persistent agent keeps working in the background: give it a goal and
+# it works through the task on its own (multi-step tool loop, up to 8
+# turns per run, like Hermes Agent), remembers what it did in its
+# long-term memory, and moves on to the next task. A non-persistent bot
+# only works when you chat with it. Tasks are stored in
+# data/agent_tasks.json; the worker thread below picks up pending tasks
+# for persistent bots every 30 seconds.
+TASKS_FILE = DATA_DIR / "agent_tasks.json"
+
+def load_tasks():
+    tasks = _load_json(TASKS_FILE, None)
+    return tasks if isinstance(tasks, list) else []
+
+def save_tasks(tasks):
+    _save_json(TASKS_FILE, tasks)
+    return tasks
+
+def _run_task(task: dict):
+    """Run one autonomous task: goal -> run_agent -> steps + result.
+    Appends a one-line summary to the bot's long-term memory, so the
+    agent remembers what it did between sessions (Hermes-style)."""
+    tasks = load_tasks()
+    stored = next((x for x in tasks if x["id"] == task["id"]), None)
+    if not stored:
+        return None
+    bot = get_bot(task["bot_id"])
+    if not bot:
+        stored["status"] = "failed"
+        stored["result"] = "Bot was deleted before the task ran."
+        stored["finished_at"] = int(time.time())
+        save_tasks(tasks)
+        return stored
+    stored["status"] = "running"
+    save_tasks(tasks)
+    try:
+        reply, trace, extra = run_agent(bot, task["goal"])
+        stored["steps"] = trace or []
+        stored["result"] = reply
+        stored["status"] = "failed" if (extra or {}).get("error") else "done"
+    except Exception as e:
+        stored["status"] = "failed"
+        stored["result"] = f"Task failed: {e}"
+    stored["finished_at"] = int(time.time())
+    save_tasks(tasks)
+    # Remember what happened, in the bot's own words, for next time.
+    try:
+        mem = load_memory(bot["id"])
+        summary = (stored.get("result") or "")[:200].replace("\n", " ").strip()
+        mem.setdefault("facts", []).append(
+            f"Completed task '{task['goal'][:80]}' ({stored['status']}): {summary}")
+        save_memory(bot["id"], mem)
+    except Exception:
+        pass
+    return stored
+
+def _persistent_worker():
+    """Background loop: every 30s, run the oldest pending task of each
+    persistent bot, one at a time. Never crashes the app."""
+    while True:
+        try:
+            time.sleep(30)
+            bots = {b["id"]: b for b in load_bots() if b.get("persistent")}
+            if not bots:
+                continue
+            for task in load_tasks():
+                if task.get("status") == "pending" and task.get("bot_id") in bots:
+                    _run_task(task)
+                    break  # one task per loop, then re-check
+        except Exception:
+            time.sleep(30)
+
+class TaskIn(BaseModel):
+    goal: str = Field(min_length=1)
+
+@app.get("/api/bots/{bot_id}/tasks")
+def list_tasks(bot_id: str):
+    if not get_bot(bot_id):
+        raise HTTPException(404, "Bot not found")
+    return [x for x in load_tasks() if x["bot_id"] == bot_id]
+
+@app.post("/api/bots/{bot_id}/tasks", status_code=201)
+def add_task(bot_id: str, body: TaskIn):
+    bot = get_bot(bot_id)
+    if not bot:
+        raise HTTPException(404, "Bot not found")
+    tasks = load_tasks()
+    task = {"id": uuid.uuid4().hex[:8], "bot_id": bot_id,
+            "goal": body.goal.strip(), "status": "pending",
+            "steps": [], "result": "", "created_at": int(time.time()),
+            "finished_at": None}
+    tasks.append(task)
+    save_tasks(tasks)
+    return task
+
+@app.post("/api/bots/{bot_id}/tasks/{task_id}/run")
+def run_task_now(bot_id: str, task_id: str):
+    if not get_bot(bot_id):
+        raise HTTPException(404, "Bot not found")
+    task = next((x for x in load_tasks() if x["id"] == task_id and x["bot_id"] == bot_id), None)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task.get("status") == "running":
+        raise HTTPException(409, "Task is already running")
+    return _run_task(task)
+
+@app.delete("/api/bots/{bot_id}/tasks/{task_id}")
+def delete_task(bot_id: str, task_id: str):
+    tasks = [x for x in load_tasks() if not (x["id"] == task_id and x["bot_id"] == bot_id)]
+    save_tasks(tasks)
+    return {"deleted": task_id}
 
 
 # ---------- Settings + Library endpoints (one store each, shared by both) ----------
@@ -2693,6 +2812,86 @@ def get_messaging():
                    "status": "not_connected", "setup": info["setup"]}
     return out
 
+# ---------- Hermes-style Telegram listener (real, polling) -------------
+# Hermes Agent connects to Telegram; LocalBotz does the same, with
+# polling instead of a webhook so nothing needs to be exposed to the
+# internet. When TELEGRAM_BOT_TOKEN is saved and Telegram is enabled
+# with inbound replies, this thread polls getUpdates every 5 seconds.
+# Only approved senders get a reply, and only from the bot chosen in
+# the Telegram settings (or the first bot). Discord and WhatsApp stay
+# config-only: Discord needs a websocket gateway, WhatsApp needs a
+# public webhook URL — both are honest "not built yet" in v1.
+TELEGRAM_STATE = {"listening": False, "last_poll": None, "last_error": "",
+                  "messages_handled": 0}
+
+def _telegram_api(token: str, method: str, payload: dict = None, timeout: int = 15):
+    with _http_client(timeout=timeout, external=True) as c:
+        r = c.post(f"https://api.telegram.org/bot{token}/{method}",
+                   json=payload or {})
+    r.raise_for_status()
+    return r.json()
+
+def _telegram_listener():
+    offset = 0
+    state_file = DATA_DIR / "telegram_offset.json"
+    try:
+        offset = int((_load_json(state_file, {}) or {}).get("offset") or 0)
+    except Exception:
+        offset = 0
+    while True:
+        try:
+            time.sleep(5)
+            token = os.getenv("TELEGRAM_BOT_TOKEN") or ""
+            cfg = load_messaging().get("telegram", {})
+            if not token or not cfg.get("enabled") or not cfg.get("inbound_replies"):
+                TELEGRAM_STATE["listening"] = False
+                continue
+            TELEGRAM_STATE["listening"] = True
+            data = _telegram_api(token, "getUpdates",
+                                 {"offset": offset, "timeout": 5}, timeout=15)
+            TELEGRAM_STATE["last_poll"] = int(time.time())
+            TELEGRAM_STATE["last_error"] = ""
+            approved = [str(x) for x in (cfg.get("approved_senders") or [])]
+            bot = get_bot(cfg.get("bot_id") or "") or (load_bots() or [None])[0]
+            for upd in (data or {}).get("result") or []:
+                offset = int(upd.get("update_id") or 0) + 1
+                msg = upd.get("message") or {}
+                text = (msg.get("text") or "").strip()
+                sender = msg.get("from") or {}
+                chat = msg.get("chat") or {}
+                sender_id = str(sender.get("id") or chat.get("id") or "")
+                sender_name = str(sender.get("username") or sender.get("first_name") or "")
+                if not text or not bot:
+                    continue
+                if approved and sender_id not in approved and sender_name not in approved:
+                    continue  # not an approved sender: ignore silently
+                try:
+                    reply, _trace, _extra = run_agent(bot, text)
+                except Exception as e:
+                    reply = f"Sorry — I hit an error: {e}"
+                _telegram_api(token, "sendMessage",
+                              {"chat_id": chat.get("id"), "text": reply[:4000]})
+                TELEGRAM_STATE["messages_handled"] += 1
+            _save_json(state_file, {"offset": offset})
+        except Exception as e:
+            TELEGRAM_STATE["listening"] = False
+            TELEGRAM_STATE["last_error"] = str(e)[:200]
+            time.sleep(5)
+
+@app.get("/api/messaging/telegram/status")
+def telegram_status():
+    token = os.getenv("TELEGRAM_BOT_TOKEN") or ""
+    cfg = load_messaging().get("telegram", {})
+    return {"listening": TELEGRAM_STATE["listening"],
+            "has_token": bool(token),
+            "enabled": bool(cfg.get("enabled")),
+            "inbound_replies": bool(cfg.get("inbound_replies")),
+            "bot_id": cfg.get("bot_id") or "",
+            "approved_senders": cfg.get("approved_senders") or [],
+            "last_poll": TELEGRAM_STATE["last_poll"],
+            "last_error": TELEGRAM_STATE["last_error"],
+            "messages_handled": TELEGRAM_STATE["messages_handled"]}
+
 @app.post("/api/messaging/{channel}")
 def update_messaging(channel: str, body: dict):
     if channel not in MESSAGING_CHANNELS:
@@ -2708,6 +2907,8 @@ def update_messaging(channel: str, body: dict):
         cfg["approved_senders"] = [str(x).strip() for x in body["approved_senders"] if str(x).strip()]
     if body.get("token"):
         _set_env_key(MESSAGING_CHANNELS[channel]["token_env"], str(body["token"]).strip())
+    if body.get("bot_id") is not None:
+        cfg["bot_id"] = str(body["bot_id"]).strip()
     save_messaging(d)
     return get_messaging()[channel]
 

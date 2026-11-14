@@ -114,6 +114,13 @@
         <strong>Memory</strong> <span id="memlist"></span>
         <form id="memform" style="display:inline"><input name="fact" placeholder="Add a memory, e.g. Thomas prefers concise replies" size="42"> <button type="submit">Add</button></form>
       </div>
+      <div class="memory" id="tasks-panel" hidden>
+        <strong>🔁 Persistent agent</strong>
+        <label style="display:inline"><input type="checkbox" id="persistent-toggle"> Keep working in the background</label>
+        <span class="note">Give it a goal and it works through it on its own, remembers what it did, and moves on to the next one — like Hermes Agent.</span>
+        <form id="taskform" style="margin-top:8px"><input name="goal" placeholder="Give this agent a goal, e.g. Research competitors and save a brief" size="60"> <button type="submit">Add task</button></form>
+        <div id="tasklist"></div>
+      </div>
       <div class="composer">
         <input id="input" placeholder="Message your bot…" autocomplete="off">
         <button id="send">Send</button>
@@ -266,13 +273,20 @@ async function loadMemory(){if(!current) return; const m=await api(`/api/bots/${
   $('memory').hidden=false;
   $('memlist').innerHTML=m.facts&&m.facts.length?'<ul>'+m.facts.map(f=>`<li>${esc(f)}</li>`).join('')+'</ul>':'(no memory yet) ';
 }
+async function loadTasks(){if(!current) return; const list=await api(`/api/bots/${current.id}/tasks`);
+  $('tasks-panel').hidden=false;
+  $('persistent-toggle').checked=!!current.persistent;
+  $('tasklist').innerHTML=list.length?list.map(t=>`<div style="margin:6px 0;padding:8px;border:1px solid #e3e0d9;border-radius:8px"><b>${esc(t.goal)}</b> — ${esc(t.status)}${t.steps&&t.steps.length?` · ${t.steps.length} tool step(s)`:''} <button class="small" data-taskrun="${t.id}">Run now</button> <button class="small ghost" data-taskdel="${t.id}">Delete</button>${t.result?`<details><summary>Result</summary><pre style="white-space:pre-wrap">${esc(t.result)}</pre></details>`:''}</div>`).join(''):'<p class="note">No tasks yet — add a goal above.</p>';
+  document.querySelectorAll('[data-taskrun]').forEach(el=>el.onclick=async()=>{await api(`/api/bots/${current.id}/tasks/${el.dataset.taskrun}/run`,{method:'POST'}); loadTasks(); loadMemory();});
+  document.querySelectorAll('[data-taskdel]').forEach(el=>el.onclick=async()=>{await api(`/api/bots/${current.id}/tasks/${el.dataset.taskdel}`,{method:'DELETE'}); loadTasks();});
+}
 async function selectBot(id){current=bots.find(b=>b.id===id); if(!current) return;
   $('botname').textContent=(current.avatar||'🤖')+' '+current.name;
   $('botmeta').textContent=(current.provider||'')+' · '+(current.model||'')+(current.schedule&&current.schedule!=='on_demand'?' · '+current.schedule:'');
   $('botprovider').value=current.provider||'lmstudio'; $('botmodel').value=current.model||'';
   fillModelList($('botmodel-list'), current.model||'', current.provider||'lmstudio');
   document.querySelectorAll('.botlist li').forEach((li,i)=>li.classList.toggle('active',bots[i].id===id));
-  showView('chat'); renderChat(await api(`/api/bots/${id}/chat`)); loadMemory(); loadStatus();
+  showView('chat'); renderChat(await api(`/api/bots/${id}/chat`)); loadMemory(); loadTasks(); loadStatus();
 }
 async function send(){const inp=$('input'); const text=inp.value.trim(); if(!text||!current) return;
   inp.value=''; const msgs=await api(`/api/bots/${current.id}/chat`);
@@ -295,6 +309,10 @@ $('applybot').onclick=async()=>{if(!current) return;
   await loadBots(); selectBot(current.id);};
 $('memform').onsubmit=async e=>{e.preventDefault(); const f=new FormData(e.target); if(!f.get('fact')) return;
   await api(`/api/bots/${current.id}/memory`,{method:'POST',body:JSON.stringify({fact:f.get('fact')})}); e.target.reset(); loadMemory();};
+$('taskform').onsubmit=async e=>{e.preventDefault(); const f=new FormData(e.target); if(!f.get('goal')) return;
+  await api(`/api/bots/${current.id}/tasks`,{method:'POST',body:JSON.stringify({goal:f.get('goal')})}); e.target.reset(); loadTasks();};
+$('persistent-toggle').onchange=async e=>{if(!current) return;
+  await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({persistent:e.target.checked})}); await loadBots(); current=bots.find(b=>b.id===current.id); msg(e.target.checked?'Persistent agent on — it will work through its tasks in the background.':'Persistent agent off.');};
 $('reset').onclick=async()=>{if(!current) return; await api(`/api/bots/${current.id}/chat/reset`,{method:'POST'}); renderChat([]);};
 $('newbotbtn').onclick=()=>{showView('makebot'); initMakeBot();};
 document.querySelectorAll('.navbtn[data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view));
@@ -526,8 +544,12 @@ async function connectorsHtml(isSettings){
 }
 async function messagingHtml(){
   const d=await api('/api/messaging');
-  return `<h2>💬 Messaging channels</h2><p class="note">v1: configuration only. Status is <b>Not connected</b> until a live listener is built — inbound replies stay <b>off by default</b> and only approved senders would ever be answered.</p>`+
+  const tg=await api('/api/messaging/telegram/status');
+  const botOpts=bots.map(b=>`<option value="${b.id}" ${d.telegram&&d.telegram.bot_id===b.id?'selected':''}>${esc(b.name)}</option>`).join('');
+  return `<h2>💬 Messaging channels</h2><p class="note"><b>Telegram is live:</b> LocalBotz polls Telegram every few seconds and answers approved senders — no webhook or public URL needed. WhatsApp and Discord are configuration only for now (WhatsApp needs a public webhook URL, Discord needs a websocket gateway) — inbound replies stay <b>off by default</b> and only approved senders would ever be answered.</p>
+  <p><b>Telegram listener:</b> ${tg.listening?'🟢 listening':tg.has_token?'⚪ ready — enable the channel and inbound replies below':'⚪ no token saved yet'} · Messages answered: ${tg.messages_handled}${tg.last_error?` · Last error: ${esc(tg.last_error)}`:''}</p>`+
   Object.entries(d).map(([id,c])=>`<h3>${esc(c.label)}</h3><p>Status: ${statusTag(c.status)} · Token: ${c.has_token?'stored (masked)':'not set'} · Inbound replies: ${c.inbound_replies?'ON':'off'}</p>
+  ${id==='telegram'?`<label>Which bot answers on Telegram</label><select data-msg="telegram:bot_id">${botOpts}</select>`:''}
   <label>Webhook URL</label><input type="text" data-msg="${id}:webhook" value="${esc(c.webhook||'')}" placeholder="https://your-server/api/messaging/${id}/webhook">
   <label>Approved senders (one per line)</label><textarea data-msg="${id}:senders" rows="3">${esc((c.approved_senders||[]).join('\n'))}</textarea>
   <label>Bot token (stored in Secure store, never shown)</label><input type="password" data-msg="${id}:token" placeholder="Leave blank to keep the current token">
@@ -634,8 +656,9 @@ function bindPage(name){
     const get=k=>{const n=document.querySelector(`[data-msg="${id}:${k}"]`); return n?(n.type==='checkbox'?n.checked:n.value):undefined;};
     const senders=(get('senders')||'').split('\n').map(x=>x.trim()).filter(Boolean);
     const body={enabled:get('enabled'),inbound_replies:get('inbound'),webhook:get('webhook'),approved_senders:senders};
+    const bid=get('bot_id'); if(bid!==undefined) body.bot_id=bid;
     const tok=get('token'); if(tok) body.token=tok;
-    await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify(body)}); msg('Saved. Status is still Not connected in v1.');});
+    await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify(body)}); msg(id==='telegram'?'Saved. Telegram polling starts within seconds when the channel is enabled with a token.':'Saved.');});
   const q=id=>$(id);
   if(q('mcp-add')) q('mcp-add').onclick=async()=>{let env={}; try{env=JSON.parse(q('mcp-env').value||'{}');}catch(e){msg('Env must be valid JSON.');return;}
     await api('/api/mcp-servers',{method:'POST',body:JSON.stringify({name:q('mcp-name').value,command_or_url:q('mcp-cmd').value,env})}); renderPage(name);};

@@ -349,6 +349,19 @@ Give your agents your computer — or rent one from us.
 A different bot — or a different member of your Office team — can
 run a different way. See `docs/how-it-runs.md`.
 
+## Hermes Agent features — persistent agents, tasks, Telegram
+
+Modelled on Hermes Agent (Nous Research, MIT). A bot can be a
+**persistent agent**: turn on "Keep working in the background"
+on its page, give it goals as **tasks**, and it works through
+them one at a time on its own (multi-step tool loop), remembers
+what it did in its long-term memory, and moves on to the next
+one. **Telegram is live too**: save a bot token from @BotFather,
+enable Telegram in Library → Messaging with approved senders,
+and LocalBotz polls Telegram and answers them — no webhook or
+public URL needed. Discord and WhatsApp are still config-only.
+See `docs/hermes.md`.
+
 ## Office — your AI team, on your own computer
 
 Sidebar → **Office**. Modelled on Munder Difflin
