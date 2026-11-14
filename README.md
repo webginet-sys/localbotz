@@ -425,16 +425,20 @@ and delete any learning that is wrong. See `docs/learnings.md`.
 
 ## Clients & Deals — deal workflows
 
-A small local CRM for sales work. A **deal** is a client, a value
-and a pipeline stage — New → Quoted → Negotiation → Won / Lost —
-with one timeline per deal (stage moves, notes, drafts, workflow
-runs). A **workflow** fires when a deal moves stage: create a task
-for a bot, run an office job with the team (Auditor + approval gate
-applies), write a draft, or add a note. Write the action with
-`{deal}`, `{client}`, `{value}`, `{currency}`, `{stage}` and they
-are filled in from the deal. Nothing is sent out by a workflow on
-its own — drafts stay drafts until you send them. See
-`docs/deal-workflows.md`.
+A small local CRM for sales work. A **deal** is a client, a value,
+a **department** and a stage in that department's pipeline — every
+department has its own stages (Construction: Tender → BOQ →
+Submitted → Awarded; IT Services: Discovery → Proposal → Signed;
+and so on for all 10 sectors + General), with one timeline per deal
+(stage moves, notes, drafts, workflow runs). A **workflow** fires
+when a deal moves stage: create a task for a bot, run an office job
+with the team (Auditor + approval gate applies), write a draft, or
+add a note — limited to one department, or any. Write the action
+with `{deal}`, `{client}`, `{value}`, `{currency}`, `{stage}` and
+they are filled in from the deal. Every department ships with two
+starter workflows (a handover draft when a deal is won, a note when
+one is lost). Nothing is sent out by a workflow on its own — drafts
+stay drafts until you send them. See `docs/deal-workflows.md`.
 
 ## Document workroom — documents with proof
 

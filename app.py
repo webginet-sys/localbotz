@@ -3852,10 +3852,43 @@ def delete_learning(learning_id: str):
 # (Twenty's idea, LocalBotz-sized: plain local JSON, no new stack.)
 DEALS_FILE = DATA_DIR / "deals.json"
 DEAL_WORKFLOWS_FILE = DATA_DIR / "deal_workflows.json"
-DEAL_STAGES = ("new", "quoted", "negotiation", "won", "lost")
-DEAL_STAGE_LABELS = {"new": "New", "quoted": "Quoted",
-                     "negotiation": "Negotiation", "won": "Won", "lost": "Lost"}
+# One pipeline per department: the same flow (deal -> stages ->
+# workflows), with each trade's own stage names. The 10 sectors are
+# the ones LocalBotz already ships as bot templates, plus General.
+DEPARTMENT_PIPELINES = {
+    "general": {"label": "General", "stages": [("new", "New"), ("quoted", "Quoted"), ("negotiation", "Negotiation"), ("won", "Won"), ("lost", "Lost")]},
+    "construction": {"label": "Construction", "stages": [("new", "New lead"), ("tender", "Tender received"), ("boq", "BOQ prepared"), ("submitted", "Submitted"), ("negotiation", "Negotiation"), ("awarded", "Awarded"), ("lost", "Lost")]},
+    "mep": {"label": "MEP", "stages": [("new", "New lead"), ("survey", "Site survey"), ("boq", "BOQ prepared"), ("submitted", "Submitted"), ("negotiation", "Negotiation"), ("awarded", "Awarded"), ("lost", "Lost")]},
+    "electrical": {"label": "Electrical Engineering", "stages": [("new", "New lead"), ("survey", "Site survey"), ("design", "Design & BOQ"), ("submitted", "Submitted"), ("negotiation", "Negotiation"), ("awarded", "Awarded"), ("lost", "Lost")]},
+    "it": {"label": "IT Services", "stages": [("new", "New lead"), ("discovery", "Discovery"), ("proposal", "Proposal"), ("negotiation", "Negotiation"), ("signed", "Signed"), ("lost", "Lost")]},
+    "ecommerce": {"label": "E-commerce", "stages": [("new", "New lead"), ("brief", "Brief"), ("proposal", "Proposal"), ("negotiation", "Negotiation"), ("won", "Order won"), ("lost", "Lost")]},
+    "realestate": {"label": "Real Estate", "stages": [("new", "New lead"), ("viewing", "Viewing"), ("offer", "Offer made"), ("negotiation", "Negotiation"), ("closed", "Closed"), ("lost", "Lost")]},
+    "clinic": {"label": "Clinic & Healthcare", "stages": [("new", "New lead"), ("consultation", "Consultation"), ("quotation", "Quotation"), ("negotiation", "Negotiation"), ("booked", "Booked"), ("lost", "Lost")]},
+    "logistics": {"label": "Logistics", "stages": [("new", "New lead"), ("quotation", "Quotation"), ("negotiation", "Negotiation"), ("booked", "Booked"), ("delivered", "Delivered"), ("lost", "Lost")]},
+    "manufacturing": {"label": "Manufacturing", "stages": [("new", "New lead"), ("quotation", "Quotation"), ("sample", "Sample"), ("negotiation", "Negotiation"), ("order", "Order"), ("lost", "Lost")]},
+    "hotel": {"label": "Hotel & Hospitality", "stages": [("new", "New lead"), ("enquiry", "Enquiry"), ("quotation", "Quotation"), ("negotiation", "Negotiation"), ("booked", "Booked"), ("lost", "Lost")]},
+}
+# The stage that means "won" in each pipeline, for the starter rules.
+DEPARTMENT_WON_STAGE = {"general": "won", "construction": "awarded",
+                        "mep": "awarded", "electrical": "awarded",
+                        "it": "signed", "ecommerce": "won",
+                        "realestate": "closed", "clinic": "booked",
+                        "logistics": "delivered", "manufacturing": "order",
+                        "hotel": "booked"}
 WORKFLOW_ACTIONS = ("create_task", "office_job", "draft", "note")
+
+
+def _pipeline(department):
+    return DEPARTMENT_PIPELINES.get(department or "general",
+                                     DEPARTMENT_PIPELINES["general"])
+
+
+def _deal_department(deal):
+    return deal.get("department") or "general"
+
+
+def _stage_label(department, stage):
+    return dict(_pipeline(department)["stages"]).get(stage, stage)
 
 
 def load_deals():
@@ -3868,7 +3901,33 @@ def save_deals(deals):
     return deals
 
 
+def _seed_deal_workflows():
+    """Starter flow for every department: a won-stage draft and a
+    lost-stage note, ready to use and to edit. No bot or office
+    needed, so they work on a fresh install."""
+    rules = []
+    now = int(time.time())
+    for dept, pipe in DEPARTMENT_PIPELINES.items():
+        won = DEPARTMENT_WON_STAGE[dept]
+        rules.append({"id": uuid.uuid4().hex[:8],
+                      "name": f"{pipe['label']} — {_stage_label(dept, won)}: prepare handover",
+                      "department": dept, "stage": won, "action": "draft",
+                      "bot_id": None, "office_id": None,
+                      "text": "Prepare the handover for {client} — {deal} ({value} {currency}). Confirm the delivery dates, the first invoice and who the client calls.",
+                      "enabled": True, "created_at": now})
+        rules.append({"id": uuid.uuid4().hex[:8],
+                      "name": f"{pipe['label']} — Lost: record the reason",
+                      "department": dept, "stage": "lost", "action": "note",
+                      "bot_id": None, "office_id": None,
+                      "text": "Lost {deal} ({value} {currency}) — record the reason.",
+                      "enabled": True, "created_at": now})
+    save_deal_workflows(rules)
+    return rules
+
+
 def load_deal_workflows():
+    if not DEAL_WORKFLOWS_FILE.exists():
+        return _seed_deal_workflows()
     rules = _load_json(DEAL_WORKFLOWS_FILE, None)
     return rules if isinstance(rules, list) else []
 
@@ -3892,16 +3951,20 @@ def _render_deal_text(template, deal):
         .replace("{client}", deal.get("client", "")) \
         .replace("{value}", value_text) \
         .replace("{currency}", deal.get("currency", "")) \
-        .replace("{stage}", DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage", "")))
+        .replace("{stage}", _stage_label(_deal_department(deal), deal.get("stage", "")))
 
 
 def _fire_deal_workflows(deal, old_stage, new_stage):
-    """Run every enabled rule that fires on a move TO new_stage.
-    Returns [{rule, action, result}]. One rule failing never stops
-    the others, and never stops the stage change itself."""
+    """Run every enabled rule that fires on a move TO new_stage in
+    this deal's department. Returns [{rule, action, result}]. One
+    rule failing never stops the others, and never stops the stage
+    change itself."""
     fired = []
     for rule in load_deal_workflows():
         if not rule.get("enabled") or rule.get("stage") != new_stage:
+            continue
+        rule_dept = rule.get("department")
+        if rule_dept and rule_dept != _deal_department(deal):
             continue
         action = rule.get("action")
         text = _render_deal_text(rule.get("text") or "", deal)
@@ -3940,11 +4003,18 @@ def _fire_deal_workflows(deal, old_stage, new_stage):
     return fired
 
 
+@app.get("/api/deals/pipelines")
+def list_deal_pipelines():
+    return DEPARTMENT_PIPELINES
+
+
 @app.get("/api/deals")
 def list_deals():
     deals = sorted(load_deals(), key=lambda d: d.get("updated_at", 0), reverse=True)
     for d in deals:
-        d["stage_label"] = DEAL_STAGE_LABELS.get(d.get("stage"), d.get("stage"))
+        d["department"] = _deal_department(d)
+        d["department_label"] = _pipeline(d["department"])["label"]
+        d["stage_label"] = _stage_label(d["department"], d.get("stage"))
     return deals
 
 
@@ -3954,6 +4024,9 @@ def create_deal(body: dict):
     client = (body.get("client") or "").strip()
     if not title or not client:
         raise HTTPException(400, "Give the deal a title and a client.")
+    department = (body.get("department") or "general").strip().lower()
+    if department not in DEPARTMENT_PIPELINES:
+        raise HTTPException(400, "Unknown department.")
     value = body.get("value")
     if value in ("", None):
         value = None
@@ -3966,14 +4039,15 @@ def create_deal(body: dict):
             "contact": (body.get("contact") or "").strip(),
             "value": value,
             "currency": (body.get("currency") or "QAR").strip() or "QAR",
-            "stage": "new", "events": [], "drafts": [],
+            "department": department, "stage": "new", "events": [], "drafts": [],
             "created_at": int(time.time()), "updated_at": int(time.time())}
     deal["events"].append({"at": int(time.time()), "kind": "stage",
-                           "text": "Deal created (New)."})
+                           "text": f"Deal created ({_stage_label(department, 'new')})."})
     deals = load_deals()
     deals.append(deal)
     save_deals(deals)
-    deal["stage_label"] = "New"
+    deal["department_label"] = _pipeline(department)["label"]
+    deal["stage_label"] = _stage_label(department, "new")
     return deal
 
 
@@ -3982,7 +4056,9 @@ def get_deal(deal_id: str):
     deal = next((x for x in load_deals() if x["id"] == deal_id), None)
     if not deal:
         raise HTTPException(404, "Deal not found")
-    deal["stage_label"] = DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage"))
+    deal["department"] = _deal_department(deal)
+    deal["department_label"] = _pipeline(deal["department"])["label"]
+    deal["stage_label"] = _stage_label(deal["department"], deal.get("stage"))
     return deal
 
 
@@ -4009,19 +4085,34 @@ def update_deal(deal_id: str, body: dict):
         deal.setdefault("events", []).append(
             {"at": int(time.time()), "kind": "note",
              "text": (body.get("note") or "").strip()})
+    if "department" in body:
+        new_dept = (body.get("department") or "").strip().lower()
+        if new_dept not in DEPARTMENT_PIPELINES:
+            raise HTTPException(400, "Unknown department.")
+        if new_dept != _deal_department(deal):
+            deal["department"] = new_dept
+            if deal.get("stage") not in dict(_pipeline(new_dept)["stages"]):
+                deal["stage"] = "new"
+                old_stage = "new"
+                deal.setdefault("events", []).append(
+                    {"at": int(time.time()), "kind": "stage",
+                     "text": f"Moved to the {_pipeline(new_dept)['label']} pipeline — stage reset to {_stage_label(new_dept, 'new')}."})
     if "stage" in body:
         new_stage = (body.get("stage") or "").strip().lower()
-        if new_stage not in DEAL_STAGES:
-            raise HTTPException(400, "Stage must be new, quoted, negotiation, won or lost.")
+        dept = _deal_department(deal)
+        if new_stage not in dict(_pipeline(dept)["stages"]):
+            raise HTTPException(400, f"'{new_stage}' is not a stage in the {_pipeline(dept)['label']} pipeline.")
         if new_stage != old_stage:
             deal["stage"] = new_stage
             deal.setdefault("events", []).append(
                 {"at": int(time.time()), "kind": "stage",
-                 "text": f"Moved {DEAL_STAGE_LABELS.get(old_stage, old_stage)} → {DEAL_STAGE_LABELS.get(new_stage, new_stage)}."})
+                 "text": f"Moved {_stage_label(dept, old_stage)} → {_stage_label(dept, new_stage)}."})
             fired = _fire_deal_workflows(deal, old_stage, new_stage)
     deal["updated_at"] = int(time.time())
     save_deals(deals)
-    deal["stage_label"] = DEAL_STAGE_LABELS.get(deal.get("stage"), deal.get("stage"))
+    deal["department"] = _deal_department(deal)
+    deal["department_label"] = _pipeline(deal["department"])["label"]
+    deal["stage_label"] = _stage_label(deal["department"], deal.get("stage"))
     deal["workflows_fired"] = fired
     return deal
 
@@ -4055,10 +4146,16 @@ def create_deal_workflow(body: dict):
     stage = (body.get("stage") or "").strip().lower()
     action = (body.get("action") or "").strip()
     text = (body.get("text") or "").strip()
+    department = (body.get("department") or "").strip().lower() or None
     if not name:
         raise HTTPException(400, "Give the workflow a name.")
-    if stage not in DEAL_STAGES:
-        raise HTTPException(400, "Stage must be new, quoted, negotiation, won or lost.")
+    if department and department not in DEPARTMENT_PIPELINES:
+        raise HTTPException(400, "Unknown department.")
+    if department:
+        if stage not in dict(_pipeline(department)["stages"]):
+            raise HTTPException(400, f"'{stage}' is not a stage in the {_pipeline(department)['label']} pipeline.")
+    elif not any(stage in dict(p["stages"]) for p in DEPARTMENT_PIPELINES.values()):
+        raise HTTPException(400, "Unknown stage — pick one from a department's pipeline.")
     if action not in WORKFLOW_ACTIONS:
         raise HTTPException(400, "Action must be create_task, office_job, draft or note.")
     if not text:
@@ -4072,6 +4169,7 @@ def create_deal_workflow(body: dict):
         if not office_id or not get_office(office_id):
             raise HTTPException(400, "Pick an office for the job.")
     rule = {"id": uuid.uuid4().hex[:8], "name": name, "stage": stage,
+            "department": department,
             "action": action, "bot_id": bot_id, "office_id": office_id,
             "text": text, "enabled": True, "created_at": int(time.time())}
     rules = load_deal_workflows()

@@ -7,13 +7,46 @@ new stack, no separate product.)
 ## Deals
 
 - **A deal** is a title, a client, an optional contact, a value and
-  a currency, and a pipeline stage: **New → Quoted → Negotiation →
-  Won / Lost**. Sidebar → Deals → create one, move it with the stage
+  a currency, a **department**, and a stage in that department's
+  pipeline. Sidebar → Deals → create one, move it with the stage
   buttons. Every deal has one **timeline**: stage moves, notes,
   drafts and workflow runs, in one place.
 - **Drafts** live on the deal. A workflow can write one; you send it
   yourself (email, WhatsApp, in person). There is no automatic
   sending — LocalBotz's mail connectors are still config-only.
+
+## One flow per department
+
+Every department has its own pipeline — the same flow, with each
+trade's own stage names:
+
+| Department | Pipeline |
+|---|---|
+| General | New → Quoted → Negotiation → Won / Lost |
+| Construction | New lead → Tender received → BOQ prepared → Submitted → Negotiation → Awarded / Lost |
+| MEP | New lead → Site survey → BOQ prepared → Submitted → Negotiation → Awarded / Lost |
+| Electrical Engineering | New lead → Site survey → Design & BOQ → Submitted → Negotiation → Awarded / Lost |
+| IT Services | New lead → Discovery → Proposal → Negotiation → Signed / Lost |
+| E-commerce | New lead → Brief → Proposal → Negotiation → Order won / Lost |
+| Real Estate | New lead → Viewing → Offer made → Negotiation → Closed / Lost |
+| Clinic & Healthcare | New lead → Consultation → Quotation → Negotiation → Booked / Lost |
+| Logistics | New lead → Quotation → Negotiation → Booked → Delivered / Lost |
+| Manufacturing | New lead → Quotation → Sample → Negotiation → Order / Lost |
+| Hotel & Hospitality | New lead → Enquiry → Quotation → Negotiation → Booked / Lost |
+
+A workflow rule can be limited to one department, or left on "Any
+department" — a rule for "Awarded" only ever fires for Construction,
+MEP and Electrical deals, because no other pipeline has that stage.
+Moving a deal to another department resets its stage to the new
+pipeline's first stage. Old deals without a department behave as
+General.
+
+Every department ships with two **starter workflows**, ready to
+use and to edit: when a deal is won (Awarded, Signed, Closed…), a
+handover draft is written on the deal; when a deal is lost, a note
+asks for the reason. They are created the first time the app runs
+with no workflow rules file, and you can pause, edit or delete any
+of them from the Deals page.
 
 ## Workflows
 
@@ -56,15 +89,17 @@ timeline.
 
 | Endpoint | What it does |
 |---|---|
+| `GET /api/deals/pipelines` | All department pipelines (stage names) |
 | `GET /api/deals` | List deals (newest first) |
-| `POST /api/deals` | Create — `{title, client, contact?, value?, currency?}` (currency defaults to QAR) |
+| `POST /api/deals` | Create — `{department?, title, client, contact?, value?, currency?}` (department defaults to `general`, currency to QAR) |
 | `GET /api/deals/{id}` | One deal, with timeline and drafts |
-| `PATCH /api/deals/{id}` | Change fields, move stage (fires workflows), or add `{note}` |
+| `PATCH /api/deals/{id}` | Change fields, move department, move stage (fires workflows), or add `{note}` |
 | `DELETE /api/deals/{id}` | Delete the deal |
 | `DELETE /api/deals/{id}/drafts/{draft_id}` | Delete a draft |
 | `GET /api/deal-workflows` | List workflow rules |
-| `POST /api/deal-workflows` | Create — `{name, stage, action, bot_id?, office_id?, text}` |
+| `POST /api/deal-workflows` | Create — `{name, department?, stage, action, bot_id?, office_id?, text}` |
 | `PATCH /api/deal-workflows/{id}` | Pause/resume (`{enabled}`), rename, change text |
 | `DELETE /api/deal-workflows/{id}` | Delete the rule |
 
 Deals live in `data/deals.json`, rules in `data/deal_workflows.json`.
+Pipelines live in `app.py` (`DEPARTMENT_PIPELINES`).

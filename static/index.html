@@ -510,18 +510,25 @@ async function routinesHtml(){
 }
 
 let currentDeal=null;
+let dealDeptFilter='all';
+let dealPipelines={};
+function pipeStageLabel(dept,stage){const p=dealPipelines[dept]; if(!p) return stage; const s=p.stages.find(x=>x[0]===stage); return s?s[1]:stage;}
 async function dealsHtml(){
   const deals=await api('/api/deals');
   const rules=await api('/api/deal-workflows');
   const bots=await api('/api/bots');
   const offices=await api('/api/offices');
-  const stageNames={new:'New',quoted:'Quoted',negotiation:'Negotiation',won:'Won',lost:'Lost'};
+  dealPipelines=await api('/api/deals/pipelines');
+  const deptOpts=Object.entries(dealPipelines).map(([id,p])=>`<option value="${id}">${esc(p.label)}</option>`).join('');
   if(!currentDeal){
-    const rows=deals.map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.client)}</td><td>${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'—'}</td><td>${esc(d.stage_label||d.stage)}</td><td><button class="small" data-deal-open="${d.id}">Open</button> <button class="small" data-deal-del="${d.id}">Delete</button></td></tr>`).join('');
-    const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>When a deal moves to <b>${esc(stageNames[r.stage]||r.stage)}</b></td><td>${esc(r.action)}${r.bot_id?` → ${esc((bots.find(b=>b.id===r.bot_id)||{}).name||'bot')}`:''}${r.office_id?` → ${esc((offices.find(o=>o.id===r.office_id)||{}).name||'office')}`:''}<br><span class="note">${esc(r.text.slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
+    const shown=dealDeptFilter==='all'?deals:deals.filter(d=>(d.department||'general')===dealDeptFilter);
+    const rows=shown.map(d=>`<tr><td><b>${esc(d.title)}</b></td><td>${esc(d.client)}</td><td>${esc(d.department_label||'')}</td><td>${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'—'}</td><td>${esc(d.stage_label||d.stage)}</td><td><button class="small" data-deal-open="${d.id}">Open</button> <button class="small" data-deal-del="${d.id}">Delete</button></td></tr>`).join('');
+    const ruleRows=rules.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${r.department?esc(dealPipelines[r.department]?.label||r.department):'Any department'}</td><td>When a deal moves to <b>${esc(pipeStageLabel(r.department||'general',r.stage))}</b></td><td>${esc(r.action)}${r.bot_id?` → ${esc((bots.find(b=>b.id===r.bot_id)||{}).name||'bot')}`:''}${r.office_id?` → ${esc((offices.find(o=>o.id===r.office_id)||{}).name||'office')}`:''}<br><span class="note">${esc(r.text.slice(0,120))}</span></td><td>${r.enabled?'✅ On':'⏸ Off'}</td><td><button class="small" data-wf-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-wf-del="${r.id}">Delete</button></td></tr>`).join('');
+    const stageOpts=Object.entries(dealPipelines).map(([id,p])=>`<optgroup label="${esc(p.label)}">${p.stages.map(([s,l])=>`<option value="${s}">${esc(l)}</option>`).join('')}</optgroup>`).join('');
     return `<h2>💼 Deals — clients & workflows</h2>
-    <p class="note">A small local CRM for sales work. A deal is a client, a value and a stage: New → Quoted → Negotiation → Won / Lost. When a deal moves stage, your workflows run — a task for a bot, a job for the office team, a draft, or a note. Nothing is sent out by a workflow on its own: drafts stay drafts, and office jobs wait for your approval.</p>
+    <p class="note">A small local CRM for sales work. Every department has its own pipeline — Construction goes Tender → BOQ → Submitted → Awarded, IT Services goes Discovery → Proposal → Signed, and so on. A deal is a client, a value and a stage in its department's pipeline. When a deal moves stage, your workflows run — a task for a bot, a job for the office team, a draft, or a note. Nothing is sent out by a workflow on its own: drafts stay drafts, and office jobs wait for your approval. Every department already has two starter workflows: a handover draft when a deal is won, and a note when one is lost.</p>
     <h3>New deal</h3>
+    <label>Department</label><select id="dl-dept">${deptOpts}</select>
     <label>Deal title</label><input id="dl-title" type="text" placeholder="e.g. Marina Tower — MEP package">
     <label>Client</label><input id="dl-client" type="text" placeholder="e.g. Al Rayyan Trading">
     <label>Contact</label><input id="dl-contact" type="text" placeholder="e.g. Sara Ahmed — sara@example.ae">
@@ -529,24 +536,27 @@ async function dealsHtml(){
     <label>Currency</label><input id="dl-currency" type="text" value="QAR">
     <div style="margin:8px 0"><button id="dl-create">Create deal</button></div>
     <h3>Your deals</h3>
-    ${deals.length?`<table><tr><th>Deal</th><th>Client</th><th>Value</th><th>Stage</th><th></th></tr>${rows}</table>`:'<p class="note">No deals yet. Create one above — for example, a quotation you are working on.</p>'}
+    <label>Show department</label><select id="dl-filter"><option value="all">All departments</option>${deptOpts}</select>
+    ${shown.length?`<table><tr><th>Deal</th><th>Client</th><th>Department</th><th>Value</th><th>Stage</th><th></th></tr>${rows}</table>`:'<p class="note">No deals in this department yet. Create one above.</p>'}
     <h3>Workflows — when a deal moves stage, the team acts</h3>
-    <p class="note">Write the text with {deal}, {client}, {value}, {currency} and {stage} — they are filled in from the deal that moved.</p>
-    <label>Name</label><input id="wf-name" type="text" placeholder="e.g. Won — start onboarding">
-    <label>When a deal moves to</label><select id="wf-stage"><option value="new">New</option><option value="quoted">Quoted</option><option value="negotiation">Negotiation</option><option value="won">Won</option><option value="lost">Lost</option></select>
+    <p class="note">Write the text with {deal}, {client}, {value}, {currency} and {stage} — they are filled in from the deal that moved. Pick a department to limit the workflow to it, or leave it on Any department.</p>
+    <label>Name</label><input id="wf-name" type="text" placeholder="e.g. Awarded — start the contract pack">
+    <label>Department</label><select id="wf-dept"><option value="">Any department</option>${deptOpts}</select>
+    <label>When a deal moves to</label><select id="wf-stage">${stageOpts}</select>
     <label>Then</label><select id="wf-action"><option value="create_task">Create a task for a bot</option><option value="office_job">Run an office job with the team</option><option value="draft">Write a draft on the deal</option><option value="note">Add a note to the timeline</option></select>
     <div id="wf-bot-row"><label>Bot</label><select id="wf-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select></div>
     <div id="wf-office-row" style="display:none"><label>Office</label><select id="wf-office">${offices.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')||'<option value="">(no office yet)</option>'}</select></div>
     <label>What should happen</label><textarea id="wf-text" rows="3" placeholder="e.g. Follow up with {client} about the {deal} quotation ({value} {currency}) — ask if they have questions and offer a site visit."></textarea>
     <div style="margin:8px 0"><button id="wf-create">Create workflow</button></div>
-    ${rules.length?`<table><tr><th>Workflow</th><th>Trigger</th><th>Action</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
+    ${rules.length?`<table><tr><th>Workflow</th><th>Department</th><th>Trigger</th><th>Action</th><th>Status</th><th></th></tr>${ruleRows}</table>`:'<p class="note">No workflows yet. Example: when a deal moves to Won, run an office job "Prepare the onboarding pack for {client}".</p>'}
     <div id="page-msg"></div>`;
   }
   const d=await api('/api/deals/'+currentDeal);
+  const pipe=dealPipelines[d.department||'general']||dealPipelines.general;
   const events=(d.events||[]).slice().reverse().map(e=>`<tr><td>${new Date(e.at*1000).toLocaleString()}</td><td>${esc(e.kind)}</td><td style="white-space:pre-wrap">${esc(e.text)}</td></tr>`).join('');
   const drafts=(d.drafts||[]).map(x=>`<details><summary>Draft — ${new Date(x.created_at*1000).toLocaleString()}</summary><p style="white-space:pre-wrap">${esc(x.text)}</p><button class="small" data-draft-del="${x.id}">Delete draft</button></details>`).join('');
-  const stageBtns=Object.entries(stageNames).filter(([s])=>s!==d.stage).map(([s,l])=>`<button class="small" data-stage="${s}">Move to ${l}</button>`).join(' ');
-  return `<h2>💼 ${esc(d.title)}</h2><p class="note">${esc(d.client)}${d.contact?` — ${esc(d.contact)}`:''} · ${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'no value yet'} · <b>${esc(d.stage_label||d.stage)}</b></p>
+  const stageBtns=pipe.stages.filter(([s])=>s!==d.stage).map(([s,l])=>`<button class="small" data-stage="${s}">Move to ${l}</button>`).join(' ');
+  return `<h2>💼 ${esc(d.title)}</h2><p class="note">${esc(d.client)}${d.contact?` — ${esc(d.contact)}`:''} · ${esc(d.department_label||'')} · ${d.value!=null?`${esc(d.currency||'')} ${Number(d.value).toLocaleString()}`:'no value yet'} · <b>${esc(d.stage_label||d.stage)}</b></p>
   <p><button class="ghost small" id="dl-back">← All deals</button></p>
   <h3>Move this deal</h3><p>${stageBtns}</p>
   <h3>Add a note</h3>
@@ -898,14 +908,16 @@ function bindPage(name){
   if(q('off-learn-add')) q('off-learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('off-learn-text').value,office_id:currentOffice})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-learn-del]').forEach(el=>el.onclick=async()=>{await api(`/api/learnings/${el.dataset.learnDel}`,{method:'DELETE'}); renderPage(name);});
   if(q('dl-back')) q('dl-back').onclick=()=>{currentDeal=null; renderPage(name);};
-  if(q('dl-create')) q('dl-create').onclick=async()=>{try{const d=await api('/api/deals',{method:'POST',body:JSON.stringify({title:q('dl-title').value,client:q('dl-client').value,contact:q('dl-contact').value,value:q('dl-value').value?parseFloat(q('dl-value').value):null,currency:q('dl-currency').value})}); currentDeal=d.id; renderPage(name);}catch(e){msg(e.message);}};
+  if(q('dl-create')) q('dl-create').onclick=async()=>{try{const d=await api('/api/deals',{method:'POST',body:JSON.stringify({department:q('dl-dept').value,title:q('dl-title').value,client:q('dl-client').value,contact:q('dl-contact').value,value:q('dl-value').value?parseFloat(q('dl-value').value):null,currency:q('dl-currency').value})}); currentDeal=d.id; renderPage(name);}catch(e){msg(e.message);}};
+  if(q('dl-filter')){q('dl-filter').value=dealDeptFilter; q('dl-filter').onchange=()=>{dealDeptFilter=q('dl-filter').value; renderPage(name);};}
   document.querySelectorAll('[data-deal-open]').forEach(el=>el.onclick=()=>{currentDeal=el.dataset.dealOpen; renderPage(name);});
   document.querySelectorAll('[data-deal-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this deal? Its timeline and drafts go too.')) return; await api(`/api/deals/${el.dataset.dealDel}`,{method:'DELETE'}); renderPage(name);});
   document.querySelectorAll('[data-stage]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({stage:el.dataset.stage})}); const fired=(d.workflows_fired||[]).map(w=>`${w.rule}: ${w.result}`).join(' | '); msg(fired?`Moved to ${d.stage_label}. Workflows ran — ${fired}`:`Moved to ${d.stage_label}.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('dl-note-add')) q('dl-note-add').onclick=async()=>{try{await api(`/api/deals/${currentDeal}`,{method:'PATCH',body:JSON.stringify({note:q('dl-note').value})}); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-draft-del]').forEach(el=>el.onclick=async()=>{await api(`/api/deals/${currentDeal}/drafts/${el.dataset.draftDel}`,{method:'DELETE'}); renderPage(name);});
   if(q('wf-action')) q('wf-action').onchange=()=>{const a=q('wf-action').value; q('wf-bot-row').style.display=(a==='create_task')?'block':'none'; q('wf-office-row').style.display=(a==='office_job')?'block':'none';};
-  if(q('wf-create')) q('wf-create').onclick=async()=>{try{await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,stage:q('wf-stage').value,action:q('wf-action').value,bot_id:q('wf-bot').value,office_id:q('wf-office').value,text:q('wf-text').value})}); msg('Workflow created — it will run when a deal moves to that stage.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('wf-dept')) q('wf-dept').onchange=()=>{const dept=q('wf-dept').value; const sel=q('wf-stage'); const pipes=dept?{[dept]:dealPipelines[dept]}:dealPipelines; sel.innerHTML=Object.entries(pipes).map(([id,p])=>`<optgroup label="${esc(p.label)}">${p.stages.map(([s,l])=>`<option value="${s}">${esc(l)}</option>`).join('')}</optgroup>`).join('');};
+  if(q('wf-create')) q('wf-create').onclick=async()=>{try{await api('/api/deal-workflows',{method:'POST',body:JSON.stringify({name:q('wf-name').value,department:q('wf-dept').value,stage:q('wf-stage').value,action:q('wf-action').value,bot_id:q('wf-bot').value,office_id:q('wf-office').value,text:q('wf-text').value})}); msg('Workflow created — it will run when a deal moves to that stage.'); renderPage(name);}catch(e){msg(e.message);}};
   document.querySelectorAll('[data-wf-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/deal-workflows/${el.dataset.wfToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-wf-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this workflow?')) return; await api(`/api/deal-workflows/${el.dataset.wfDel}`,{method:'DELETE'}); renderPage(name);});
   // Workroom
