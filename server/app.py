@@ -266,7 +266,7 @@ REGISTER_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <style>body{font-family:system-ui,sans-serif;max-width:520px;margin:60px auto;padding:0 20px;color:#1f1b2e;line-height:1.6}
 h1{font-size:28px}label{display:block;font-weight:700;margin:14px 0 4px}
 input{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px}
-button{margin-top:18px;background:linear-gradient(90deg,#ec2a8a,#7c3aed);color:#fff;border:0;border-radius:999px;padding:14px 26px;font-size:17px;font-weight:700;cursor:pointer}
+button{margin-top:18px;background:linear-gradient(90deg,#0d9488,#0f766e);color:#fff;border:0;border-radius:999px;padding:14px 26px;font-size:17px;font-weight:700;cursor:pointer}
 #out{margin-top:20px;padding:16px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;display:none;word-break:break-all}
 code{background:#f3f0fa;padding:2px 6px;border-radius:6px}</style></head><body>
 <h1>Register for LocalBotz Premium</h1>
@@ -276,6 +276,7 @@ paste into the LocalBotz app under Settings &gt; Connectors &gt; VPS Premium.</p
 <form id="f"><label>Your name</label><input id="name" required>
 <label>Email</label><input id="email" type="email" required>
 <button type="submit">Register</button></form>
+<p style="margin-top:20px">Already have a token? <a href="/login">Sign in</a></p>
 <div id="out"></div>
 <script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();
 const r=await fetch('/register',{method:'POST',headers:{'content-type':'application/json'},
@@ -324,6 +325,290 @@ async def register(request: Request):
     return {"workspace_id": workspace_id, "email": email,
             "token": token,
             "note": "Save this token now — it is shown once. Paste it in the LocalBotz app under Settings > Connectors > VPS Premium."}
+
+
+# ---------- user sign-in portal -----------------------------------------
+# Like the Abacus flow: a user signs in (email + the token issued at
+# registration), sees their plan on /account ("Your free plan works in
+# LocalBotz" + Upgrade + Open LocalBotz + Sign out), and "Open LocalBotz"
+# takes them to /whatsapp — enter your WhatsApp number, start a chat with
+# the bot, or skip and download the app instead.
+# Sessions: a random token in an HttpOnly cookie; only its SHA-256 hash is
+# stored, in data/sessions.json (30 days). A restart does not log anyone
+# out. Failed sign-ins: 5 wrong tries locks that email for 5 minutes.
+from urllib.parse import quote as _urlquote
+
+SESSIONS_FILE = BASE_DIR / "data" / "sessions.json"
+SESSION_DAYS = 30
+_LOGIN_ATTEMPTS = {}  # email -> [fails, locked_until_ts]
+
+def _load_sessions():
+    try:
+        data = json.loads(SESSIONS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _save_sessions(sessions):
+    SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SESSIONS_FILE.write_text(json.dumps(sessions, indent=2), encoding="utf-8")
+
+def _prune_sessions(sessions):
+    now = int(time.time())
+    return [s for s in sessions if int(s.get("expires", 0)) > now]
+
+def _create_session(workspace_id: str) -> str:
+    token = "lbs_" + secrets.token_urlsafe(32)
+    sessions = _prune_sessions(_load_sessions())
+    sessions.append({"token_hash": hashlib.sha256(token.encode()).hexdigest(),
+                     "workspace_id": workspace_id,
+                     "created": int(time.time()),
+                     "expires": int(time.time()) + SESSION_DAYS * 86400})
+    _save_sessions(sessions)
+    return token
+
+def _session_user(request: Request):
+    raw = (request.cookies.get("lb_session") or "").strip()
+    if not raw:
+        return None
+    h = hashlib.sha256(raw.encode()).hexdigest()
+    for s in _prune_sessions(_load_sessions()):
+        if s.get("token_hash") == h:
+            for u in _load_users():
+                if u.get("workspace_id") == s.get("workspace_id") and u.get("status") == "active":
+                    return u
+    return None
+
+def _require_session(request: Request):
+    user = _session_user(request)
+    if not user:
+        raise HTTPException(401, "Sign in first: /login")
+    return user
+
+def _delete_session(request: Request):
+    raw = (request.cookies.get("lb_session") or "").strip()
+    if not raw:
+        return
+    h = hashlib.sha256(raw.encode()).hexdigest()
+    sessions = [s for s in _load_sessions() if s.get("token_hash") != h]
+    _save_sessions(sessions)
+
+def _usage_for(workspace_id: str):
+    reqs = in_tok = out_tok = 0
+    cost = 0.0
+    try:
+        for line in USAGE_LOG.read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+            except Exception:
+                continue
+            if e.get("workspace_id") != workspace_id:
+                continue
+            reqs += 1
+            in_tok += int(e.get("input_tokens") or 0)
+            out_tok += int(e.get("output_tokens") or 0)
+            cost += float(e.get("cost_usd") or 0.0)
+    except Exception:
+        pass
+    return {"requests": reqs, "input_tokens": in_tok,
+            "output_tokens": out_tok, "cost_usd": round(cost, 4)}
+
+WHATSAPP_BOT_NUMBER = (os.getenv("WHATSAPP_BOT_NUMBER") or "").strip().lstrip("+")
+
+TEAL_BTN = "background:linear-gradient(90deg,#0d9488,#0f766e);color:#fff;border:0;border-radius:999px;padding:14px 26px;font-size:17px;font-weight:700;cursor:pointer"
+
+LOGIN_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — LocalBotz</title>
+<style>body{font-family:system-ui,sans-serif;max-width:520px;margin:60px auto;padding:0 20px;color:#1f2a30;line-height:1.6}
+h1{font-size:28px;color:#0f2a3d}label{display:block;font-weight:700;margin:14px 0 4px}
+input{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px}
+button{margin-top:18px;__TEAL_BTN__}
+#out{margin-top:20px;padding:16px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;display:none}
+a{color:#0f766e}.wordmark{font-weight:800;letter-spacing:.18em;color:#0f766e}</style></head><body>
+<p class="wordmark">LOCALBOTZ</p>
+<h1>Sign in to LocalBotz</h1>
+<p>Use the email and the token from your registration. Your token was shown
+once when you registered — if you lost it, ask the VPS owner for a new one.</p>
+<form id="f"><label>Email</label><input id="email" type="email" required>
+<label>Your token</label><input id="token" type="password" required autocomplete="off">
+<button type="submit">Sign in</button></form>
+<div id="out"></div>
+<p style="margin-top:20px">No account yet? <a href="/register">Register for Premium</a></p>
+<script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();
+const r=await fetch('/login',{method:'POST',headers:{'content-type':'application/json'},
+body:JSON.stringify({email:document.getElementById('email').value,token:document.getElementById('token').value})});
+if(r.ok){location.href='/account';return;}
+const d=await r.json().catch(()=>({}));const o=document.getElementById('out');
+o.style.display='block';o.textContent=d.detail||'Sign-in failed.';};</script>
+</body></html>""".replace("__TEAL_BTN__", TEAL_BTN)
+
+ACCOUNT_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your plan — LocalBotz</title>
+<style>body{font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:0 20px;color:#1f2a30;line-height:1.6;text-align:center}
+h1{font-size:32px;line-height:1.25;color:#0f2a3d;margin:24px 0 8px}
+p.sub{color:#5b6b72;font-size:18px;margin:0 0 24px}
+.btn{display:inline-block;text-decoration:none;font-weight:700;font-size:17px;padding:14px 26px;border-radius:999px;margin:6px}
+.btn.primary{__TEAL_BTN__;display:inline-block}
+.btn.outline{background:#fff;color:#0f2a3d;border:1px solid #ccc}
+a.signout{color:#0f2a3d;display:inline-block;margin-top:18px}
+.wordmark{font-weight:800;letter-spacing:.18em;color:#0f766e}
+.card{text-align:left;border:1px solid #dfe9e7;border-radius:16px;padding:20px 22px;margin-top:28px;background:#f6fbfa}
+.card h2{font-size:18px;margin:0 0 8px;color:#0f2a3d}.card p{margin:4px 0;color:#5b6b72}
+.card code{background:#eafaf7;padding:2px 6px;border-radius:6px}
+table{width:100%;border-collapse:collapse;margin-top:8px}td,th{text-align:left;padding:6px 4px;border-bottom:1px solid #dfe9e7;font-size:15px}
+#prices{margin-top:8px}</style></head><body>
+<p class="wordmark">LOCALBOTZ</p>
+<h1>Your free plan works in<br>LocalBotz</h1>
+<p class="sub">Upgrade to use premium models.</p>
+<p><a class="btn primary" href="#premium">Upgrade to Premium</a></p>
+<p><a class="btn outline" href="/whatsapp">Open LocalBotz</a></p>
+<p><a class="signout" href="/logout">Sign out</a></p>
+<div class="card"><h2>Your account</h2><div id="acct"><p>Loading…</p></div></div>
+<div class="card" id="premium"><h2>Upgrade to Premium</h2>
+<p>Premium models (Claude Sonnet, GPT, Gemini, DeepSeek) are pay-as-you-go,
+metered per 1M tokens. Your usage so far is shown above — the server owner
+bills your workspace. Local models on your own computer are always free.</p>
+<div id="prices"><p>Loading prices…</p></div></div>
+<script>async function load(){
+const r=await fetch('/api/account');if(!r.ok){location.href='/login';return;}
+const d=await r.json();
+document.getElementById('acct').innerHTML='<p><b>'+d.name+'</b> · '+d.email+'</p>'
++'<p>Workspace <code>'+d.workspace_id+'</code> · Plan: <b>'+d.plan+'</b></p>'
++'<p>Premium requests: <b>'+d.usage.requests+'</b> · Tokens in/out: <b>'+d.usage.input_tokens+' / '+d.usage.output_tokens+'</b></p>'
++'<p>Premium spend so far: <b>$'+d.usage.cost_usd.toFixed(4)+'</b></p>'
++'<p>WhatsApp: '+(d.whatsapp_number?('<b>'+d.whatsapp_number+'</b>'):'not linked — <a href="/whatsapp">link it</a>')+'</p>';
+const p=await (await fetch('/v1/pricing')).json();
+document.getElementById('prices').innerHTML='<table><tr><th>Model</th><th>Input / 1M</th><th>Output / 1M</th></tr>'
++p.models.map(m=>'<tr><td><code>'+m.id+'</code></td><td>$'+m.per_1m_input_usd+'</td><td>$'+m.per_1m_output_usd+'</td></tr>').join('')+'</table>'
++'<p>USD per 1M tokens. Pick a premium model in the app to start using it.</p>';
+} load();</script>
+</body></html>""".replace("__TEAL_BTN__", TEAL_BTN)
+
+WHATSAPP_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat with LocalBotz on WhatsApp</title>
+<style>body{font-family:system-ui,sans-serif;max-width:520px;margin:60px auto;padding:0 20px;color:#1f2a30;line-height:1.6}
+h1{font-size:28px;color:#0f2a3d;margin:16px 0 8px}.wa{width:64px;height:64px;border-radius:18px;background:#25d366;color:#fff;font-size:36px;display:flex;align-items:center;justify-content:center}
+p{color:#5b6b72}label{display:block;font-weight:700;margin:14px 0 4px;color:#1f2a30}
+input{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px}
+button{margin-top:18px;__TEAL_BTN__}
+#out{margin-top:20px;padding:16px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;display:none}
+a{color:#0f2a3d}.skip{display:block;text-align:right;margin-top:28px;font-weight:600;text-decoration:none}</style></head><body>
+<div class="wa">💬</div>
+<h1>Chat with LocalBotz on WhatsApp</h1>
+<p>Message LocalBotz from WhatsApp, wherever you are. This opens a chat with
+the bot. It doesn't link your WhatsApp account.</p>
+<form id="f"><label>Your WhatsApp number, with country code</label>
+<input id="phone" type="tel" placeholder="+1 415 555 0123" required>
+<button type="submit">Start WhatsApp chat</button></form>
+<div id="out"></div>
+<p style="margin-top:16px">Next, you send one message in WhatsApp. That's it.</p>
+<a class="skip" href="https://github.com/webginet-sys/localbotz">Skip, download the app instead</a>
+<script>document.getElementById('f').onsubmit=async(e)=>{e.preventDefault();
+const r=await fetch('/api/whatsapp/start',{method:'POST',headers:{'content-type':'application/json'},
+body:JSON.stringify({phone:document.getElementById('phone').value})});
+const d=await r.json();const o=document.getElementById('out');o.style.display='block';
+if(!r.ok){o.style.background='#fef2f2';o.style.borderColor='#fecaca';o.textContent=d.detail||'Could not start WhatsApp chat.';return;}
+if(d.wa_url){o.innerHTML='Opening WhatsApp… if it does not open, <a href="'+d.wa_url+'">tap here</a>.';location.href=d.wa_url;return;}
+o.innerHTML='WhatsApp chat is not set up on this server yet. The number is saved on your account — <a href="https://github.com/webginet-sys/localbotz">download the app instead</a>.';};</script>
+</body></html>""".replace("__TEAL_BTN__", TEAL_BTN)
+
+@app.get("/login")
+@app.get("/v1/login")
+def login_page():
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(LOGIN_PAGE)
+
+@app.post("/login")
+@app.post("/v1/login")
+async def login(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    email = (body.get("email") or "").strip().lower()
+    token = (body.get("token") or "").strip()
+    now = int(time.time())
+    fails, locked_until = _LOGIN_ATTEMPTS.get(email, [0, 0])
+    if locked_until > now:
+        raise HTTPException(429, "Too many failed sign-ins. Try again in a few minutes.")
+    user = None
+    for u in _load_users():
+        if u.get("email") == email:
+            user = u
+            break
+    ok = bool(user and user.get("status") == "active"
+              and hashlib.sha256(token.encode()).hexdigest() == user.get("token_hash"))
+    if not ok:
+        fails += 1
+        if fails >= 5:
+            _LOGIN_ATTEMPTS[email] = [0, now + 300]
+            raise HTTPException(429, "Too many failed sign-ins. Try again in a few minutes.")
+        _LOGIN_ATTEMPTS[email] = [fails, 0]
+        raise HTTPException(401, "Wrong email or token.")
+    _LOGIN_ATTEMPTS.pop(email, None)
+    session = _create_session(user["workspace_id"])
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse({"workspace_id": user["workspace_id"], "email": user["email"]})
+    secure = (request.headers.get("x-forwarded-proto") or "").lower() == "https"
+    resp.set_cookie("lb_session", session, httponly=True, samesite="lax",
+                    secure=secure, path="/", max_age=SESSION_DAYS * 86400)
+    return resp
+
+@app.get("/account")
+def account_page(request: Request):
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    if not _session_user(request):
+        return RedirectResponse("/login", status_code=302)
+    return HTMLResponse(ACCOUNT_PAGE)
+
+@app.get("/api/account")
+def account_api(request: Request):
+    user = _require_session(request)
+    return {"workspace_id": user.get("workspace_id"), "name": user.get("name"),
+            "email": user.get("email"), "plan": "Free",
+            "usage": _usage_for(user.get("workspace_id", "")),
+            "whatsapp_number": user.get("whatsapp") or "",
+            "premium_models": PREMIUM_MODELS}
+
+@app.get("/logout")
+def logout(request: Request):
+    from fastapi.responses import RedirectResponse
+    _delete_session(request)
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie("lb_session", path="/")
+    return resp
+
+@app.get("/whatsapp")
+def whatsapp_page(request: Request):
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    if not _session_user(request):
+        return RedirectResponse("/login", status_code=302)
+    return HTMLResponse(WHATSAPP_PAGE)
+
+@app.post("/api/whatsapp/start")
+async def whatsapp_start(request: Request):
+    user = _require_session(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Request body must be valid JSON.")
+    phone = re.sub(r"[\s\-()]", "", (body.get("phone") or "").strip())
+    if not re.match(r"^\+?[1-9]\d{6,14}$", phone):
+        raise HTTPException(400, "Enter your WhatsApp number with country code, e.g. +1 415 555 0123.")
+    users = _load_users()
+    for u in users:
+        if u.get("workspace_id") == user.get("workspace_id"):
+            u["whatsapp"] = phone
+            break
+    _save_users(users)
+    if not WHATSAPP_BOT_NUMBER:
+        return {"wa_url": None,
+                "note": "WhatsApp chat is not set up on this server yet (WHATSAPP_BOT_NUMBER is not set)."}
+    text = _urlquote("Hi LocalBotz, I'm " + user.get("workspace_id", "") + " — let's chat.")
+    return {"wa_url": "https://wa.me/" + WHATSAPP_BOT_NUMBER + "?text=" + text}
 
 def _require_admin(request: Request):
     if not ADMIN_TOKEN:

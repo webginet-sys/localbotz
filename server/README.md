@@ -228,6 +228,33 @@ only its SHA-256 hash is stored, in `data/users.json`, next to the
 name, email, workspace id and status. One account per email (`409`
 if it already exists), invalid email gets `400`, and
 `REGISTRATION_DAILY_LIMIT` (default 100/day) caps sign-ups.
+
+## User sign-in portal (like the Abacus flow)
+
+After registering, a user signs in and sees their plan — the same flow
+as Abacus: sign-in page, plan page, then WhatsApp.
+
+1. **Sign in:** `GET /login` — email + the token from registration.
+   `POST /login` verifies the token hash, sets an `lb_session` cookie
+   (HttpOnly, 30 days, stored hashed in `data/sessions.json`) and
+   redirects to `/account`. 5 wrong sign-ins locks that email for
+   5 minutes.
+2. **Plan page:** `GET /account` — "Your free plan works in
+   LocalBotz" + "Upgrade to use premium models", buttons **Upgrade to
+   Premium** (price list, pay-as-you-go) and **Open LocalBotz** (goes
+   to `/whatsapp`), and **Sign out** (`GET /logout`). `GET /api/account`
+   (session cookie) returns the workspace, plan, premium usage so far
+   (requests, tokens, spend) and the linked WhatsApp number.
+3. **WhatsApp:** `GET /whatsapp` — "Chat with LocalBotz on WhatsApp",
+   enter your WhatsApp number with country code, **Start WhatsApp
+   chat**. `POST /api/whatsapp/start` saves the number on the account
+   and, if `WHATSAPP_BOT_NUMBER` is set in `.env`, returns a `wa.me`
+   link to the bot's number with a prefilled "Hi LocalBotz, I'm
+   <workspace>" message. Until a real WhatsApp Business number is set,
+   the page honestly says chat isn't set up yet and offers **Skip,
+   download the app instead** (→ the GitHub repo). A webhook that
+   answers WhatsApp messages is not built yet — that is the next step
+   once the number exists.
 Set `REGISTRATION_OPEN=false` in `.env` to close sign-ups — then
 only tokens you issue by hand (`PREMIUM_API_TOKEN` /
 `PREMIUM_API_TOKENS`) work. Registered users' tokens work exactly

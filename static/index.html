@@ -541,6 +541,7 @@ async function connectorsHtml(isSettings){
   <label>Email</label><input id="vps-reg-email" type="email" placeholder="you@example.com">
   <div style="margin:8px 0"><button id="vps-register">Register for Premium</button></div>
   <div id="vps-register-out"></div>
+  <p class="note">Already registered? <a href="${esc((vps.base_url||'https://api.localbotz.io/v1').replace(/\/v1\/?$/,''))}/login" target="_blank">Sign in to your LocalBotz account</a> to see your plan, usage and WhatsApp chat.</p>
   <h3>Service connectors</h3><table><tr><th>Service</th><th>Auth</th><th>Status</th><th>Setup</th><th></th></tr>${svcRows}</table>
   <p class="note">Keys are added in Settings &gt; Secure store. Test connection probes the provider and updates its status.</p><div id="page-msg"></div>`;
 }
