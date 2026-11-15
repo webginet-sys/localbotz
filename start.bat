@@ -186,11 +186,13 @@ lms ls 2>nul | findstr /I "qwen3.5" >nul
 if not errorlevel 1 goto :model_present
 echo [LocalBotz] Downloading the Qwen3.5 model (~6 GB, first time only)...
 echo [LocalBotz] Downloading the Qwen3.5 model (~6 GB, first time only)... >> install.log
-lms get qwen/qwen3.5-9b --yes
+lms get lmstudio-community/Qwen3.5-9B-GGUF --yes
+if errorlevel 1 lms get qwen/qwen3.5-9b --yes
 if errorlevel 1 lms get qwen3.5-9b --yes
 :model_present
 echo [LocalBotz] Loading Qwen3.5 and starting the LM Studio local server...
-lms load qwen3.5-9b --yes >nul 2>&1
+lms load lmstudio-community/Qwen3.5-9B-GGUF --yes >nul 2>&1
+if errorlevel 1 lms load qwen3.5-9b --yes >nul 2>&1
 if errorlevel 1 lms load qwen/qwen3.5-9b --yes >nul 2>&1
 lms server start >nul 2>&1
 echo [LocalBotz] LM Studio server should now be on http://localhost:1234
