@@ -5,75 +5,135 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LocalBotz — personal agent, fully local</title>
 <style>
-  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;background:#f6f5f2}
-  body.dark{background:#1c1c1e;color:#eee} body.dark aside,body.dark main header,body.dark .composer,body.dark .msg.assistant{background:#2a2a2e;color:#eee;border-color:#444}
-  body.dark .botlist li.active{background:#333} body.dark input,body.dark select,body.dark textarea{background:#333;color:#eee;border-color:#555}
+  /* LocalBotz design system — teal brand, professional, works offline.
+     System font stack only; no external fonts, no CDN, no images. */
+  *{box-sizing:border-box}
+  :root{
+    --brand:#0f766e; --brand-2:#14b8a6; --brand-soft:#e6f4f1; --brand-border:#bfe3de; --brand-ink:#134e4a;
+    --bg:#f3f5f4; --surface:#ffffff; --surface-2:#f8faf9; --hover:#e9efed;
+    --border:#dfe6e3; --border-strong:#c4cfcb;
+    --text:#16211e; --muted:#5c6f6a; --faint:#8a9a95;
+    --ok:#15803d; --ok-soft:#e3f4e8; --warn:#b45309; --warn-soft:#fef3c7; --bad:#b91c1c; --bad-soft:#fee2e2;
+    --amber-soft:#fffbe8; --amber-border:#e7dc9c;
+    --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+    --shadow-sm:0 1px 2px rgba(15,45,40,.06); --shadow-md:0 4px 16px rgba(15,45,40,.10);
+    --sidebar-w:300px;
+  }
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--text);background:var(--bg);font-size:15px;line-height:1.5}
+  body.dark{--bg:#161918;--surface:#222625;--surface-2:#2c3130;--hover:#313836;--border:#39413f;--border-strong:#4b5653;--text:#e9edec;--muted:#a7b4af;--faint:#7e8d88;--brand-soft:#0f3531;--brand-border:#1d5a53;--brand-ink:#8fd6cc;--amber-soft:#3a3220;--amber-border:#665c2e;--ok-soft:#14301f;--warn-soft:#453a16;--bad-soft:#471d1d;--shadow-sm:0 1px 2px rgba(0,0,0,.35);--shadow-md:0 4px 16px rgba(0,0,0,.45)}
+  :focus-visible{outline:2px solid var(--brand-2);outline-offset:2px}
+  a{color:var(--brand)}
+  code{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:.88em}
   .app{display:flex;height:100vh}
-  aside{width:300px;background:#fff;border-right:1px solid #e3e0d9;display:flex;flex-direction:column;overflow:auto}
-  aside h1{font-size:18px;margin:16px 16px 4px} aside p.sub{margin:0 16px 12px;color:#666;font-size:13px}
-  .logo{width:180px;max-width:82%;margin:16px 16px 2px;display:block}
-  /* LocalBotz brand: pink-to-purple gradient accents (logo colours) */
-  :root{--brand1:#ec4899;--brand2:#8b5cf6;--brand-grad:linear-gradient(135deg,#ec4899,#8b5cf6)}
-  .status{margin:0 16px 12px;padding:10px;border-radius:8px;font-size:13px;background:#f0efe9}
-  body.dark .status{background:#333}
+  /* ---- Sidebar ---- */
+  aside{width:var(--sidebar-w);flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+  aside h1{font-size:18px;margin:16px 16px 4px}
+  aside p.sub{margin:0 16px 12px;color:var(--muted);font-size:13px}
+  .logo{width:180px;max-width:82%;margin:18px 16px 2px;display:block}
+  .status{margin:0 16px 12px;padding:12px;border-radius:var(--r-lg);font-size:13px;line-height:1.5;background:var(--surface-2);border:1px solid var(--border)}
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
-  .dot.ok{background:#1a9e54}.dot.bad{background:#d33}.dot.mock{background:#d98e00}
-  .navsec{margin:8px 16px 2px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#888}
+  .dot.ok{background:#16a34a}.dot.bad{background:#dc2626}.dot.mock{background:#d97706}
+  .navsec{margin:16px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint)}
   .botlist{list-style:none;margin:0;padding:0 8px}
-  .botlist li{padding:10px 12px;border-radius:8px;cursor:pointer}
-  .botlist li.active{background:#eef4ff}.botlist li:hover{background:#f0efe9}
-  .botlist small{color:#666;display:block}
-  .navbtn{display:block;width:calc(100% - 16px);margin:2px 8px;padding:9px 12px;border:0;border-radius:8px;background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
-  .navbtn:hover{background:#f0efe9} .navbtn.active{background:#eef4ff}
-  button{background:var(--brand-grad);color:#fff;border:0;padding:9px 14px;border-radius:6px;cursor:pointer;font:inherit}
-  button.ghost{background:#eee;color:#222} button.small{padding:5px 9px;font-size:13px}
+  .botlist li{padding:10px 12px;border-radius:var(--r-md);cursor:pointer;border:1px solid transparent}
+  .botlist li.active{background:var(--brand-soft);border-color:var(--brand-border);color:var(--brand-ink);font-weight:600}
+  .botlist li:hover{background:var(--surface-2)}
+  .botlist small{color:var(--muted);display:block;font-weight:400}
+  .navbtn{display:block;width:calc(100% - 16px);margin:2px 8px;padding:9px 12px;border:1px solid transparent;border-radius:var(--r-md);background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
+  .navbtn:hover{background:var(--surface-2)}
+  .navbtn.active{background:var(--brand-soft);color:var(--brand-ink);font-weight:600;border-color:var(--brand-border)}
+  /* ---- Buttons, inputs ---- */
+  button{background:var(--brand);color:#fff;border:1px solid transparent;padding:9px 16px;border-radius:var(--r-md);cursor:pointer;font:inherit;font-weight:600;transition:background .15s ease}
+  button:hover{background:#0d6a63}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  button.ghost{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+  button.ghost:hover{background:var(--hover)}
+  button.small{padding:5px 10px;font-size:13px}
+  button.danger{background:var(--bad)}
+  button.danger:hover{background:#991b1b}
+  label{display:block;margin:14px 0 5px;font-weight:600;font-size:14px}
+  input[type=text],input[type=password],input[type=number],input[type=time],input[type=email],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--r-md);font:inherit;background:var(--surface);color:var(--text)}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand-2);outline:2px solid rgba(20,184,166,.25);outline-offset:0}
+  input[type=checkbox]{width:auto}
+  /* ---- Main, header, views ---- */
   main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto}
-  header{padding:14px 20px;background:#fff;border-bottom:1px solid #e3e0d9;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  header h2{margin:0;font-size:18px;flex:1}
-  header .meta{color:#666;font-size:13px}
-  .view{padding:20px;max-width:960px}
-  .view h2{margin-top:0}
+  header{padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  header h2{margin:0;font-size:18px;flex:1;min-width:180px}
+  header .meta{color:var(--muted);font-size:13px}
+  .view{padding:24px;max-width:980px;width:100%}
+  .view h2{margin:0 0 8px;font-size:22px;letter-spacing:-.01em}
+  .view h3{margin:26px 0 8px;font-size:16px}
+  .view h3:first-child{margin-top:0}
+  .view p{margin:8px 0}
+  /* ---- Chat ---- */
   #chat{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
-  .msg{max-width:820px;padding:12px 14px;border-radius:10px;white-space:pre-wrap;line-height:1.5}
-  .msg.user{background:var(--brand-grad);color:#fff;align-self:flex-end}
-  .msg.assistant{background:#fff;border:1px solid #e3e0d9;align-self:flex-start}
-  .tools{margin-top:8px;font-size:13px}
-  .tools details{background:#f6f5f2;border:1px solid #e3e0d9;border-radius:6px;padding:8px;margin-top:6px}
+  .msg{max-width:820px;padding:12px 16px;border-radius:var(--r-lg);white-space:pre-wrap;line-height:1.55;box-shadow:var(--shadow-sm)}
+  .msg.user{background:var(--brand);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+  .msg.assistant{background:var(--surface);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px}
+  .tools{margin-top:10px;font-size:13px}
+  .tools details{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 10px;margin-top:6px}
   .tools summary{cursor:pointer;font-weight:600}
-  .tools pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;color:#444}
-  .composer{padding:14px 20px;background:#fff;border-top:1px solid #e3e0d9;display:flex;gap:10px}
-  .composer input{flex:1;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit}
-  .memory{padding:10px 20px;background:#fffbe8;border-top:1px solid #e3e0d9;font-size:13px}
+  .tools pre{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;color:var(--muted);font-size:12.5px}
+  .composer{padding:14px 20px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:10px}
+  .composer input{flex:1;padding:12px 16px;border:1px solid var(--border-strong);border-radius:999px;font:inherit;background:var(--surface-2);color:var(--text)}
+  .composer button{border-radius:999px;padding:11px 20px}
+  .memory{padding:12px 20px;background:var(--amber-soft);border-top:1px solid var(--amber-border);font-size:13px}
   .memory ul{margin:6px 0;padding-left:18px}
-  .empty{color:#777;text-align:center;margin-top:60px}
+  .empty{color:var(--faint);text-align:center;margin-top:60px;line-height:1.6}
+  /* ---- Tabs, cards, tables, tags, notes ---- */
   .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
-  .tabs button{background:#eee;color:#222} .tabs button.active{background:var(--brand-grad);color:#fff}
+  .tabs button{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+  .tabs button:hover{background:var(--hover)}
+  .tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-  .card{background:#fff;border:1px solid #e3e0d9;border-radius:10px;padding:14px;cursor:pointer;text-align:left}
-  .card:hover{border-color:#c084fc} .card.selected{border:2px solid #8b5cf6}
-  .card .icon{font-size:26px} .card h3{margin:8px 0 4px;font-size:16px} .card p{margin:0;color:#555;font-size:14px}
-  .avatars{display:flex;gap:8px;margin:8px 0}
-  .avatars button{font-size:24px;padding:8px 12px;background:#fff;border:1px solid #ccc;color:#222}
-  .avatars button.selected{border:2px solid #8b5cf6;background:#f3e8ff}
-  label{display:block;margin:12px 0 4px;font-weight:600}
-  input[type=text],input[type=password],input[type=number],select,textarea{width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;font:inherit}
-  .row{display:flex;gap:12px;flex-wrap:wrap} .row>*{flex:1;min-width:200px}
-  table{width:100%;border-collapse:collapse;margin:10px 0;background:#fff}
-  th,td{text-align:left;padding:8px;border-bottom:1px solid #eee;font-size:14px;vertical-align:top}
-  .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#eef4ff}
-  .tag.bad{background:#fde8e8}.tag.warn{background:#fff3cd}.tag.ok{background:#e2f5e9}
-  .note{background:#fffbe8;border:1px solid #eee0a0;border-radius:8px;padding:10px 12px;font-size:14px;margin:10px 0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;transition:border-color .15s ease,box-shadow .15s ease}
+  .card:hover{border-color:var(--brand-2);box-shadow:var(--shadow-md)}
+  .card.selected{border:2px solid var(--brand);background:var(--brand-soft)}
+  .card .icon{font-size:26px}
+  .card h3{margin:8px 0 4px;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+  .avatars{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+  .avatars button{font-size:24px;padding:8px 12px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text)}
+  .avatars button.selected{border:2px solid var(--brand);background:var(--brand-soft)}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:200px}
+  table{width:100%;border-collapse:separate;border-spacing:0;margin:12px 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--surface-2);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:var(--surface-2)}
+  .tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--brand-soft);color:var(--brand-ink)}
+  .tag.bad{background:var(--bad-soft);color:var(--bad)}
+  .tag.warn{background:var(--warn-soft);color:var(--warn)}
+  .tag.ok{background:var(--ok-soft);color:var(--ok)}
+  .note{background:var(--amber-soft);border:1px solid var(--amber-border);border-radius:var(--r-md);padding:10px 12px;font-size:14px;margin:10px 0}
+  /* Numbered "how to activate" steps (VPS Premium) */
+  .activate-steps{background:var(--brand-soft);border:1px solid var(--brand-border);border-radius:var(--r-lg);padding:14px 18px;margin:12px 0}
+  .activate-steps h4{margin:0 0 4px;font-size:15px;color:var(--brand-ink)}
+  .activate-steps ol{margin:8px 0;padding-left:22px}
+  .activate-steps li{margin:6px 0}
   .hidden{display:none}
-  /* Floating bar + live job overlay (Muse status, always in reach) */
-  #floatbar{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;padding:8px 16px;background:#fff;border-bottom:1px solid #e3e0d9;font-size:14px}
-  body.dark #floatbar{background:#2a2a2e;border-color:#444}
+  /* ---- Floating bar + live job overlay ---- */
+  #floatbar{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);font-size:14px;box-shadow:var(--shadow-sm)}
   #floatbar .dot{flex:none}
   #float-status{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #float-notch{position:sticky;top:0;z-index:20;padding:6px 16px}
-  #job-overlay{position:sticky;top:0;z-index:30;margin:0 16px;padding:12px 14px;background:#fffbe8;border:1px solid #eee0a0;border-radius:0 0 10px 10px}
-  body.dark #job-overlay{background:#3a3220;border-color:#665c2e}
-  @media(max-width:700px){aside{width:220px}}
+  #job-overlay{position:sticky;top:0;z-index:30;margin:0 16px;padding:12px 16px;background:var(--amber-soft);border:1px solid var(--amber-border);border-radius:0 0 var(--r-lg) var(--r-lg);box-shadow:var(--shadow-md)}
+  /* ---- Wizard ---- */
+  #view-wizard{max-width:720px}
+  #view-wizard>div{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:20px 22px;margin-top:14px;box-shadow:var(--shadow-sm)}
+  #view-wizard h3{margin-top:0}
+  #view-wizard label{font-weight:400}
+  #view-wizard label b{font-weight:700}
+  @media(max-width:900px){aside{width:240px}.view{padding:16px}}
+  @media(max-width:700px){
+    .app{flex-direction:column}
+    aside{width:100%;max-height:46vh;border-right:0;border-bottom:1px solid var(--border)}
+    .view{padding:16px}
+    header{padding:12px 14px}
+  }
 </style>
+
 </head>
 <body>
 <div class="app">
@@ -114,7 +174,6 @@
     <button class="navbtn" data-view="set-permissions">🛡️ Permissions</button>
     <button class="navbtn" data-view="set-messaging">💬 Messaging channels</button>
     <button class="navbtn" data-view="set-devices">💻 Devices</button>
-    <button class="navbtn" data-view="admin">👑 Super Admin</button>
   </aside>
   <main>
     <!-- FLOATING BAR — Muse's status, always in reach -->
@@ -206,6 +265,7 @@
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="computer" checked> <b>🖥️ On my computer</b> — free, on your downloaded local model (LM Studio / Qwen3.5). Nothing leaves the computer.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="subscriptions"> <b>🔑 With my subscriptions</b> — Claude, ChatGPT, Grok, Gemini and more, using keys you already pay for.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="rent"> <b>☁️ Rent one from us</b> — premium models from our server, metered to your wallet. No keys of your own.</label>
+        <p class="note">Premium is 3 steps, after setup: Step 1 — register on the VPS. Step 2 — get your token. Step 3 — connect in Settings → Connectors → VPS Premium. No keys of your own needed — the keys stay on our server.</p>
         <h3 style="margin-top:14px">Where should LocalBotz keep its data?</h3>
         <p class="note">Your bots, memory, offices, workrooms and documents. The app itself stays where it is — only the data moves. Pick D: to keep the C: drive light.</p>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-data" value="default" checked> <b>📁 In the LocalBotz folder</b> — <span id="wiz-data-default"></span></label>
@@ -254,7 +314,7 @@ function showView(name){
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
   $('view-wizard').classList.toggle('hidden', name!=='wizard');
-  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live','languages','home','character','phone'].includes(name);
+  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['office','workroom','routines','deals','runs','desktop','live','languages','home','character','phone'].includes(name);
   if(name!=='live' && typeof stopLive==='function') stopLive('You left the Live Voice page — the mic is off.');
   $('view-page').classList.toggle('hidden', !_isPage);
   if(_isPage) renderPage(name);
@@ -698,7 +758,7 @@ function livePlayPcm(b64, rate){
   }catch(e){ /* a bad audio chunk never breaks the session */ }
 }
 
-// ---------- Workspaces + operating mode (Super Admin) ----------
+// ---------- Workspaces + operating mode (set by the VPS owner) ----------
 let EFFECTIVE=null;
 function currentWorkspace(){ return ($('ws-select')&&$('ws-select').value) || localStorage.getItem('localbotz-ws') || 'default'; }
 async function loadWorkspaces(){
@@ -720,13 +780,13 @@ async function loadEffective(){
 function applyPickerVisibility(){
   if(!EFFECTIVE) return;
   const fixed=EFFECTIVE.mode==='fixed';
-  const fixedLabel=fixed?`Fixed model: ${EFFECTIVE.fixed_llm.provider}/${EFFECTIVE.fixed_llm.model} (set by Super Admin)`:'';
+  const fixedLabel=fixed?`Fixed model: ${EFFECTIVE.fixed_llm.provider}/${EFFECTIVE.fixed_llm.model} (set by the VPS owner)`:'';
   ['botprovider','botmodel','botmodel-list','refresh-models','applybot'].forEach(id=>{const el=$(id); if(el) el.style.display=fixed?'none':'';});
   if(fixed && current) $('botmeta').textContent=fixedLabel;
   const mbNote=$('mb-mode-note');
   if(fixed && !mbNote){
     const note=document.createElement('p'); note.id='mb-mode-note'; note.className='note';
-    note.textContent='Fixed mode: this workspace uses the Super Admin’s fixed model ('+EFFECTIVE.fixed_llm.provider+'/'+EFFECTIVE.fixed_llm.model+'). The provider/model pickers are hidden.';
+    note.textContent='Fixed mode: this workspace uses the VPS owner’s fixed model ('+EFFECTIVE.fixed_llm.provider+'/'+EFFECTIVE.fixed_llm.model+'). The provider/model pickers are hidden.';
     $('view-makebot').insertBefore(note, $('view-makebot').querySelector('h3'));
   } else if(!fixed && mbNote) mbNote.remove();
   // Filter the provider dropdowns to what this workspace may use.
@@ -736,49 +796,6 @@ function applyPickerVisibility(){
     });
   }
 }
-function adminHeaders(){ const t=sessionStorage.getItem('localbotz-admin')||''; return t?{'X-Admin-Token':t}:{}; }
-async function adminApi(p,o={}){ const h={...(o.headers||{}), ...adminHeaders()}; const r=await fetch(p,{headers:{'Content-Type':'application/json',...h},...o}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-async function adminHtml(){
-  const token=sessionStorage.getItem('localbotz-admin')||'';
-  if(!token){
-    return `<h2>👑 Super Admin</h2><p class="note">The Super Admin owns the platform: master API keys, the global operating mode, the model roster and pricing, and workspace wallets. Set <code>ADMIN_TOKEN</code> in <code>.env</code> to enable this panel.</p>
-    <label>Admin token</label><input id="adm-token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN from .env">
-    <div style="margin-top:10px"><button id="adm-login">Log in as Super Admin</button></div><div id="page-msg"></div>`;
-  }
-  let plat, pricing, keys, wss;
-  try{
-    plat=await adminApi('/api/admin/platform');
-    pricing=await adminApi('/api/admin/pricing');
-    keys=await adminApi('/api/admin/master-keys');
-    wss=await api('/api/workspaces');
-  }catch(e){ return `<h2>👑 Super Admin</h2><p>Could not load the admin panel: ${esc(e.message)}</p><button id="adm-logout">Log out</button><div id="page-msg"></div>`; }
-  const modeOpts=['fixed','selectable','byok'].map(m=>`<option value="${m}" ${plat.global_mode===m?'selected':''}>${m==='fixed'?'1 — Master Managed Fixed':m==='selectable'?'2 — Master User-Selectable':'3 — BYOK (tenant keys)'}</option>`).join('');
-  const provOpts=(sel)=>providers.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.label)}</option>`).join('');
-  const rosterRows=(plat.roster||[]).map((e,i)=>`<tr><td>${esc(e.type||'')}</td><td>${esc(e.provider||'')}</td><td>${esc(e.model||'')}</td><td>${esc(e.label||'')}</td><td><label><input type="checkbox" data-roster="${i}" ${e.enabled?'checked':''}> enabled</label></td></tr>`).join('');
-  const keyRows=keys.map(k=>`<tr><td>${esc(k.label)}</td><td><code>${esc(k.key_env)}</code></td><td>${k.has_key?esc(k.masked):'—'}</td><td>${k.has_key?'<span class="tag ok">stored</span>':'<span class="tag">not set</span>'}</td></tr>`).join('');
-  const wsRows=wss.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.mode||'inherit')}</td><td>$${Number(w.wallet_balance||0).toFixed(2)}</td><td>${(w.byok_providers||[]).join(', ')||'—'}</td><td><input type="number" step="0.01" min="0" id="topup-${w.id}" placeholder="Amount USD" style="width:110px"> <button class="small" data-topup="${w.id}">Top up</button></td></tr>`).join('');
-  return `<h2>👑 Super Admin</h2><p class="note">Logged in as Super Admin. Master keys pay for Fixed / Selectable chats; BYOK workspaces pay with their own keys; local models are always free.</p>
-  <h3>Operating mode (global default)</h3><label>Global mode — workspaces set to “inherit” follow this</label><select id="adm-mode">${modeOpts}</select>
-  <div class="row"><div><label>Fixed LLM — provider</label><select id="adm-fixed-prov">${provOpts(plat.fixed_llm.provider)}</select></div><div><label>Fixed LLM — model</label><input id="adm-fixed-model" type="text" value="${esc(plat.fixed_llm.model||'qwen3.5')}"></div></div>
-  <div class="row"><div><label>Fixed Voice — provider</label><select id="adm-fixed-voice-prov">${provOpts(plat.fixed_voice.provider)}</select></div><div><label>Fixed Voice — model</label><input id="adm-fixed-voice-model" type="text" value="${esc(plat.fixed_voice.model||'tts-1')}"></div></div>
-  <p style="color:#666;font-size:14px">Fixed mode: every chat in a Fixed workspace uses the fixed LLM above, and tenants see no provider/model picker. Voice models below are the TTS roster.</p>
-  <div style="margin-top:10px"><button id="adm-save-platform">Save mode + fixed models</button> <button id="adm-logout" class="ghost">Log out</button></div>
-  <h3>Model roster (Selectable mode + Voice)</h3><p style="color:#666;font-size:14px">Tenants in Selectable mode can only pick enabled roster entries. Voice entries are TTS models (real audio only when a key is configured — otherwise “not configured”, never faked).</p>
-  <table><tr><th>Type</th><th>Provider</th><th>Model</th><th>Label</th><th></th></tr>${rosterRows}</table>
-  <div style="margin-top:10px"><button id="adm-save-roster">Save roster</button></div>
-  <h3>Pricing (USD, editable JSON)</h3><p style="color:#666;font-size:14px">Per 1,000 tokens in/out per model, plus per-character voice prices. Metering estimates tokens as chars ÷ 4 when the provider returns no usage counts.</p>
-  <textarea id="adm-pricing" rows="8">${esc(JSON.stringify(pricing,null,2))}</textarea>
-  <div style="margin-top:10px"><button id="adm-save-pricing">Save pricing</button></div>
-  <h3>Master platform keys</h3><p style="color:#666;font-size:14px">These keys pay for Fixed / Selectable chats. Stored in <code>.env</code>, shown masked only.</p>
-  <table><tr><th>Provider</th><th>Env var</th><th>Stored key</th><th></th></tr>${keyRows}</table>
-  <div class="row"><div><label>Provider</label><select id="adm-key-id">${keys.map(k=>`<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select></div><div><label>Master API key</label><input id="adm-key-val" type="password" autocomplete="off"></div></div>
-  <div style="margin-top:10px"><button id="adm-save-key">Save master key</button></div>
-  <h3>Workspaces / tenants + wallets</h3>
-  <table><tr><th>Workspace</th><th>Mode</th><th>Wallet</th><th>BYOK providers</th><th>Top up (manual, no real payment)</th></tr>${wsRows}</table>
-  <div class="row"><div><label>New workspace name</label><input id="adm-ws-name" type="text"></div><div><label>Mode</label><select id="adm-ws-mode"><option value="inherit">inherit (global)</option><option value="fixed">fixed</option><option value="selectable">selectable</option><option value="byok">byok</option></select></div></div>
-  <div style="margin-top:10px"><button id="adm-ws-add">Create workspace</button></div><div id="page-msg"></div>`;
-}
-
 // ---------- Make a Bot ----------
 const AVATARS=["🤖","👔","🔬","🌅","📰","📝","💬","👀"];
 const TABS=[["featured","Featured"],["personal_assistant","Personal Assistant"],["productivity","Productivity"],["research","Research"],["sectors","Sectors"],["more","More"]];
@@ -843,8 +860,7 @@ function fmtChecked(ts){ if(!ts) return ''; try{ return new Date(ts*1000).toLoca
 async function renderPage(name){
   const el=$('view-page'); el.innerHTML='<h2>Loading…</h2>';
   try{
-    if(name==='admin') el.innerHTML=await adminHtml();
-    else if(name==='office') el.innerHTML=await officeHtml();
+    if(name==='office') el.innerHTML=await officeHtml();
     else if(name==='workroom') el.innerHTML=await workroomHtml();
     else if(name==='routines') el.innerHTML=await routinesHtml();
     else if(name==='deals') el.innerHTML=await dealsHtml();
@@ -1279,7 +1295,7 @@ async function officeHtml(){
   ${docRows?`<table><tr><th>File</th><th>Job</th><th>Format</th><th>Size</th><th>Made</th></tr>${docRows}</table>`:'<p class="note">No documents yet. Export a job above — Word, Excel or PowerPoint.</p>'}
   <h3>Shared office memory</h3>
   <p class="note">Memory the whole team shares — it survives sessions. Job summaries are added here automatically.</p>
-  <pre style="white-space:pre-wrap;background:#faf7ff;border:1px solid #e9e4f2;border-radius:12px;padding:14px;max-height:220px;overflow:auto">${esc(o.memory||'(empty)')}</pre>
+  <pre style="white-space:pre-wrap;background:#f8faf9;border:1px solid #dfe6e3;border-radius:12px;padding:14px;max-height:220px;overflow:auto">${esc(o.memory||'(empty)')}</pre>
   <label>Add to office memory</label><input id="off-mem-text" type="text" placeholder="e.g. Our biggest customer is Al Rayyan Trading.">
   <div style="margin:8px 0"><button id="off-mem-add">Add memory</button></div>
   <h3>What the team has learned</h3>
@@ -1351,6 +1367,14 @@ async function connectorsHtml(isSettings){
   <h3>Model providers</h3><table><tr><th>Provider</th><th>Endpoint</th><th>Key</th><th>Status</th><th></th></tr>${provRows}</table>
   <h3>Service connectors</h3>${svcRows}
   <h3>🌐 VPS Premium — premium models from your own VPS</h3>
+  <div class="activate-steps">
+    <h4>How to activate Premium — 3 steps</h4>
+    <ol>
+      <li><b>Register on the VPS</b> — enter your name and email in the form below. The VPS creates your workspace and gives you a token.</li>
+      <li><b>Get your token</b> — it is saved here automatically when you register. Already registered? Use the 6-digit sign-in code from your account page instead (also below).</li>
+      <li><b>Connect here</b> — pick provider “VPS Premium” on a bot and start chatting. No provider API keys ever sit on this computer — they stay on the VPS.</li>
+    </ol>
+  </div>
   <p class="note">Point the app at your VPS gateway (see <code>server/</code> in the repo) to use premium models — Claude, GPT, Gemini — without putting any provider API key on this computer. Your provider keys stay on the VPS; this app only sends a token the VPS owner issued to you. Status: <b>${vps.configured?'configured':'not configured'}</b> · Token: ${vps.has_token?esc(vps.masked_token||'stored'):'not set'}</p>
   <label>VPS base URL</label><input id="vps-url" type="text" value="${esc(vps.base_url||'')}" placeholder="https://YOUR-VPS/v1">
   <label>Your VPS token (stored in Secure store, never shown)</label><input id="vps-token" type="password" autocomplete="off" placeholder="Leave blank to keep the current token">
@@ -1582,14 +1606,6 @@ function bindPage(name){
     await api('/api/permissions',{method:'POST',body:JSON.stringify({global:g,blocked_paths:q('perm-blocked').value.split('\n')})}); msg('Permissions saved and enforced in the agent loop.');};
   if(q('perm-savebot')) q('perm-savebot').onclick=async()=>{await api(`/api/permissions/bots/${q('perm-bot').value}`,{method:'POST',body:JSON.stringify({approval_mode:q('perm-mode').value})}); msg('Bot approval mode saved.');};
   if(q('dev-add')) q('dev-add').onclick=async()=>{await api('/api/devices',{method:'POST',body:JSON.stringify({name:q('dev-name').value,kind:q('dev-kind').value})}); renderPage(name);};
-  if(q('adm-login')) q('adm-login').onclick=async()=>{try{const r=await api('/api/admin/login',{method:'POST',body:JSON.stringify({token:q('adm-token').value})}); if(r.ok){sessionStorage.setItem('localbotz-admin',q('adm-token').value); renderPage(name);} else msg(r.error||'Wrong admin token.');}catch(e){msg('Login failed: '+e.message);}};
-  if(q('adm-logout')) q('adm-logout').onclick=()=>{sessionStorage.removeItem('localbotz-admin'); renderPage(name);};
-  if(q('adm-save-platform')) q('adm-save-platform').onclick=async()=>{const plat=await adminApi('/api/admin/platform'); await adminApi('/api/admin/platform',{method:'POST',body:JSON.stringify({global_mode:q('adm-mode').value, fixed_llm:{provider:q('adm-fixed-prov').value, model:q('adm-fixed-model').value.trim()}, fixed_voice:{provider:q('adm-fixed-voice-prov').value, model:q('adm-fixed-voice-model').value.trim()}})}); msg('Operating mode + fixed models saved.'); loadEffective();};
-  if(q('adm-save-roster')) q('adm-save-roster').onclick=async()=>{const plat=await adminApi('/api/admin/platform'); const roster=(plat.roster||[]).map((e,i)=>{const cb=document.querySelector(`[data-roster="${i}"]`); return {...e, enabled:cb?cb.checked:!!e.enabled};}); await adminApi('/api/admin/platform',{method:'POST',body:JSON.stringify({roster})}); msg('Roster saved.');};
-  if(q('adm-save-pricing')) q('adm-save-pricing').onclick=async()=>{try{const pr=JSON.parse(q('adm-pricing').value); await adminApi('/api/admin/pricing',{method:'POST',body:JSON.stringify(pr)}); msg('Pricing saved.');}catch(e){msg('Pricing must be valid JSON: '+e.message);}};
-  if(q('adm-save-key')) q('adm-save-key').onclick=async()=>{await adminApi('/api/admin/master-keys',{method:'POST',body:JSON.stringify({provider:q('adm-key-id').value, api_key:q('adm-key-val').value})}); q('adm-key-val').value=''; msg('Master key saved (masked).'); renderPage(name);};
-  if(q('adm-ws-add')) q('adm-ws-add').onclick=async()=>{await api('/api/workspaces',{method:'POST',body:JSON.stringify({name:q('adm-ws-name').value, mode:q('adm-ws-mode').value})}); msg('Workspace created.'); renderPage(name); loadWorkspaces();};
-  document.querySelectorAll('[data-topup]').forEach(el=>el.onclick=async()=>{const amt=parseFloat(($( 'topup-'+el.dataset.topup)||{}).value||'0'); if(!amt||amt<=0){msg('Enter a top-up amount greater than 0.');return;} await adminApi(`/api/workspaces/${el.dataset.topup}/wallet/topup`,{method:'POST',body:JSON.stringify({amount_usd:amt, note:'Manual top-up by Super Admin'})}); msg('Topped up $'+amt.toFixed(2)+'.'); renderPage(name); loadEffective();});
   if(q('vps-save')) q('vps-save').onclick=async()=>{const body={base_url:q('vps-url').value.trim()}; const tok=q('vps-token').value.trim(); if(tok) body.token=tok; await api('/api/vps/config',{method:'POST',body:JSON.stringify(body)}); q('vps-token').value=''; await loadProviders(); msg('VPS Premium saved. Pick provider “VPS Premium” per bot to use it.'); renderPage(name);};
   if(q('vps-test')) q('vps-test').onclick=async()=>{const r=await api('/api/connectors/provider/vps/test',{method:'POST'}); msg(`VPS Premium: ${r.status} — ${r.detail||''}`);};
   if(q('vps-models')) q('vps-models').onclick=async()=>{const r=await api('/api/vps/models'); const out=$('vps-models-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Premium models on your VPS:</p><ul>${(r.models||[]).map(m=>`<li><code>${esc(m)}</code></li>`).join('')||'<li>None listed by the gateway.</li>'}</ul>`; msg(r.error||`${(r.models||[]).length} premium model(s) listed.`);};
