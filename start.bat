@@ -124,6 +124,14 @@ for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [LocalBotz] %%v
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [LocalBotz] %%v >> install.log
 
 if "%SKIPSETUP%"=="1" goto :venv
+echo STEP 2>> install_progress.txt
+REM Install progress screen: a friendly window that shows each step
+REM while the install runs, so the user sees the model downloading
+REM instead of only a black window. Best-effort: if it cannot start,
+REM the install carries on in this window exactly as before.
+if exist install_progress.txt del install_progress.txt
+where pythonw >nul 2>&1
+if not errorlevel 1 start "" /min pythonw installer\progress.py
 
 REM ---------- Step 2 + 3: LM Studio + Qwen3.5 (auto-install if missing) ----------
 REM Check for LM Studio: the `lms` tool, or the app folder.
@@ -166,6 +174,7 @@ if errorlevel 1 (
 where lms >nul 2>&1
 if errorlevel 1 goto :venv
 echo [LocalBotz] Setting up LM Studio (model Qwen3.5 + local server)...
+echo STEP 3>> install_progress.txt
 echo [LocalBotz] Setting up LM Studio (model Qwen3.5 + local server)... >> install.log
 lms bootstrap >nul 2>&1
 lms ls 2>nul | findstr /I "qwen3.5" >nul
@@ -218,6 +227,7 @@ echo [LocalBotz] Data will be kept in %CUSTOMDATA%
 goto :venv
 
 :venv
+echo STEP 4>> install_progress.txt
 if not exist ".venv\Scripts\python.exe" (
   echo [LocalBotz] Creating virtual environment...
   echo [LocalBotz] Creating virtual environment... >> install.log
@@ -254,6 +264,7 @@ if errorlevel 1 (
 
 REM ---------- Browser automation - always installed upfront ----------
 echo [LocalBotz] Installing browser automation (Playwright + Chromium)...
+echo STEP 5>> install_progress.txt
   echo [LocalBotz] Installing browser automation (Playwright + Chromium)... >> install.log
 echo [LocalBotz] This is part of the full install, so browser automation
 echo [LocalBotz] is ready before you need it - nothing to install later.
@@ -313,6 +324,7 @@ if "%HAVEPORT%"=="0" (
   )
 )
 echo [LocalBotz] Starting on %APP_URL% - open that in your browser.
+echo STEP 6>> install_progress.txt
   echo [LocalBotz] Starting on %APP_URL% >> install.log
 echo [LocalBotz] Keep this black window open - LocalBotz runs inside it.
 echo [LocalBotz] Your app opens in the browser in a few seconds. If it
@@ -321,6 +333,7 @@ REM Open the browser a few seconds after the app starts, so the user
 REM actually sees the app instead of just a black window. This runs in
 REM its own tiny window and never stops the app if it fails.
 start "" /min cmd /c "ping -n 6 127.0.0.1 >nul & start %APP_URL%"
+echo DONE>> install_progress.txt
 ".venv\Scripts\python.exe" app.py %APP_ARGS%
 set APP_EXIT=%ERRORLEVEL%
 echo [LocalBotz] %DATE% %TIME% - LocalBotz stopped, exit code %APP_EXIT% >> install.log
