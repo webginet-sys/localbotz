@@ -86,7 +86,7 @@
   .tabs button:hover{background:var(--hover)}
   .tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;transition:border-color .15s ease,box-shadow .15s ease}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;color:var(--text);transition:border-color .15s ease,box-shadow .15s ease}
   .card:hover{border-color:var(--brand-2);box-shadow:var(--shadow-md)}
   .card.selected{border:2px solid var(--brand);background:var(--brand-soft)}
   .card .icon{font-size:26px}
@@ -132,6 +132,49 @@
     .view{padding:16px}
     header{padding:12px 14px}
   }
+  /* ---- Page redesigns: hero, row cards, pills, switches ---- */
+  .search{width:100%;margin:6px 0 4px}
+  .hero{text-align:center;padding:26px 12px 10px}
+  .hero h2{font-size:28px;margin:8px 0 6px}
+  .hero p{color:var(--muted);max-width:640px;margin:6px auto}
+  .hero-face{font-size:64px;line-height:1}
+  .hero-icons{display:flex;gap:10px;justify-content:center}
+  .hero-icons span{width:56px;height:56px;border-radius:16px;background:var(--brand-soft);color:var(--brand-ink);display:flex;align-items:center;justify-content:center;font-size:28px}
+  .pill-input{display:flex;gap:10px;align-items:center;max-width:560px;margin:18px auto 4px}
+  .pill-input input{border-radius:999px;padding:13px 20px}
+  .pill-arrow{width:48px;height:48px;flex:none;border-radius:50%;padding:0;font-size:22px;line-height:1}
+  .conn-row{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin:10px 0}
+  .tile{width:46px;height:46px;flex:none;border-radius:12px;background:var(--brand-soft);color:var(--brand-ink);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700}
+  .conn-main{flex:1;min-width:0}
+  .conn-main b{font-size:15px}
+  .conn-main .note{display:block;margin:3px 0}
+  .conn-main details{margin-top:6px}
+  .conn-main summary{cursor:pointer;font-size:13px;color:var(--muted)}
+  .conn-side{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex:none}
+  .conn-side label{margin:0;font-weight:400;display:inline-flex;align-items:center;gap:5px}
+  input[type=checkbox].switch{appearance:none;-webkit-appearance:none;width:46px;height:26px;border-radius:999px;background:#cbd5d1;border:0;position:relative;cursor:pointer;padding:0;flex:none;transition:background .15s ease}
+  input[type=checkbox].switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s ease}
+  input[type=checkbox].switch:checked{background:var(--brand)}
+  input[type=checkbox].switch:checked::after{left:23px}
+  input[type=checkbox].switch:disabled{opacity:.45;cursor:not-allowed}
+  .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+  .tpl-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tpl-uses{color:var(--faint);font-size:12.5px;margin-top:8px}
+  .msg-setup{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:2px 16px 14px;margin:-2px 0 14px 60px}
+  .msg-setup label{margin-top:10px}
+  .conn-sec{margin:22px 0 6px}
+  .hero-suggest{margin-top:18px;text-align:left}
+  .hero-suggest .card p{font-size:13px}
+  .mcp-sub{display:flex;gap:16px;margin:-2px 0 12px 60px}
+  .mcp-sub button{background:none;border:0;color:var(--muted);padding:2px 0;font-weight:400}
+  .mcp-sub button:hover{color:var(--brand-ink);background:none}
+  .switch-row{display:flex;gap:14px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 16px;margin:10px 0}
+  .switch-row b{font-size:15px}
+  .switch-row .note{margin:3px 0 0}
+  .switch-row>div{flex:1;min-width:0}
+  .switch-row select{width:220px;flex:none}
+  @media(max-width:700px){.conn-row{flex-wrap:wrap}.msg-setup,.mcp-sub{margin-left:0}.switch-row select{width:100%}}
 </style>
 
 </head>
@@ -205,7 +248,7 @@
         <select id="chat-lang" style="width:auto" title="Reply language for this chat — Auto follows the bot, or pick a language just for this chat"></select>
         <button class="ghost" id="reset">Clear chat</button>
       </header>
-      <div id="chat"><div class="empty">Select a bot on the left, then ask it something.<br>Try: “Search the web for today’s weather in Doha” or “List the files in my workspace”.</div></div>
+      <div id="chat"><div class="hero"><div class="hero-face">🤖</div><h2>What should we do?</h2><p>Select a bot on the left, then ask it something — in plain words.</p><p class="note">Try: “Search the web for today’s weather in Doha” or “List the files in my workspace”.</p></div></div>
       <div class="memory" id="memory" hidden>
         <strong>Memory</strong> <span id="memlist"></span>
         <form id="memform" style="display:inline"><input name="fact" placeholder="Add a memory, e.g. Thomas prefers concise replies" size="42"> <button type="submit">Add</button></form>
@@ -224,12 +267,15 @@
     </div>
     <!-- MAKE A BOT VIEW -->
     <div id="view-makebot" class="view hidden">
-      <h2>Make a bot</h2>
-      <p>A bot is a standing agent with its own instructions, schedule, memory and chats. Start from a template, or name one and describe the job.</p>
-      <label>Avatar</label>
-      <div class="avatars" id="avatars"></div>
+      <div class="hero">
+        <div class="hero-face" id="mb-avatar-big">🤖</div>
+        <h2>Who do you need?</h2>
+        <p>A bot is a standing agent with its own instructions, schedule, memory and chats. Start from a template, or name one and describe the job.</p>
+      </div>
+      <label style="text-align:center">Avatar</label>
+      <div class="avatars" id="avatars" style="justify-content:center"></div>
+      <div class="pill-input"><input id="mb-name" type="text" placeholder="Name your bot" aria-label="Name your bot"><button type="button" class="pill-arrow" id="mb-name-next" title="Next — describe the job">→</button></div>
       <div class="row">
-        <div><label>Name your bot</label><input id="mb-name" type="text" placeholder="e.g. Morning Brief"></div>
         <div><label>Provider</label><select id="mb-provider"></select></div>
         <div><label>Model</label><input id="mb-model" type="text" value="qwen3.5" title="Model for this bot — type your own, or pick from the Available models list below"></div>
         <div><label>Available models</label><select id="mb-model-list" title="Only models that can actually work right now, grouped by source"></select></div>
@@ -247,8 +293,7 @@
       <label>Instructions (pre-filled from a template — edit as you like)</label>
       <textarea id="mb-instructions" rows="5" placeholder="Full instructions for this bot…"></textarea>
       <div style="margin-top:14px"><button id="mb-create">Create bot</button> <span id="mb-msg" style="color:#666;margin-left:8px"></span></div>
-      <h3 style="margin-top:28px">Templates</h3>
-      <div class="tabs" id="tpl-tabs"></div>
+      <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-top:28px"><h3 style="margin:0">Templates</h3><div class="tabs" id="tpl-tabs" style="margin:0"></div></div>
       <div class="cards" id="tpl-cards"></div>
     </div>
     <!-- LIBRARY / SETTINGS VIEWS (filled by JS) -->
@@ -396,8 +441,47 @@ async function loadBots(){
     li.onclick=()=>selectBot(b.id); ul.appendChild(li);});
   if(!current && bots.length) selectBot(bots[0].id);
 }
+const CHAT_SUGGESTIONS=[
+  {t:'Plan my day',p:'Plan my day: what needs doing first, and what can wait?'},
+  {t:'Follow up my oldest quoted deal',p:'Look at my deals and draft a follow-up email for the oldest one still at Quoted stage.'},
+  {t:'Review the BOQ for missing prices',p:'Open the BOQ in the workroom and list every line that still has no price.'},
+  {t:'Summarise this week',p:'Summarise what the team did this week — deals, jobs and things learned.'},
+  {t:'Draft a WhatsApp message',p:'Draft a short WhatsApp message for a client whose deal has gone quiet.'},
+  {t:'Prepare a meeting brief',p:'Prepare a one-page brief for my next meeting: who it is with, what we agreed last time, and what to ask.'}
+];
+function heroModelLine(){
+  if(!current) return '';
+  const prov=(providers||[]).find(x=>x.id===current.provider);
+  const label=prov?prov.label:current.provider;
+  let avail='';
+  if(availableModels&&availableModels.sources){
+    const src=availableModels.sources.find(x=>x.provider===current.provider);
+    if(src) avail=src.status==='available'?((src.models||[]).indexOf(current.model)>=0?' ✓ available now':' — model not listed'):(' — '+(src.reason||'unavailable'));
+  }
+  return esc(label)+' · '+esc(current.model||'')+avail;
+}
+async function fillHeroPerm(){
+  try{ const p=await api('/api/permissions'); const el=$('hero-perm'); if(!el||!current) return;
+    const bp=(p.bots||{})[current.id]||{}; const m=bp.approval_mode||'auto';
+    el.textContent='Permission: '+({ask:'Ask — asks before changing anything',auto:'Auto — tools run in the sandbox',full:'Full — everything runs without asking'})[m];
+  }catch(e){}
+}
 function renderChat(msgs){const c=$('chat'); c.innerHTML='';
-  if(!msgs.length){c.innerHTML='<div class="empty">No messages yet. Say hello to your bot.</div>';return;}
+  if(!msgs.length){
+    const face=current?(current.avatar||'🤖'):'🤖';
+    const name=current?current.name:'your bot';
+    c.innerHTML=`<div class="hero chat-hero">
+      <div class="hero-face">${esc(face)}</div>
+      <h2>What should we do?</h2>
+      <p>Tell ${esc(name)} what to do — in plain words. No prompting, no menus.</p>
+      <p><span class="tag" id="hero-model">${heroModelLine()||'No model picked yet'}</span> <span class="tag" id="hero-perm">Permission: …</span></p>
+      <p class="note">Type below, or try one of these:</p>
+      <div class="cards hero-suggest">${CHAT_SUGGESTIONS.map(x=>`<button class="card" data-chat-suggest="${esc(x.p)}"><h3>${esc(x.t)}</h3><p>${esc(x.p)}</p></button>`).join('')}</div>
+    </div>`;
+    fillHeroPerm();
+    c.querySelectorAll('[data-chat-suggest]').forEach(el=>el.onclick=()=>{const inp=$('input'); inp.value=el.dataset.chatSuggest; inp.focus();});
+    return;
+  }
   msgs.forEach(m=>{const d=document.createElement('div'); d.className='msg '+m.role;
     d.textContent=m.content||'';
     if(m.role==='assistant'){ const c=effLangCode(); if(langIsRTL(c)) d.dir='rtl'; }
@@ -761,9 +845,10 @@ async function initMakeBot(){
   templates=await api('/api/templates');
   allTools=await api('/api/tools');
   $('avatars').innerHTML='';
+  const big=$('mb-avatar-big'); if(big) big.textContent=mbAvatar;
   AVATARS.forEach(a=>{const b=document.createElement('button'); b.type='button'; b.textContent=a;
     if(a===mbAvatar) b.classList.add('selected');
-    b.onclick=()=>{mbAvatar=a; document.querySelectorAll('#avatars button').forEach(x=>x.classList.toggle('selected',x.textContent===a));};
+    b.onclick=()=>{mbAvatar=a; const bg=$('mb-avatar-big'); if(bg) bg.textContent=a; document.querySelectorAll('#avatars button').forEach(x=>x.classList.toggle('selected',x.textContent===a));};
     $('avatars').appendChild(b);});
   $('mb-tools').innerHTML='';
   allTools.forEach(t=>{const l=document.createElement('label'); l.style.cssText='font-weight:normal;display:inline-flex;gap:4px;align-items:center;margin:4px 8px 4px 0';
@@ -786,7 +871,7 @@ function renderCards(){
     : templates.filter(t=>t.category===activeTab);
   $('tpl-cards').innerHTML='';
   list.forEach(t=>{const c=document.createElement('button'); c.className='card'+(mbTemplate===t.id?' selected':'');
-    c.innerHTML=`<div class="icon">${esc(t.icon||t.avatar||'🤖')}</div><h3>${esc(t.name)}</h3><p>${esc(t.description||'')}</p><p style="color:#888;font-size:12px;margin-top:6px">${esc(t.category.replace('_',' '))} · ${esc(t.schedule||'on_demand')}</p>`;
+    c.innerHTML=`<div class="icon">${esc(t.icon||t.avatar||'🤖')}</div><h3>${esc(t.name)}</h3><p class="tpl-desc">${esc(t.description||'')}</p>${(t.default_tools||[]).length?`<p class="tpl-uses">Uses ${esc(t.default_tools.join(', '))}</p>`:''}<p style="color:#888;font-size:12px;margin-top:6px">${esc(t.category.replace('_',' '))} · ${esc(t.schedule||'on_demand')}</p>`;
     c.onclick=()=>{mbTemplate=t.id;
       $('mb-name').value=t.name; $('mb-job').value=''; $('mb-instructions').value=t.instructions||'';
       mbAvatar=t.avatar||t.icon||'🤖'; $('mb-provider').value=t.provider||'lmstudio'; $('mb-model').value=t.model||'qwen3.5';
@@ -801,6 +886,7 @@ $('botprovider').onchange=()=>{ fillModelList($('botmodel-list'), $('botmodel').
 $('refresh-models').onclick=async()=>{ $('refresh-models').textContent='↻ Refreshing…'; await loadAvailableModels(); $('refresh-models').textContent='↻ Models'; };
 bindModelList('botmodel-list','botprovider','botmodel');
 bindModelList('mb-model-list','mb-provider','mb-model');
+if($('mb-name-next')) $('mb-name-next').onclick=()=>{const j=$('mb-job'); if(j){ j.scrollIntoView({block:'center'}); j.focus(); }};
 $('mb-create').onclick=async()=>{
   const name=$('mb-name').value.trim();
   if(!name){$('mb-msg').textContent='Please name your bot first.'; return;}
@@ -939,6 +1025,12 @@ async function phoneHtml(){
   </ul>
   <div id="page-msg"></div>`;
 }
+const RT_STARTERS=[
+  {id:'morning',icon:'☀️',name:'Morning brief',desc:'What today needs from you: your top priorities, and anything new that matters.',task:'Prepare my morning brief: what today needs from me, my top 3 priorities, and anything new that matters.',kind:'daily',time:'08:00'},
+  {id:'deals',icon:'💼',name:'Stuck-deal check',desc:'Which deals have gone quiet for 3 days or more — with a follow-up drafted for each.',task:'Check my deals and tell me which ones have gone quiet for 3 days or more, and draft a follow-up for each.',kind:'daily',time:'09:00'},
+  {id:'week',icon:'🗓️',name:'Week in review',desc:'What the team did this week — deals moved, jobs run, things learned — grouped by theme.',task:'Summarise what the team did this week — deals moved, jobs run, and things learned — grouped by theme, ending with what looks stuck.',kind:'weekly',weekday:4,time:'16:00'},
+  {id:'prices',icon:'💰',name:'Daily price check',desc:'What changed in the price list since yesterday.',task:'Check the price list in the workspace and tell me what changed since yesterday.',kind:'daily',time:'09:00'}
+];
 async function routinesHtml(){
   const routines=await api('/api/routines');
   const bots=await api('/api/bots');
@@ -946,7 +1038,16 @@ async function routinesHtml(){
   const botName=id=>(bots.find(b=>b.id===id)||{}).name||'deleted bot';
   const rows=routines.map(r=>`<tr><td><b>${esc(r.name)}</b><br><span class="note">${esc((r.task||'').slice(0,120))}</span>${r.desktop_action?`<br><span class="note">🖥️ ${esc(r.desktop_action)}${r.desktop_target?` ${esc(r.desktop_target)}`:''}${r.desktop_text?` — ${esc(r.desktop_text.slice(0,60))}`:''}${r.desktop_keys?` — ${esc(r.desktop_keys)}`:''}</span>`:''}</td><td>${esc(botName(r.bot_id))}</td><td>${esc(r.schedule_text||'')}</td><td>${r.next_run?new Date(r.next_run*1000).toLocaleString():'—'}</td><td>${r.enabled?'✅ On':'⏸ Off'}${r.last_status?`<br><span class="note">last: ${esc(r.last_status)}${r.last_run?` · ${new Date(r.last_run*1000).toLocaleString()}`:''}</span>`:''}</td><td><button class="small" data-rt-run="${r.id}">▶ Run now</button> <button class="small" data-rt-toggle="${r.id}" data-on="${!r.enabled}">${r.enabled?'⏸ Pause':'▶ Resume'}</button> <button class="small" data-rt-del="${r.id}">Delete</button></td></tr>`).join('');
   const runsHtml=routines.flatMap(r=>(r.runs||[]).slice(-3).map(run=>`<li><b>${esc(r.name)}</b> — ${esc(run.status)} · ${new Date(run.at*1000).toLocaleString()} — ${esc((run.summary||'').slice(0,200))}</li>`)).join('');
+  const starterCards=RT_STARTERS.map(s=>`<button class="card" data-rt-starter="${s.id}"><div class="icon">${s.icon}</div><h3>${esc(s.name)}</h3><p>${esc(s.desc)}</p></button>`).join('');
   return `<h2>⏰ Routines — work that runs itself</h2>
+  <div class="hero">
+    <div class="hero-icons"><span>☀️</span><span>🕐</span><span>📥</span></div>
+    <h2>Put your bots on a schedule</h2>
+    <p>A routine runs a prompt on its own: every morning, every few hours. It runs on this computer while the app is open.</p>
+    <button id="rt-new">New routine</button>
+  </div>
+  <h3>Or start from one of these</h3>
+  <div class="cards">${starterCards}</div>
   <p class="note">A routine is a bot with a job and a clock. It runs on its own while LocalBotz is open — daily at 09:00, every hour, once on Friday. If the app was closed when a routine was due, it runs once when you open it again, then goes back to its normal time. Nothing runs while the app is closed.</p>
   <h3>New routine</h3>
   <label>Name</label><input id="rt-name" type="text" placeholder="e.g. Daily BOQ price check">
@@ -1313,16 +1414,82 @@ async function workroomHtml(){
   <div style="margin:8px 0"><button id="wr-save">Save settings</button></div>
   <div id="page-msg"></div>`;
 }
+const SERVICE_BLURBS={
+  gmail:'Read, search, draft and send mail from your Gmail account.',
+  drive:'Browse, read and manage files, docs and spreadsheets in your Drive.',
+  calendar:'Read and create events on your Google Calendar.',
+  outlook:'Read and send mail from your Microsoft 365 account.',
+  dropbox:'Browse and manage files in your Dropbox.',
+  slack:'Send and read messages in your Slack workspace.',
+  telegram:'Chat with the agent from Telegram, and let it message people as you.',
+  discord:'Chat with the agent from Discord, and let it message people as you.',
+  whatsapp:'Chat with the agent from WhatsApp, and let it message people as you.',
+  teams:'Send and read messages in Microsoft Teams.',
+  notion:'Read and update pages and databases in Notion.',
+  trello:'Read and move cards on your Trello boards.',
+  asana:'Read and update tasks in Asana.',
+  jira:'Read and update issues in Jira.',
+  linear:'Read and update issues in Linear.',
+  airtable:'Read and update records in Airtable.',
+  sheets:'Read and update Google Sheets.',
+  github:'Read repos, issues and pull requests on GitHub.',
+  gitlab:'Read projects, issues and merge requests on GitLab.',
+  hubspot:'Read and update contacts and deals in HubSpot.',
+  salesforce:'Read and update records in Salesforce.',
+  stripe:'Read customers, payments and invoices in Stripe.',
+  zoom:'Schedule and list Zoom meetings.',
+  x:'Read and post on X (Twitter).',
+  linkedin:'Read and post on LinkedIn.'
+};
+const CONN_FEATURED=['telegram','whatsapp','gmail','drive','calendar','slack'];
+let connCat='All', connQuery='';
+function connRow(kind,item){
+  const tile=(item.label||'?').trim().charAt(0).toUpperCase();
+  const featured=(kind==='provider'?(item.id==='lmstudio'||item.id==='vps'):CONN_FEATURED.indexOf(item.id)>=0)?'1':'0';
+  const sub=kind==='provider'
+    ? `${esc(item.base_url||'')} · ${item.requires_key?(item.configured?('key stored · '+esc(item.masked||'••••')):'key missing'):'no key needed'}`
+    : `${esc(SERVICE_BLURBS[item.id]||'Connect this service.')} · ${esc(item.auth||'')}`;
+  return `<div class="conn-row" data-cat="${esc(kind==='provider'?'Model providers':(item.category||'Other'))}" data-label="${esc((item.label||'').toLowerCase())}" data-featured="${featured}">
+    <div class="tile">${esc(tile)}</div>
+    <div class="conn-main"><b>${esc(item.label)}</b> <span class="tag">${esc(kind==='provider'?'Model provider':'Service')}</span>
+      <span class="note">${sub}</span>
+      ${item.status_detail?`<span class="note">${esc(item.status_detail)}</span>`:''}
+      ${item.last_test&&item.last_test.checked_at?`<span class="note">Checked: ${esc(item.last_test.checked_at)}</span>`:''}
+      ${kind==='service'?`<details><summary>Setup</summary><p class="note">${esc(item.setup||'')}</p></details>`:''}
+    </div>
+    <div class="conn-side">${statusTag(item.status)}<label><input type="checkbox" data-conn="${kind}:${item.id}" ${item.enabled?'checked':''}> enabled</label> <button class="small" data-test="${kind}:${item.id}">Test</button></div>
+  </div>`;
+}
+function filterConn(){
+  const needle=(connQuery||'').trim().toLowerCase();
+  document.querySelectorAll('#conn-lists .conn-row').forEach(row=>{
+    const okCat=(connCat==='All'||row.dataset.cat===connCat||(connCat==='Featured'&&row.dataset.featured==='1'));
+    const okQ=!needle||(row.dataset.label||'').includes(needle);
+    row.style.display=(okCat&&okQ)?'':'none';
+  });
+  document.querySelectorAll('#conn-lists .conn-group').forEach(g=>{
+    const rows=[...g.querySelectorAll('.conn-row')];
+    if(!rows.length) return;
+    g.style.display=rows.some(r=>r.style.display!=='none')?'':'none';
+  });
+}
 async function connectorsHtml(isSettings){
   const d=await api('/api/connectors');
   let vps={base_url:'', configured:false, has_token:false, masked_token:''};
   try{ vps=await api('/api/vps/config'); }catch(e){ /* VPS section stays empty, not a crash */ }
-  const provRows=d.providers.map(p=>`<tr><td>${esc(p.label)}<br><small><code>${esc(p.key_env||'no key needed')}</code></small></td><td>${esc(p.base_url)}</td><td>${p.requires_key?(p.configured?('stored · '+esc(p.masked||'••••')):'<b>key missing</b>'):'no key needed'}</td><td>${statusTag(p.status)}${p.status_detail?`<br><small>${esc(p.status_detail)}</small>`:''}${p.last_test&&p.last_test.checked_at?`<br><small>Checked: ${esc(p.last_test.checked_at)}</small>`:''}</td><td><label><input type="checkbox" data-conn="provider:${p.id}" ${p.enabled?'checked':''}> enabled</label> <button class="small" data-test="provider:${p.id}">Test</button></td></tr>`).join('');
   const svcCats=[...new Set(d.services.map(s=>s.category||'Other'))];
-  const svcRows=svcCats.map(cat=>`<h3>${esc(cat)}</h3><table><tr><th>Connector</th><th>Auth</th><th>Status</th><th>Setup</th><th></th></tr>${d.services.filter(s=>(s.category||'Other')===cat).map(s=>`<tr><td>${esc(s.label)}</td><td>${esc(s.auth)}</td><td>${statusTag(s.status)}${s.status_detail?`<br><small>${esc(s.status_detail)}</small>`:''}${s.last_test&&s.last_test.checked_at?`<br><small>Checked: ${esc(s.last_test.checked_at)}</small>`:''}</td><td>${esc(s.setup)}</td><td><label><input type="checkbox" data-conn="service:${s.id}" ${s.enabled?'checked':''}> enabled</label> <button class="small" data-test="service:${s.id}">Test</button></td></tr>`).join('')}</table>`).join('');
+  const cats=['All','Featured','Model providers',...svcCats];
+  const pills=cats.map(c=>`<button class="tab ${connCat===c?'active':''}" data-conncat="${esc(c)}">${esc(c)}</button>`).join('');
+  const isConn=x=>x.status==='connected'||x.status==='reachable';
+  const connHtml=d.providers.filter(isConn).map(p=>connRow('provider',p)).join('')+d.services.filter(isConn).map(s=>connRow('service',s)).join('');
+  const availHtml=d.providers.filter(p=>!isConn(p)).map(p=>connRow('provider',p)).join('')+d.services.filter(s=>!isConn(s)).map(s=>connRow('service',s)).join('');
   return `<h2>🔌 Connectors</h2><p>Model providers and service connectors. Token-based connectors are really tested against the service — OAuth-only ones are config + setup instructions in v1 and stay <b>Not connected</b> until you complete their setup; nothing here is faked.</p>
-  <h3>Model providers</h3><table><tr><th>Provider</th><th>Endpoint</th><th>Key</th><th>Status</th><th></th></tr>${provRows}</table>
-  <h3>Service connectors</h3>${svcRows}
+  <input id="conn-q" type="text" placeholder="Search connectors" class="search">
+  <div class="tabs" style="margin:6px 0">${pills}</div>
+  <div id="conn-lists">
+    <div class="conn-group" data-group="connected"><h3 class="conn-sec">Connected</h3>${connHtml||'<p class="note">Nothing connected yet — press Test on a connector to check it. A connector shows here only after a real test succeeds.</p>'}</div>
+    <div class="conn-group" data-group="available"><h3 class="conn-sec">Available</h3>${availHtml}</div>
+  </div>
   <h3>🌐 VPS Premium — premium models from your own VPS</h3>
   <div class="activate-steps">
     <h4>How to activate Premium — 3 steps</h4>
@@ -1332,7 +1499,7 @@ async function connectorsHtml(isSettings){
       <li><b>Connect here</b> — pick provider “VPS Premium” on a bot and start chatting. No provider API keys ever sit on this computer — they stay on the VPS.</li>
     </ol>
   </div>
-  <p class="note">Point the app at your VPS gateway (see <code>server/</code> in the repo) to use premium models — Claude, GPT, Gemini — without putting any provider API key on this computer. Your provider keys stay on the VPS; this app only sends a token the VPS owner issued to you. Status: <b>${vps.configured?'configured':'not configured'}</b> · Token: ${vps.has_token?esc(vps.masked_token||'stored'):'not set'}</p>
+  <p class="note">Point the app at your VPS gateway (register at <code>api.localbotz.io/register</code>) to use premium models — Claude, GPT, Gemini — without putting any provider API key on this computer. Your provider keys stay on the VPS; this app only sends a token the VPS owner issued to you. Status: <b>${vps.configured?'configured':'not configured'}</b> · Token: ${vps.has_token?esc(vps.masked_token||'stored'):'not set'}</p>
   <label>VPS base URL</label><input id="vps-url" type="text" value="${esc(vps.base_url||'')}" placeholder="https://YOUR-VPS/v1">
   <label>Your VPS token (stored in Secure store, never shown)</label><input id="vps-token" type="password" autocomplete="off" placeholder="Leave blank to keep the current token">
   <div style="margin:8px 0"><button id="vps-save">Save VPS Premium</button> <button id="vps-test" class="ghost">Test connection</button> <button id="vps-models" class="ghost">List premium models</button> <button id="vps-prices" class="ghost">Show prices</button></div>
@@ -1350,47 +1517,132 @@ async function connectorsHtml(isSettings){
   <div style="margin:8px 0"><button id="vps-code-signin">Sign in with code</button></div>
   <div id="vps-code-out"></div>
   <p class="note">Already registered? <a href="${esc((vps.base_url||'https://api.localbotz.io/v1').replace(/\/v1\/?$/,''))}/login" target="_blank">Sign in to your LocalBotz account</a> to see your plan, usage and WhatsApp chat.</p>
-  <h3>Service connectors</h3><table><tr><th>Service</th><th>Auth</th><th>Status</th><th>Setup</th><th></th></tr>${svcRows}</table>
   <p class="note">Keys are added in Settings &gt; Secure store. Test connection probes the provider and updates its status.</p><div id="page-msg"></div>`;
 }
 async function messagingHtml(){
   const d=await api('/api/messaging');
   const tg=await api('/api/messaging/telegram/status');
   const botOpts=bots.map(b=>`<option value="${b.id}" ${d.telegram&&d.telegram.bot_id===b.id?'selected':''}>${esc(b.name)}</option>`).join('');
+  const answerBotId=(d.telegram&&d.telegram.bot_id)||(bots[0]&&bots[0].id)||'';
+  let unattended=false;
+  try{ const p=await api('/api/permissions'); const bp=(p.bots||{})[answerBotId]||{}; unattended=(bp.approval_mode||'auto')==='full'; }catch(e){}
+  const icons={telegram:'✈️',discord:'🎮',whatsapp:'💬'};
+  const order=['telegram','discord','whatsapp'];
+  const anyOn=order.some(id=>d[id]&&d[id].enabled);
+  const rows=order.map(id=>{ const c=d[id]||{};
+    const st=id==='telegram'&&tg.listening?{tag:statusTag('connected'),note:'Listening — polling Telegram every few seconds.'}
+      :c.has_token?{tag:statusTag('saved_not_checked'),note:'Token saved — enable the channel below to start it.'}
+      :{tag:statusTag('not_connected'),note:'No token saved yet.'};
+    return `<div class="conn-row">
+      <div class="tile">${icons[id]}</div>
+      <div class="conn-main"><b>${esc(c.label||id)}</b>
+        <span class="note">${st.note}${c.enabled?'':' · Channel disabled.'}${id==='discord'?' Configuration only for now — it needs a websocket gateway.':''}${id==='whatsapp'?' Official Business API — replies wait for your approval.':''}</span>
+        ${id==='telegram'&&tg.last_error?`<span class="note">Last error: ${esc(tg.last_error)}</span>`:''}
+      </div>
+      <div class="conn-side">${st.tag}<button class="small" data-msgsetup="${id}">Connect</button></div>
+    </div>
+    <div class="msg-setup" id="msg-setup-${id}" hidden>
+      <label>Webhook URL</label><input type="text" data-msg="${id}:webhook" value="${esc(c.webhook||'')}" placeholder="https://your-server/api/messaging/${id}/webhook">
+      <label>Approved senders (one per line)</label><textarea data-msg="${id}:senders" rows="3">${esc((c.approved_senders||[]).join('\n'))}</textarea>
+      <label>Bot token (stored in Secure store, never shown)</label><input type="password" data-msg="${id}:token" placeholder="Leave blank to keep the current token">
+      <div style="margin:8px 0"><label style="display:inline"><input type="checkbox" data-msg="${id}:enabled" ${c.enabled?'checked':''}> Channel enabled</label> <button class="small" data-msgsave="${id}">Save</button></div>
+      <p style="color:#666;font-size:14px">${esc(c.setup)}</p>
+    </div>`;}).join('');
   return `<h2>💬 Messaging channels</h2><p class="note"><b>Telegram is live:</b> LocalBotz polls Telegram every few seconds and answers approved senders — no webhook or public URL needed. WhatsApp has its own sales agent below (official Business API — replies wait for your approval). Discord is configuration only for now (it needs a websocket gateway) — inbound replies stay <b>off by default</b> and only approved senders would ever be answered.</p>
-  <p><b>Telegram listener:</b> ${tg.listening?'🟢 listening':tg.has_token?'⚪ ready — enable the channel and inbound replies below':'⚪ no token saved yet'} · Messages answered: ${tg.messages_handled}${tg.last_error?` · Last error: ${esc(tg.last_error)}`:''}</p>`+
-  Object.entries(d).map(([id,c])=>`<h3>${esc(c.label)}</h3><p>Status: ${statusTag(c.status)} · Token: ${c.has_token?'stored (masked)':'not set'} · Inbound replies: ${c.inbound_replies?'ON':'off'}</p>
-  ${id==='telegram'?`<label>Which bot answers on Telegram</label><select data-msg="telegram:bot_id">${botOpts}</select>`:''}
-  <label>Webhook URL</label><input type="text" data-msg="${id}:webhook" value="${esc(c.webhook||'')}" placeholder="https://your-server/api/messaging/${id}/webhook">
-  <label>Approved senders (one per line)</label><textarea data-msg="${id}:senders" rows="3">${esc((c.approved_senders||[]).join('\n'))}</textarea>
-  <label>Bot token (stored in Secure store, never shown)</label><input type="password" data-msg="${id}:token" placeholder="Leave blank to keep the current token">
-  <div style="margin:8px 0"><label style="display:inline"><input type="checkbox" data-msg="${id}:enabled" ${c.enabled?'checked':''}> Channel enabled</label> &nbsp; <label style="display:inline"><input type="checkbox" data-msg="${id}:inbound" ${c.inbound_replies?'checked':''}> Enable inbound replies</label> <button class="small" data-msgsave="${id}">Save</button></div>
-  <p style="color:#666;font-size:14px">${esc(c.setup)}</p>`).join('') + await waAgentHtml() + `<div id="page-msg"></div>`;
+  <p><b>Telegram listener:</b> ${tg.listening?'🟢 listening':tg.has_token?'⚪ ready — enable the channel and inbound replies below':'⚪ no token saved yet'} · Messages answered: ${tg.messages_handled}${tg.last_error?` · Last error: ${esc(tg.last_error)}`:''}</p>
+  ${rows}
+  <div class="switch-row"><div><b>Messaging enabled</b><p class="note">Turns all three channels on or off at once. Each channel still needs its own token and approved senders.</p></div><input type="checkbox" class="switch" id="msg-all" ${anyOn?'checked':''}></div>
+  <div class="switch-row"><div><b>Allow unattended remote tasks</b><p class="note">Messages from approved senders can run commands and change files without asking you. When off, the answering bot asks first before anything that changes files or the desktop.</p></div><input type="checkbox" class="switch" id="msg-unattended" ${unattended?'checked':''} ${answerBotId?'':'disabled'}></div>
+  <div class="switch-row"><div><b>Deliver to bot</b><p class="note">Which bot answers messages on Telegram.</p></div><select data-msg="telegram:bot_id">${botOpts}</select></div>
+  <h3>Auto-reply</h3>
+  <p class="note">Auto-reply answers only people you approved. On WhatsApp, replies are drafted and wait for your approval — nothing is ever sent by itself. Nobody is added unless you add them.</p>
+  ${order.map(id=>{const c=d[id]||{}; return `<div class="switch-row"><div><b>Reply to incoming messages — ${esc(c.label||id)}</b><p class="note">${id==='whatsapp'?'Replies are drafted for approval, never sent automatically.':id==='telegram'?'Replies go to approved senders only.':'Configuration only — Discord cannot reply yet.'}</p></div><input type="checkbox" class="switch" data-msg="${id}:inbound" ${c.inbound_replies?'checked':''} ${id==='discord'?'disabled':''}></div>`;}).join('')}
+  <div style="margin:8px 0"><button id="msg-save-auto">Save auto-reply settings</button></div>` + await waAgentHtml() + `<div id="page-msg"></div>`;
+}
+let mcpEditing='';
+async function mcpImportJson(data){
+  const list=Array.isArray(data)?data:(data&&data.servers?data.servers:[data]);
+  let n=0;
+  for(const s of list){
+    const name=(s.name||'').trim(); const cmd=(s.command_or_url||s.command||s.url||'').trim();
+    if(!name||!cmd) continue;
+    await api('/api/mcp-servers',{method:'POST',body:JSON.stringify({name,command_or_url:cmd,env:(s.env||{})})}); n++;
+  }
+  msg(n?`Imported ${n} MCP server(s).`:'Nothing to import — each server needs a name and a command or URL.');
+  renderPage('lib-mcp');
 }
 async function mcpHtml(){
   const list=await api('/api/mcp-servers');
-  const rows=list.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.command_or_url)}</td><td>${s.enabled?'enabled':'disabled'}</td><td>${statusTag(s.status)}${s.last_test?'<br><small>'+esc(s.last_test.detail||'')+'</small>':''}</td><td>${(s.tools||[]).join(', ')||'—'}</td><td><button class="small" data-mcptest="${s.id}">Test</button> <button class="small" data-mcptoggle="${s.id}" data-on="${!s.enabled}">${s.enabled?'Disable':'Enable'}</button> <button class="small" data-mcpdel="${s.id}">Delete</button></td></tr>`).join('');
+  const cards=list.map(s=>`<div class="conn-row">
+    <div class="tile">🧩</div>
+    <div class="conn-main"><b>${esc(s.name)}</b>
+      <span class="note mono">${esc(s.command_or_url)}</span>
+      <span class="note">Tools: ${esc((s.tools||[]).join(', ')||'—')} · ${s.enabled?'enabled':'disabled'}</span>
+      ${s.last_test?`<span class="note">Last test: ${esc(s.last_test.detail||'')}</span>`:''}
+      <details id="mcp-logs-${s.id}"><summary>Logs</summary><p class="note">${s.last_test?esc(s.last_test.detail||'No detail recorded.'):'No test yet — press Test to probe this server.'}<br>Command: <code>${esc(s.command_or_url)}</code><br>Tools found: ${esc((s.tools||[]).join(', ')||'none')}</p></details>
+    </div>
+    <div class="conn-side">${statusTag(s.status)}<button class="small" data-mcptest="${s.id}">Test</button> <button class="small" data-mcpedit="${s.id}">Edit</button> <button class="small" data-mcptoggle="${s.id}" data-on="${!s.enabled}">${s.enabled?'Disable':'Enable'}</button> <button class="small danger" data-mcpdel="${s.id}">Remove</button></div>
+  </div>
+  <div class="mcp-sub"><button data-mcprestart="${s.id}">Restart</button><button data-mcplogs="${s.id}">Logs</button><button data-mcpsignin="${s.id}">Sign in</button></div>`).join('');
   return `<h2>🧩 MCP servers</h2><p>Add a server by name + command or URL. Test checks it is really reachable and lists its tools when it answers; if it cannot be reached, the error is shown.</p>
-  <table><tr><th>Name</th><th>Command / URL</th><th></th><th>Status</th><th>Tools</th><th></th></tr>${rows||'<tr><td colspan="6">No MCP servers yet.</td></tr>'}</table>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    <button id="mcp-add-top">Add server</button>
+    <label class="ghost small" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)">Import file<input type="file" id="mcp-import-file" accept=".json,application/json" hidden></label>
+    <button id="mcp-paste-toggle" class="ghost">Paste JSON</button>
+    <button id="mcp-refresh" class="ghost">↻ Refresh</button>
+  </div>
+  <div id="mcp-paste-box" hidden><label>Paste MCP server JSON — one server, or a list of servers (name + command_or_url, optional env)</label><textarea id="mcp-paste" rows="4" placeholder='{"name": "filesystem", "command_or_url": "npx -y @modelcontextprotocol/server-filesystem /path"}'></textarea><div style="margin:8px 0"><button id="mcp-paste-import">Import JSON</button></div></div>
+  ${cards||'<p class="note">No MCP servers yet. Add one below, or import a JSON file.</p>'}
   <h3>Add a server</h3><div class="row"><div><label>Name</label><input id="mcp-name" type="text"></div><div><label>Command or URL</label><input id="mcp-cmd" type="text" placeholder="npx -y @modelcontextprotocol/server-filesystem /path  OR  https://..."></div></div>
-  <label>Env (JSON, optional)</label><input id="mcp-env" type="text" placeholder='{"API_KEY": "…"}'><div style="margin-top:10px"><button id="mcp-add">Add server</button></div><div id="page-msg"></div>`;
+  <label>Env (JSON, optional)</label><input id="mcp-env" type="text" placeholder='{"API_KEY": "…"}'><div style="margin-top:10px"><button id="mcp-add">Add server</button> <button id="mcp-cancel-edit" class="ghost" hidden>Cancel edit</button></div><div id="page-msg"></div>`;
 }
+let skillEditing='', skillEditingBuiltin=false;
 async function skillsHtml(){
   const list=await api('/api/skills');
-  const rows=list.map(s=>`<tr><td>${esc(s.name)}${s.builtin?' <span class="tag">built-in</span>':''}</td><td>${esc(s.instructions||'')}</td><td>${esc(s.source||'—')}</td><td>${s.enabled?'enabled':'disabled'}</td><td>${s.builtin?'':'<button class="small" data-skilldel="'+s.id+'">Delete</button>'}</td></tr>`).join('');
+  const rows=list.map(s=>`<div class="conn-row">
+    <div class="tile">✨</div>
+    <div class="conn-main"><b>${esc(s.name)}</b> <code>/${esc(s.id)}</code>${s.builtin?' <span class="tag">built-in</span>':''}
+      <p class="note clamp2" style="margin:6px 0 0">${esc(s.instructions||'')}</p>
+      <span class="note">Source: ${esc(s.source||'—')} · ${s.enabled?'enabled':'disabled'}</span>
+    </div>
+    <div class="conn-side"><button class="small" data-skilledit="${s.id}">Edit skill</button>${s.builtin?'':' <button class="small danger" data-skilldel="'+s.id+'">Uninstall</button>'}</div>
+  </div>`).join('');
   const botOpts=bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
-  return `<h2>✨ Skills</h2><p>Skills are instruction packs the agent uses. Enable/disable them per bot below.</p>
-  <table><tr><th>Skill</th><th>Instructions</th><th>Source</th><th></th><th></th></tr>${rows}</table>
+  return `<h2>✨ Skills</h2><p>Skills are instruction packs the agent uses. Skills are global — they apply to every bot; enable them per bot below.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    <label class="ghost small" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)">Import file<input type="file" id="skill-import-file" accept=".md,.txt" hidden></label>
+    <label class="ghost small" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)">Import folder<input type="file" id="skill-import-folder" webkitdirectory hidden></label>
+  </div>
+  <p class="note">Scope: Global. Import file loads one .md or .txt file into the form below — review it, then Add custom skill. Import folder adds every .md or .txt file in the folder as its own skill.</p>
+  ${rows}
   <h3>Enable per bot</h3><div class="row"><div><label>Bot</label><select id="skill-bot">${botOpts}</select></div><div><label>Skill</label><select id="skill-id">${list.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></div></div>
   <div style="margin-top:10px"><button id="skill-enable">Enable for bot</button> <button id="skill-disable" class="ghost">Disable for bot</button></div>
   <h3>Add a custom skill</h3><div class="row"><div><label>Name</label><input id="skill-name" type="text"></div><div><label>Source folder / file (optional)</label><input id="skill-src" type="text"></div></div>
-  <label>Instructions</label><textarea id="skill-inst" rows="3"></textarea><div style="margin-top:10px"><button id="skill-add">Add custom skill</button></div><div id="page-msg"></div>`;
+  <label>Instructions</label><textarea id="skill-inst" rows="3"></textarea><div style="margin-top:10px"><button id="skill-add">Add custom skill</button> <button id="skill-cancel-edit" class="ghost" hidden>Cancel edit</button></div><div id="page-msg"></div>`;
 }
+const TOOL_GROUPS=[
+  ['Web search',['web_search','browser_search']],
+  ['Browser automation',['browser_open','browser_read','browser_screenshot','browser_click','browser_type']],
+  ['Desktop control',['desktop_inspect','desktop_activate','desktop_click','desktop_type','desktop_key','desktop_screenshot']],
+  ['Files & workspace',['list_files','read_file','write_file','run_command']]
+];
 async function toolsHtml(){
   const list=await api('/api/tools');
-  const rows=list.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.description)}</td><td>${t.enabled?'enabled':'disabled'}</td><td>${esc((t.bots_using||[]).join(', ')||'—')}</td><td><button class="small" data-tool="${t.name}" data-on="${!t.enabled}">${t.enabled?'Disable':'Enable'}</button></td></tr>`).join('');
-  return `<h2>🛠 Tools</h2><p>Built-in tools. Toggles here are global and are enforced in the agent loop; per-bot toggles live in each bot's template / Tools settings.</p>
-  <table><tr><th>Tool</th><th>Description</th><th>Global</th><th>Bots using it</th><th></th></tr>${rows}</table><div id="page-msg"></div>`;
+  const byName={}; list.forEach(t=>byName[t.name]=t);
+  const groups=TOOL_GROUPS.map(([g,names])=>{
+    const tools=names.map(n=>byName[n]).filter(Boolean);
+    const allOn=tools.length&&tools.every(t=>t.enabled);
+    const det=tools.map(t=>`<div style="margin:8px 0"><b><code>${esc(t.name)}</code></b> — ${esc(t.description)}<br><span class="note">${t.enabled?'enabled':'disabled'} · used by: ${esc((t.bots_using||[]).join(', ')||'no bot')}</span> <button class="small" data-tool="${t.name}" data-on="${!t.enabled}">${t.enabled?'Disable':'Enable'}</button></div>`).join('');
+    return `<div class="conn-row tool-group" data-tools="${esc(names.join(' '))}">
+      <div class="conn-main"><b>${esc(g)}</b><span class="note mono">${esc(names.join(', '))}</span>
+        <details><summary>Details</summary>${det}</details>
+      </div>
+      <div class="conn-side"><label><input type="checkbox" class="switch" data-toolgroup="${esc(names.join(' '))}" ${allOn?'checked':''}></label></div>
+    </div>`;
+  }).join('');
+  return `<h2>🛠 Tools</h2><p>Choose which tools the agent can use. Toggles are global and enforced in the agent loop; per-bot toggles live in each bot's Tools settings. Every tool can be switched off — none is always on.</p>
+  <input id="tool-q" type="text" placeholder="Search tools" class="search">
+  ${groups}<div id="page-msg"></div>`;
 }
 async function languagesHtml(){
   await loadLanguages();
@@ -1526,7 +1778,12 @@ function bindPage(name){
   if(q('ph-revoke')) q('ph-revoke').onclick=async()=>{ if(!confirm('Unlink every phone?')) return; await api('/api/phone/revoke',{method:'POST'}); msg('Every phone unlinked.'); renderPage(name); };
   document.querySelectorAll('[data-conn]').forEach(el=>el.onchange=async()=>{const [kind,id]=el.dataset.conn.split(':'); await api(`/api/connectors/${kind}/${id}/toggle`,{method:'POST',body:JSON.stringify({enabled:el.checked})}); msg('Saved.');});
   document.querySelectorAll('[data-test]').forEach(el=>el.onclick=async()=>{const [kind,id]=el.dataset.test.split(':'); const r=await api(`/api/connectors/${kind}/${id}/test`,{method:'POST'}); msg(`${id}: ${r.status} — ${r.detail||''}`); renderPage(name);});
+  if(q('conn-q')){ q('conn-q').value=connQuery; q('conn-q').oninput=()=>{connQuery=q('conn-q').value; filterConn();}; }
+  document.querySelectorAll('[data-conncat]').forEach(el=>el.onclick=()=>{connCat=el.dataset.conncat; document.querySelectorAll('[data-conncat]').forEach(b=>b.classList.toggle('active',b===el)); filterConn();});
+  if(q('conn-q')) filterConn();
   document.querySelectorAll('[data-tool]').forEach(el=>el.onclick=async()=>{await api(`/api/tools/${el.dataset.tool}`,{method:'POST',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
+  if(q('tool-q')) q('tool-q').oninput=()=>{const needle=q('tool-q').value.trim().toLowerCase(); document.querySelectorAll('.tool-group').forEach(g=>{g.style.display=(!needle||g.textContent.toLowerCase().includes(needle))?'':'none';});};
+  document.querySelectorAll('[data-toolgroup]').forEach(el=>el.onchange=async()=>{const names=el.dataset.toolgroup.split(' '); for(const n of names){ await api(`/api/tools/${n}`,{method:'POST',body:JSON.stringify({enabled:el.checked})}); } renderPage(name);});
   document.querySelectorAll('[data-mcptest]').forEach(el=>el.onclick=async()=>{const r=await api(`/api/mcp-servers/${el.dataset.mcptest}/test`,{method:'POST'}); msg(`${r.name}: ${r.status} — ${r.detail||''} Tools: ${(r.tools||[]).join(', ')||'none'}`); renderPage(name);});
   document.querySelectorAll('[data-mcptoggle]').forEach(el=>el.onclick=async()=>{await api(`/api/mcp-servers/${el.dataset.mcptoggle}/toggle`,{method:'POST',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-mcpdel]').forEach(el=>el.onclick=async()=>{await api(`/api/mcp-servers/${el.dataset.mcpdel}`,{method:'DELETE'}); renderPage(name);});
@@ -1541,9 +1798,48 @@ function bindPage(name){
     const bid=get('bot_id'); if(bid!==undefined) body.bot_id=bid;
     const tok=get('token'); if(tok) body.token=tok;
     await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify(body)}); msg(id==='telegram'?'Saved. Telegram polling starts within seconds when the channel is enabled with a token.':'Saved.');});
+  document.querySelectorAll('[data-msgsetup]').forEach(el=>el.onclick=()=>{const box=$('msg-setup-'+el.dataset.msgsetup); if(box){ box.hidden=!box.hidden; if(!box.hidden) box.scrollIntoView({block:'nearest'}); }});
+  if(q('msg-all')) q('msg-all').onchange=async()=>{const on=q('msg-all').checked; for(const id of ['telegram','discord','whatsapp']){ await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify({enabled:on})}); } renderPage(name);};
+  if(q('msg-unattended')) q('msg-unattended').onchange=async()=>{const sel=document.querySelector('[data-msg="telegram:bot_id"]'); const bid=sel?sel.value:''; if(!bid){ msg('Pick a bot first.'); return; } await api(`/api/permissions/bots/${bid}`,{method:'POST',body:JSON.stringify({approval_mode:q('msg-unattended').checked?'full':'ask'})}); msg(q('msg-unattended').checked?'Unattended remote tasks allowed for this bot.':'Unattended remote tasks off — the bot asks first.');};
+  if(q('msg-save-auto')) q('msg-save-auto').onclick=async()=>{for(const id of ['telegram','discord','whatsapp']){const n=document.querySelector(`[data-msg="${id}:inbound"]`); if(n) await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify({inbound_replies:n.checked})});} msg('Auto-reply settings saved.');};
   if(q('mcp-add')) q('mcp-add').onclick=async()=>{let env={}; try{env=JSON.parse(q('mcp-env').value||'{}');}catch(e){msg('Env must be valid JSON.');return;}
-    await api('/api/mcp-servers',{method:'POST',body:JSON.stringify({name:q('mcp-name').value,command_or_url:q('mcp-cmd').value,env})}); renderPage(name);};
-  if(q('skill-add')) q('skill-add').onclick=async()=>{await api('/api/skills',{method:'POST',body:JSON.stringify({name:q('skill-name').value,instructions:q('skill-inst').value,source:q('skill-src').value})}); renderPage(name);};
+    try{ await api('/api/mcp-servers',{method:'POST',body:JSON.stringify({name:q('mcp-name').value,command_or_url:q('mcp-cmd').value,env})});
+      if(mcpEditing){ await api(`/api/mcp-servers/${mcpEditing}`,{method:'DELETE'}); mcpEditing=''; }
+      renderPage(name); }catch(e){ msg(e.message); }};
+  if(q('mcp-cancel-edit')) q('mcp-cancel-edit').onclick=()=>{mcpEditing=''; q('mcp-name').value=''; q('mcp-cmd').value=''; q('mcp-env').value=''; q('mcp-add').textContent='Add server'; q('mcp-cancel-edit').hidden=true;};
+  if(q('mcp-add-top')) q('mcp-add-top').onclick=()=>{const n=q('mcp-name'); if(n){ n.scrollIntoView({block:'center'}); n.focus(); }};
+  if(q('mcp-paste-toggle')) q('mcp-paste-toggle').onclick=()=>{const b=q('mcp-paste-box'); if(b){ b.hidden=!b.hidden; if(!b.hidden) q('mcp-paste').focus(); }};
+  if(q('mcp-paste-import')) q('mcp-paste-import').onclick=async()=>{try{ await mcpImportJson(JSON.parse(q('mcp-paste').value||'{}')); }catch(e){ msg('Invalid JSON: '+e.message); }};
+  if(q('mcp-import-file')) q('mcp-import-file').onchange=async()=>{const f=q('mcp-import-file').files[0]; if(!f) return; try{ await mcpImportJson(JSON.parse(await f.text())); }catch(e){ msg('Import failed: '+e.message); }};
+  if(q('mcp-refresh')) q('mcp-refresh').onclick=()=>renderPage(name);
+  document.querySelectorAll('[data-mcpedit]').forEach(el=>el.onclick=async()=>{const list=await api('/api/mcp-servers'); const sv=list.find(x=>x.id===el.dataset.mcpedit); if(!sv) return;
+    q('mcp-name').value=sv.name; q('mcp-cmd').value=sv.command_or_url; q('mcp-env').value=JSON.stringify(sv.env||{});
+    mcpEditing=sv.id; q('mcp-add').textContent='Save changes'; q('mcp-cancel-edit').hidden=false;
+    q('mcp-name').scrollIntoView({block:'center'}); msg('Editing — save to replace this server.');});
+  document.querySelectorAll('[data-mcprestart]').forEach(el=>el.onclick=async()=>{const r=await api(`/api/mcp-servers/${el.dataset.mcprestart}/test`,{method:'POST'}); msg(`Restarted ${r.name}: ${r.status} — ${r.detail||''}`); renderPage(name);});
+  document.querySelectorAll('[data-mcplogs]').forEach(el=>el.onclick=()=>{const d=$('mcp-logs-'+el.dataset.mcplogs); if(d){ d.open=!d.open; d.scrollIntoView({block:'nearest'}); }});
+  document.querySelectorAll('[data-mcpsignin]').forEach(el=>el.onclick=async()=>{const list=await api('/api/mcp-servers'); const sv=list.find(x=>x.id===el.dataset.mcpsignin); if(!sv) return;
+    q('mcp-name').value=sv.name; q('mcp-cmd').value=sv.command_or_url; q('mcp-env').value=JSON.stringify(sv.env||{});
+    mcpEditing=sv.id; q('mcp-add').textContent='Save changes'; q('mcp-cancel-edit').hidden=false;
+    q('mcp-env').scrollIntoView({block:'center'}); q('mcp-env').focus();
+    msg("No separate sign-in flow — add the server's credentials in Env (JSON), then Save changes.");});
+  if(q('skill-add')) q('skill-add').onclick=async()=>{try{ await api('/api/skills',{method:'POST',body:JSON.stringify({name:q('skill-name').value,instructions:q('skill-inst').value,source:q('skill-src').value})});
+    if(skillEditing&&!skillEditingBuiltin){ await api(`/api/skills/${skillEditing}`,{method:'DELETE'}); }
+    skillEditing=''; skillEditingBuiltin=false; renderPage(name); }catch(e){ msg(e.message); }};
+  if(q('skill-cancel-edit')) q('skill-cancel-edit').onclick=()=>{skillEditing=''; skillEditingBuiltin=false; q('skill-name').value=''; q('skill-inst').value=''; q('skill-src').value=''; q('skill-add').textContent='Add custom skill'; q('skill-cancel-edit').hidden=true;};
+  document.querySelectorAll('[data-skilledit]').forEach(el=>el.onclick=async()=>{const list=await api('/api/skills'); const sv=list.find(x=>x.id===el.dataset.skilledit); if(!sv) return;
+    q('skill-name').value=sv.name; q('skill-inst').value=sv.instructions||''; q('skill-src').value=sv.source||'';
+    skillEditing=sv.id; skillEditingBuiltin=!!sv.builtin;
+    q('skill-add').textContent=sv.builtin?'Save as custom copy':'Save changes'; q('skill-cancel-edit').hidden=false;
+    q('skill-name').scrollIntoView({block:'center'});
+    msg(sv.builtin?'Built-in skills cannot be changed — saving creates your own custom copy.':'Editing — save to replace this skill.');});
+  if(q('skill-import-file')) q('skill-import-file').onchange=async()=>{const f=q('skill-import-file').files[0]; if(!f) return;
+    const text=await f.text(); q('skill-name').value=f.name.replace(/\.(md|txt)$/i,'').replace(/[-_]/g,' ');
+    q('skill-inst').value=text; q('skill-name').scrollIntoView({block:'center'});
+    msg('Loaded from file — review it, then Add custom skill.');};
+  if(q('skill-import-folder')) q('skill-import-folder').onchange=async()=>{const files=[...q('skill-import-folder').files].filter(f=>/\.(md|txt)$/i.test(f.name)); let n=0;
+    try{ for(const f of files){ const text=await f.text(); await api('/api/skills',{method:'POST',body:JSON.stringify({name:f.name.replace(/\.(md|txt)$/i,'').replace(/[-_]/g,' '),instructions:text,source:f.name})}); n++; } }catch(e){ msg('Import failed: '+e.message); return; }
+    msg(n?`Imported ${n} skill(s) from the folder.`:'No .md or .txt files in that folder.'); renderPage(name);};
   if(q('skill-enable')) q('skill-enable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:true})}); msg('Skill enabled for bot.');};
   if(q('skill-disable')) q('skill-disable').onclick=async()=>{await api(`/api/bots/${q('skill-bot').value}/skills`,{method:'POST',body:JSON.stringify({skill_id:q('skill-id').value,enabled:false})}); msg('Skill disabled for bot.');};
   if(q('set-save')) q('set-save').onclick=async()=>{try{await api('/api/settings',{method:'POST',body:JSON.stringify({default_provider:q('set-provider').value,default_model:q('set-model').value,workspace_folder:q('set-ws').value,theme:q('set-theme').value,default_language:q('set-language').value,autostart:q('set-autostart').checked})}); document.body.classList.toggle('dark',q('set-theme').value==='dark'); await loadProviders(); msg('Settings saved.');}catch(e){msg(e.message);}};
@@ -1610,6 +1906,14 @@ function bindPage(name){
   document.querySelectorAll('[data-job-export]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobExport}/export`,{method:'POST',body:JSON.stringify({format:el.dataset.fmt})}); msg(`Exported as ${d.filename} (${(d.size_bytes/1024).toFixed(1)} KB) — it is in Documents below. Click it to download.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('rt-kind')) q('rt-kind').onchange=()=>{const k=q('rt-kind').value; q('rt-time-row').style.display=(k==='interval')?'none':'block'; q('rt-weekday-row').style.display=(k==='weekly')?'block':'none'; q('rt-interval-row').style.display=(k==='interval')?'block':'none';};
   if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value),desktop_action:q('rt-desktop-action')?q('rt-desktop-action').value:'',desktop_target:q('rt-desktop-target')?q('rt-desktop-target').value:'',desktop_text:q('rt-desktop-text')?q('rt-desktop-text').value:'',desktop_keys:q('rt-desktop-keys')?q('rt-desktop-keys').value:''})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
+  if(q('rt-new')) q('rt-new').onclick=()=>{const n=q('rt-name'); if(n){n.scrollIntoView({block:'center'}); n.focus();}};
+  document.querySelectorAll('[data-rt-starter]').forEach(el=>el.onclick=()=>{const st=RT_STARTERS.find(x=>x.id===el.dataset.rtStarter); if(!st) return;
+    q('rt-name').value=st.name; q('rt-task').value=st.task; q('rt-kind').value=st.kind;
+    q('rt-kind').dispatchEvent(new Event('change'));
+    if(st.time) q('rt-time').value=st.time;
+    if(st.weekday!==undefined) q('rt-weekday').value=String(st.weekday);
+    q('rt-name').scrollIntoView({block:'center'}); q('rt-name').focus();
+    msg('Starter loaded — pick a bot, then Create routine.');});
   if(q('desk-act')) q('desk-act').onclick=async()=>{const b=q('desk-act'); b.disabled=true; b.textContent='Working…';
     const action=q('desk-action').value, target=q('desk-target').value;
     setMuseStatus('Working',`Desktop: ${action} ${target}`.trim());
