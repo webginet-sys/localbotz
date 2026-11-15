@@ -11,15 +11,14 @@ commands — driven by a downloaded local model in **LM Studio**.
 
 > **MIT licensed and built in the open.** [Read the code](https://github.com/webginet-sys/localbotz), run it from source, or [send a pull request](https://github.com/webginet-sys/localbotz/pulls).
 >
-> **Landing page:** [landing.html](landing.html) — also at `docs/index.html` for GitHub Pages. Hero, try-it prompts, what you can build, open source, and download.
+> **Website:** [localbotz.io](https://localbotz.io) — hero, try-it prompts, what you can build, open source, and download. (The website lives on our VPS; this repo holds only the application.)
 
 ## Download — for everyone
 
 **You do not need to know how to use a terminal.** If you have never
 downloaded an app from GitHub before, start here:
 
-- **Open the download page:** [download.html](download.html) — also at
-  `docs/download.html` for GitHub Pages — or read the plain-language
+- **Open the download page:** [localbotz.io/download.html](https://localbotz.io/download.html) — or read the plain-language
   steps in [DOWNLOAD.md](DOWNLOAD.md).
 - **🪟 [Download for Windows](https://github.com/webginet-sys/localbotz)** — Windows 10 / 11. On GitHub, click **Code → Download ZIP**, extract it, then double-click `start.bat`.
 - **🍎 [Download for Mac](https://github.com/webginet-sys/localbotz)** — Apple Silicon (M1 / M2 / M3 / M4) and Intel. On GitHub, click **Code → Download ZIP**, open the ZIP, then double-click `start.command`.

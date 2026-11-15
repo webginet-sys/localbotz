@@ -97,7 +97,7 @@ cd localbotz
 start.bat         # Windows
 ```
 
-See [README.md](README.md) for the full guide, and [download.html](download.html) for the same instructions as a web page.
+See [README.md](README.md) for the full guide, and [localbotz.io/download.html](https://localbotz.io/download.html) for the same instructions as a web page.
 
 Support: https://github.com/webginet-sys/localbotz/issues
 
