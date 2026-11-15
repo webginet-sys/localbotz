@@ -23,7 +23,7 @@
   body.dark{--bg:#161918;--surface:#222625;--surface-2:#2c3130;--hover:#313836;--border:#39413f;--border-strong:#4b5653;--text:#e9edec;--muted:#a7b4af;--faint:#7e8d88;--brand-soft:#0f3531;--brand-border:#1d5a53;--brand-ink:#8fd6cc;--amber-soft:#3a3220;--amber-border:#665c2e;--ok-soft:#14301f;--warn-soft:#453a16;--bad-soft:#471d1d;--shadow-sm:0 1px 2px rgba(0,0,0,.35);--shadow-md:0 4px 16px rgba(0,0,0,.45)}
   :focus-visible{outline:2px solid var(--brand-2);outline-offset:2px}
   a{color:var(--brand)}
-  code{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:.88em}
+  code{font-family:var(--font-code,ui-monospace,Menlo,Consolas,monospace);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:.88em}
   .app{display:flex;height:100vh}
   /* ---- Sidebar ---- */
   aside{width:var(--sidebar-w);flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
@@ -113,6 +113,37 @@
   .activate-steps ol{margin:8px 0;padding-left:22px}
   .activate-steps li{margin:6px 0}
   .hidden{display:none}
+  /* ---- Notifications toast ---- */
+  #toast{position:fixed;right:18px;bottom:18px;z-index:60;max-width:360px;background:var(--surface);border:1px solid var(--brand-border);border-left:4px solid var(--brand);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:12px 14px;font-size:14px}
+  /* ---- Appearance modes ---- */
+  body.compact .navbtn{padding:6px 10px}
+  body.compact .botlist li{padding:7px 10px}
+  body.compact label{margin:9px 0 4px}
+  body.high-contrast{--text:#0a0f0d;--muted:#33413c;--faint:#55655f;--border:#9aa8a2;--border-strong:#6b7a74}
+  body.high-contrast.dark{--text:#ffffff;--muted:#d3ddd9;--faint:#b3c0bb;--border:#7d8b86;--border-strong:#a7b4af}
+  body.translucent aside{background:rgba(255,255,255,.82);backdrop-filter:blur(10px)}
+  body.translucent header{background:rgba(255,255,255,.82);backdrop-filter:blur(10px)}
+  body.translucent.dark aside{background:rgba(34,38,37,.82);backdrop-filter:blur(10px)}
+  body.translucent.dark header{background:rgba(34,38,37,.82);backdrop-filter:blur(10px)}
+  body.tabs-one-row #tpl-tabs{flex-wrap:nowrap;overflow-x:auto}
+  body.rail-icons aside{width:72px}
+  body.rail-icons .logo,body.rail-icons .sub,body.rail-icons #status,body.rail-icons .navsec{display:none}
+  body.rail-icons .navbtn{padding:9px 0;text-align:center;font-size:18px}
+  body.rail-icons .botlist li{padding:8px 0;text-align:center}
+  body.rail-icons .botlist li small{display:none}
+  /* ---- Avatar with accessory ---- */
+  .avatar-wrap{position:relative;display:inline-block}
+  .avatar-acc{position:absolute;right:-8px;top:-10px;font-size:.55em;line-height:1}
+  .hero-face .avatar-acc{font-size:36px;right:6px;top:-6px}
+  /* ---- Usage bars ---- */
+  .bars{display:flex;align-items:flex-end;gap:4px;height:110px;margin:12px 0 4px}
+  .bars .bar{flex:1;background:var(--brand-2);border-radius:4px 4px 0 0;min-height:2px}
+  .bars .bar.zero{background:var(--border)}
+  .bars-labels{display:flex;gap:4px;font-size:11px;color:var(--muted)}
+  .bars-labels span{flex:1;text-align:center;overflow:hidden;white-space:nowrap}
+  /* ---- Shortcuts ---- */
+  .shortcut-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .shortcut-row .keys{margin-left:auto;font-family:var(--font-code,ui-monospace,Menlo,Consolas,monospace);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:3px 9px;white-space:nowrap}
   /* ---- Floating bar + live job overlay ---- */
   #floatbar{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);font-size:14px;box-shadow:var(--shadow-sm)}
   #floatbar .dot{flex:none}
@@ -204,6 +235,7 @@
     <button class="navbtn" data-view="lib-mcp">🧩 MCP servers</button>
     <button class="navbtn" data-view="lib-skills">✨ Skills</button>
     <button class="navbtn" data-view="lib-tools">🛠 Tools</button>
+    <button class="navbtn" data-view="artifacts">🗂️ Artifacts</button>
     <div class="navsec">Settings</div>
     <button class="navbtn" data-view="set-general">⚙️ General</button>
     <button class="navbtn" data-view="character">🤖 Character — Muse</button>
@@ -214,6 +246,11 @@
     <button class="navbtn" data-view="set-permissions">🛡️ Permissions</button>
     <button class="navbtn" data-view="set-messaging">💬 Messaging channels</button>
     <button class="navbtn" data-view="set-devices">💻 Devices</button>
+    <button class="navbtn" data-view="set-notifications">🔔 Notifications</button>
+    <button class="navbtn" data-view="set-usage">📊 Usage</button>
+    <button class="navbtn" data-view="set-browser">🌐 Browser</button>
+    <button class="navbtn" data-view="set-shortcuts">⌨️ Keyboard shortcuts</button>
+    <button class="navbtn" data-view="set-appearance">🎨 Appearance</button>
   </aside>
   <main>
     <!-- FLOATING BAR — Muse's status, always in reach -->
@@ -274,6 +311,7 @@
       </div>
       <label style="text-align:center">Avatar</label>
       <div class="avatars" id="avatars" style="justify-content:center"></div>
+      <div class="row" style="justify-content:center"><div style="max-width:280px"><label>Accessory</label><select id="mb-accessory"><option value="none">None</option><option value="glasses">Glasses</option><option value="shades">Shades</option><option value="bow">Bow</option><option value="cap">Cap</option><option value="headphones">Headphones</option><option value="antenna">Antenna</option></select></div></div>
       <div class="pill-input"><input id="mb-name" type="text" placeholder="Name your bot" aria-label="Name your bot"><button type="button" class="pill-arrow" id="mb-name-next" title="Next — describe the job">→</button></div>
       <div class="row">
         <div><label>Provider</label><select id="mb-provider"></select></div>
@@ -286,8 +324,11 @@
       </div>
       <label>Describe the job</label>
       <textarea id="mb-job" rows="3" placeholder="e.g. Every morning, summarise what happened overnight on the topics I care about."></textarea>
-      <label>Schedule</label>
-      <input id="mb-schedule" type="text" value="on_demand" placeholder="on_demand, daily 08:00, weekly Monday 09:00">
+      <label>Persona — one line, how this bot comes across</label>
+      <input id="mb-persona" type="text" placeholder="e.g. Reliable, detail-oriented, quiet">
+      <label>Schedule — run this bot on its own</label>
+      <div class="row"><div><select id="mb-schedule-kind"><option value="off">Off — only when I ask</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekdays">Weekdays (Mon–Fri)</option><option value="weekly">Weekly</option></select></div><div id="mb-schedule-time-row"><label style="margin-top:0">Time</label><input id="mb-schedule-time" type="time" value="09:00"></div><div id="mb-schedule-weekday-row" style="display:none"><label style="margin-top:0">Weekday</label><select id="mb-schedule-weekday"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select></div></div>
+      <p class="note">A schedule creates a routine for this bot (see Routines). Off removes it again.</p>
       <label>Tools this bot can use</label>
       <div id="mb-tools" class="row" style="gap:6px"></div>
       <label>Instructions (pre-filled from a template — edit as you like)</label>
@@ -348,6 +389,24 @@ let mbAvatar="🤖", mbTemplate="", mbTools=[];
 const $=id=>document.getElementById(id);
 const q=id=>$(id); // top-level shortcut — the wizard wiring and wfStepsRender use it outside bindPage
 const msg=t=>{const m=$('page-msg'); if(m) m.textContent=t;}; // top-level too — persistent-toggle, wizFinish and the floating bar use it outside bindPage
+let NOTIFICATIONS=null, APPEARANCE=null, SHORTCUTS=null;
+let mbAccessory='none', RAIL_ON=false, CAPTURING_SHORTCUT=null;
+const AVATAR_ACCESSORY_EMOJI={glasses:'👓',shades:'🕶️',bow:'🎀',cap:'🧢',headphones:'🎧',antenna:'📡'};
+function avatarFace(avatar, acc){ const a=AVATAR_ACCESSORY_EMOJI[acc]||''; return a?`<span class="avatar-wrap">${esc(avatar||'🤖')}<span class="avatar-acc">${a}</span></span>`:esc(avatar||'🤖'); }
+function inQuietHours(){ if(!NOTIFICATIONS||!NOTIFICATIONS.quiet_hours_enabled) return false; const p=x=>{const m=String(x||'').match(/^(\d{1,2}):(\d{2})$/); return m?[+m[1],+m[2]]:null;}; const s=p(NOTIFICATIONS.quiet_start), e=p(NOTIFICATIONS.quiet_end); if(!s||!e) return false; const n=new Date(), cur=n.getHours()*60+n.getMinutes(), a=s[0]*60+s[1], b=e[0]*60+e[1]; return a<=b ? (cur>=a&&cur<b) : (cur>=a||cur<b); }
+function playBeep(){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=880; o.type='sine'; g.gain.setValueAtTime(.08,ctx.currentTime); g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.25); o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+.25); }catch(e){} }
+function showToast(text){ let t=$('toast'); if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); } t.innerHTML=`${esc(text)}<br><button class="ghost small" onclick="this.parentElement.remove()">Dismiss</button>`; setTimeout(()=>{ if(t.parentElement) t.remove(); }, 8000); }
+async function loadNotifications(){ try{ NOTIFICATIONS=await api('/api/notifications'); }catch(e){ NOTIFICATIONS=null; } return NOTIFICATIONS; }
+function notify(event, text){ if(!NOTIFICATIONS) return; const key={reply_arrived:'reply_arrived',needs_you:'needs_you',done:'done',failed:'failed',routine_fired:'routine_fired'}[event]; if(!key||!NOTIFICATIONS[key]) return; showToast(text); if(NOTIFICATIONS.play_sounds&&!inQuietHours()) playBeep(); }
+async function checkNeedsYou(){ try{ const offices=await api('/api/offices'); const seen=JSON.parse(localStorage.getItem('localbotz-notified-needs-you')||'[]'); let changed=false; (offices||[]).forEach(o=>(o.jobs||[]).forEach(j=>{ if(j.status==='awaiting_approval'&&!seen.includes(j.id)){ seen.push(j.id); changed=true; notify('needs_you', `Needs you: office job "${j.title||'untitled'}" is waiting for your approval.`); } })); if(changed) localStorage.setItem('localbotz-notified-needs-you', JSON.stringify(seen)); }catch(e){} }
+const FONT_UI_STACKS={system:'system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif',segoe:'"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif',arial:'Arial,Helvetica,sans-serif',georgia:'Georgia,"Times New Roman",serif',verdana:'Verdana,Geneva,sans-serif'};
+const FONT_CODE_STACKS={system:'ui-monospace,Menlo,Consolas,"Courier New",monospace',consolas:'Consolas,"Courier New",monospace',menlo:'Menlo,Monaco,"Courier New",monospace',courier:'"Courier New",Courier,monospace'};
+const ACCENTS={teal:{brand:'#0f766e',brand2:'#14b8a6',ink:'#134e4a'},emerald:{brand:'#047857',brand2:'#10b981',ink:'#064e3b'},green:{brand:'#15803d',brand2:'#22c55e',ink:'#14532d'},cyan:{brand:'#0e7490',brand2:'#06b6d4',ink:'#164e63'}};
+async function loadAppearance(){ try{ APPEARANCE=await api('/api/appearance'); }catch(e){ APPEARANCE=null; } return APPEARANCE; }
+function applyAppearance(){ const a=APPEARANCE||{}; const dark=a.theme==='dark'||(a.theme==='system'&&((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)||settings.theme==='dark')); document.body.classList.toggle('dark', !!dark); const acc=ACCENTS[a.accent]||ACCENTS.teal; document.documentElement.style.setProperty('--brand', acc.brand); document.documentElement.style.setProperty('--brand-2', acc.brand2); document.documentElement.style.setProperty('--brand-ink', acc.ink); document.body.classList.toggle('high-contrast', a.contrast==='high'); const r=a.corners==='sharp'?['4px','4px','6px','8px']:a.corners==='round'?['10px','14px','18px','22px']:['6px','8px','12px','16px']; ['--r-sm','--r-md','--r-lg','--r-xl'].forEach((v,i)=>document.documentElement.style.setProperty(v, r[i])); document.body.classList.toggle('compact', a.density==='compact'); document.body.style.fontSize=(a.text_size||14)+'px'; document.body.style.fontFamily=FONT_UI_STACKS[a.font_ui]||FONT_UI_STACKS.system; document.documentElement.style.setProperty('--font-code', FONT_CODE_STACKS[a.font_code]||FONT_CODE_STACKS.system); document.body.classList.toggle('translucent', !!a.translucent); document.body.classList.toggle('tabs-one-row', !a.tabs_two_rows); applyRailIcons(!!a.rail_icons); }
+function applyRailIcons(on){ RAIL_ON=!!on; document.body.classList.toggle('rail-icons', RAIL_ON); document.querySelectorAll('aside .navbtn').forEach(b=>{ if(RAIL_ON){ if(!b.dataset.full) b.dataset.full=b.textContent; b.textContent=b.textContent.trim().split(' ')[0]; b.title=b.dataset.full; } else if(b.dataset.full){ b.textContent=b.dataset.full; b.removeAttribute('title'); } }); document.querySelectorAll('#botlist li').forEach(li=>{ const b=bots.find(x=>x.id===li.dataset.botId); if(!b) return; if(RAIL_ON){ if(!li.dataset.full) li.dataset.full=li.innerHTML; li.innerHTML=avatarFace(b.avatar, b.avatar_accessory); li.title=b.name; } else if(li.dataset.full){ li.innerHTML=li.dataset.full; li.removeAttribute('title'); } }); }
+async function loadShortcuts(){ try{ SHORTCUTS=await api('/api/shortcuts'); }catch(e){ SHORTCUTS=null; } return SHORTCUTS; }
+function shortcutKeys(e){ const parts=[]; if(e.ctrlKey) parts.push('Ctrl'); if(e.altKey) parts.push('Alt'); if(e.shiftKey) parts.push('Shift'); if(e.metaKey) parts.push('Meta'); let k=e.key; if(k===' ') k='Space'; else if(k.length===1) k=k.toUpperCase(); else if(k===',') k=','; else if(k==='Control'||k==='Alt'||k==='Shift'||k==='Meta') return ''; parts.push(k); return parts.join('+'); }
 async function api(p,o={}){const r=await fetch(p,{headers:{'Content-Type':'application/json'},...o}); if(!r.ok) throw new Error(await r.text()); return r.json();}
 function esc(s){return String(s??'').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function showView(name){
@@ -356,7 +415,7 @@ function showView(name){
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
   $('view-wizard').classList.toggle('hidden', name!=='wizard');
-  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['office','workroom','routines','deals','runs','desktop','live','languages','home','character','phone'].includes(name);
+  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['office','workroom','routines','deals','runs','desktop','live','languages','home','character','phone','artifacts'].includes(name);
   if(name!=='live' && typeof stopLive==='function') stopLive('You left the Live Voice page — the mic is off.');
   $('view-page').classList.toggle('hidden', !_isPage);
   if(_isPage) renderPage(name);
@@ -435,10 +494,11 @@ function bindModelList(selId, providerElId, modelElId){
 }
 async function loadBots(){
   bots=await api('/api/bots'); const ul=$('botlist'); ul.innerHTML='';
-  bots.forEach(b=>{const li=document.createElement('li'); li.innerHTML=`${esc(b.avatar||'🤖')} ${esc(b.name)}`;
+  bots.forEach(b=>{const li=document.createElement('li'); li.dataset.botId=b.id; li.innerHTML=`${avatarFace(b.avatar, b.avatar_accessory)} ${esc(b.name)}`;
     const s=document.createElement('small'); s.textContent=(b.provider||'')+' · '+(b.model||''); li.appendChild(s);
     if(current&&current.id===b.id) li.classList.add('active');
     li.onclick=()=>selectBot(b.id); ul.appendChild(li);});
+  if(RAIL_ON) applyRailIcons(true);
   if(!current && bots.length) selectBot(bots[0].id);
 }
 const CHAT_SUGGESTIONS=[
@@ -468,10 +528,10 @@ async function fillHeroPerm(){
 }
 function renderChat(msgs){const c=$('chat'); c.innerHTML='';
   if(!msgs.length){
-    const face=current?(current.avatar||'🤖'):'🤖';
+    const face=current?avatarFace(current.avatar, current.avatar_accessory):'🤖';
     const name=current?current.name:'your bot';
     c.innerHTML=`<div class="hero chat-hero">
-      <div class="hero-face">${esc(face)}</div>
+      <div class="hero-face">${face}</div>
       <h2>What should we do?</h2>
       <p>Tell ${esc(name)} what to do — in plain words. No prompting, no menus.</p>
       <p><span class="tag" id="hero-model">${heroModelLine()||'No model picked yet'}</span> <span class="tag" id="hero-perm">Permission: …</span></p>
@@ -482,9 +542,18 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
     c.querySelectorAll('[data-chat-suggest]').forEach(el=>el.onclick=()=>{const inp=$('input'); inp.value=el.dataset.chatSuggest; inp.focus();});
     return;
   }
-  msgs.forEach(m=>{const d=document.createElement('div'); d.className='msg '+m.role;
+  msgs.forEach((m,idx)=>{const d=document.createElement('div'); d.className='msg '+m.role;
     d.textContent=m.content||'';
     if(m.role==='assistant'){ const c=effLangCode(); if(langIsRTL(c)) d.dir='rtl'; }
+    if(m.role==='assistant' && NOTIFICATIONS && NOTIFICATIONS.ask_rating){
+      const rate=document.createElement('div'); rate.style.cssText='font-size:12px;color:#888;margin-top:8px';
+      if(m.rating){ rate.textContent=`You rated this ${'★'.repeat(m.rating)}${'☆'.repeat(5-m.rating)}${m.rating_comment?` — “${m.rating_comment}”`:''} · saved on this computer only`; }
+      else{
+        rate.innerHTML=`How was this reply? <span>${[1,2,3,4,5].map(n=>`<button class="ghost small" data-rate="${n}" title="${n} star${n>1?'s':''}">☆</button>`).join('')}</span> <input type="text" placeholder="A word about it (optional)" style="width:200px;padding:4px 8px;font-size:12px" data-rate-comment> <button class="ghost small" data-rate-save>Save</button>`;
+        rate.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>{ rate.dataset.picked=b.dataset.rate; rate.querySelectorAll('[data-rate]').forEach((x,i)=>x.textContent=i<+b.dataset.rate?'★':'☆'); });
+        rate.querySelector('[data-rate-save]').onclick=async()=>{ const r=+(rate.dataset.picked||0); if(!r){ rate.querySelector('[data-rate-save]').textContent='Pick stars first'; return; } const comment=rate.querySelector('[data-rate-comment]').value; try{ await api(`/api/bots/${current.id}/chat/rate`,{method:'POST',body:JSON.stringify({index:idx, rating:r, comment})}); rate.textContent=`Thanks — rated ${'★'.repeat(r)}${'☆'.repeat(5-r)} · saved on this computer only`; }catch(e){ rate.textContent='Could not save the rating: '+e.message; } };
+      }
+      d.appendChild(rate);}
     if(m.role==='assistant' && m.cost_usd!==undefined){
       const f=document.createElement('div');
       f.style.cssText='font-size:12px;color:#888;margin-top:8px';
@@ -531,6 +600,7 @@ async function send(){const inp=$('input'); const text=inp.value.trim(); if(!tex
     talkUsed=false;
     renderChat(await api(`/api/bots/${current.id}/chat`));
     if(res.reply) speakText(res.reply);
+    if(!res.error) notify('reply_arrived', `Reply from ${current.name}.`);
     setMuseStatus('Idle');
     if(res.error==='model_unavailable'&&res.suggested_model){const b=document.createElement('button'); b.textContent=`Switch to ${res.suggested_model} (${res.suggested_provider}) — available now`; b.style.margin='10px 20px';
       b.onclick=async()=>{await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({provider:res.suggested_provider,model:res.suggested_model})}); await loadBots(); selectBot(current.id);};
@@ -607,6 +677,7 @@ function speakAloud(text){
 }
 function speakText(text){
   if(!speakOn || !('speechSynthesis' in window)) return;
+  if(inQuietHours()) return; // quiet hours: no spoken replies
   try{
     window.speechSynthesis.cancel();
     const clean=String(text||'').replace(/[#*`_\[\]()]/g,' ').replace(/\s+/g,' ').trim();
@@ -715,6 +786,7 @@ function startJobPoll(id){
           j.status==='stopped'?`Stopped — finished ${j.results?j.results.length:0} of ${total} step(s). Nothing else ran.`:
           `Job ${j.status} — see the Desktop page for what happened.`;
         showJobOverlay(done, `Job ${j.id} · ${j.status}`);
+        notify(j.status==='done'?'done':'failed', j.status==='done'?`Desktop job finished — ${total} step(s) done.`:`Desktop job ${j.status} — see the Desktop page for what happened.`);
         const b=$('job-stop'); b.textContent='Dismiss'; b.onclick=()=>hideJobOverlay();
         setMuseStatus('Idle');
       }
@@ -723,6 +795,28 @@ function startJobPoll(id){
 }
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'&&$('job-overlay')&&!$('job-overlay').classList.contains('hidden')) stopCurrentJob();
+});
+document.addEventListener('keydown', e=>{
+  if(CAPTURING_SHORTCUT){
+    e.preventDefault();
+    if(e.key==='Escape'){ CAPTURING_SHORTCUT=null; renderPage('set-shortcuts'); return; }
+    const keys=shortcutKeys(e);
+    if(!keys||['Control','Alt','Shift','Meta'].includes(e.key)) return;
+    const id=CAPTURING_SHORTCUT; CAPTURING_SHORTCUT=null;
+    (async()=>{ try{ const all=await api('/api/shortcuts'); all[id].keys=keys; await api('/api/shortcuts',{method:'POST',body:JSON.stringify(all)}); await loadShortcuts(); msg('Shortcut saved.'); renderPage('set-shortcuts'); }catch(err){ msg(err.message); } })();
+    return;
+  }
+  if(!SHORTCUTS||e.isComposing) return;
+  const keys=shortcutKeys(e);
+  if(!keys) return;
+  const hit=Object.entries(SHORTCUTS).find(([,v])=>v.keys&&v.keys===keys);
+  if(!hit) return;
+  e.preventDefault();
+  const action=hit[0];
+  if(action==='new_chat'){ if(!current) return; api(`/api/bots/${current.id}/chat/reset`,{method:'POST'}).then(()=>renderChat([])).catch(()=>{}); }
+  else if(action==='new_bot'){ showView('makebot'); initMakeBot(); }
+  else if(action==='toggle_sidebar'){ document.querySelector('aside').classList.toggle('hidden'); }
+  else if(action==='open_settings'){ showView('set-general'); }
 });
 
 // ---------- Live Voice (real-time) ----------
@@ -841,15 +935,18 @@ function livePlayPcm(b64, rate){
 const AVATARS=["🤖","👔","🔬","🌅","📰","📝","💬","👀"];
 const TABS=[["featured","Featured"],["personal_assistant","Personal Assistant"],["productivity","Productivity"],["research","Research"],["sectors","Sectors"],["more","More"]];
 let activeTab="featured";
+function syncMbAvatarBig(){ const big=$('mb-avatar-big'); if(big) big.innerHTML=avatarFace(mbAvatar, mbAccessory); }
 async function initMakeBot(){
   templates=await api('/api/templates');
   allTools=await api('/api/tools');
   $('avatars').innerHTML='';
-  const big=$('mb-avatar-big'); if(big) big.textContent=mbAvatar;
+  syncMbAvatarBig();
   AVATARS.forEach(a=>{const b=document.createElement('button'); b.type='button'; b.textContent=a;
     if(a===mbAvatar) b.classList.add('selected');
-    b.onclick=()=>{mbAvatar=a; const bg=$('mb-avatar-big'); if(bg) bg.textContent=a; document.querySelectorAll('#avatars button').forEach(x=>x.classList.toggle('selected',x.textContent===a));};
+    b.onclick=()=>{mbAvatar=a; syncMbAvatarBig(); document.querySelectorAll('#avatars button').forEach(x=>x.classList.toggle('selected',x.textContent===a));};
     $('avatars').appendChild(b);});
+  if($('mb-accessory')){ $('mb-accessory').value=mbAccessory; $('mb-accessory').onchange=e=>{mbAccessory=e.target.value; syncMbAvatarBig();}; }
+  if($('mb-schedule-kind')){ const sk=$('mb-schedule-kind'); sk.onchange=()=>{ const k=sk.value; $('mb-schedule-time-row').style.display=(k==='off'||k==='hourly')?'none':''; $('mb-schedule-weekday-row').style.display=(k==='weekly')?'':'none'; }; sk.dispatchEvent(new Event('change')); }
   $('mb-tools').innerHTML='';
   allTools.forEach(t=>{const l=document.createElement('label'); l.style.cssText='font-weight:normal;display:inline-flex;gap:4px;align-items:center;margin:4px 8px 4px 0';
     l.innerHTML=`<input type="checkbox" value="${t.name}" ${mbTools.includes(t.name)?'checked':''}> ${t.name}`;
@@ -874,8 +971,14 @@ function renderCards(){
     c.innerHTML=`<div class="icon">${esc(t.icon||t.avatar||'🤖')}</div><h3>${esc(t.name)}</h3><p class="tpl-desc">${esc(t.description||'')}</p>${(t.default_tools||[]).length?`<p class="tpl-uses">Uses ${esc(t.default_tools.join(', '))}</p>`:''}<p style="color:#888;font-size:12px;margin-top:6px">${esc(t.category.replace('_',' '))} · ${esc(t.schedule||'on_demand')}</p>`;
     c.onclick=()=>{mbTemplate=t.id;
       $('mb-name').value=t.name; $('mb-job').value=''; $('mb-instructions').value=t.instructions||'';
-      mbAvatar=t.avatar||t.icon||'🤖'; $('mb-provider').value=t.provider||'lmstudio'; $('mb-model').value=t.model||'qwen3.5';
-      $('mb-schedule').value=t.schedule||'on_demand'; mbTools=[...(t.default_tools||[])];
+      if($('mb-persona')) $('mb-persona').value='';
+      mbAvatar=t.avatar||t.icon||'🤖'; mbAccessory='none'; $('mb-provider').value=t.provider||'lmstudio'; $('mb-model').value=t.model||'qwen3.5';
+      if($('mb-schedule-kind')){ const sc=(t.schedule||'on_demand'); let kind='off', time='09:00', wd='0';
+        let m=sc.match(/^(daily|weekdays)\s+(\d{1,2}:\d{2})$/); if(m){ kind=m[1]; time=m[2]; }
+        else if(sc.match(/^weekly\s+(\w+)\s+(\d{1,2}:\d{2})$/)){ const mm=sc.match(/^weekly\s+(\w+)\s+(\d{1,2}:\d{2})$/); kind='weekly'; wd=String(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].indexOf(mm[1].toLowerCase())); time=mm[2]; }
+        else if(sc==='hourly'||sc==='interval') kind='hourly';
+        $('mb-schedule-kind').value=kind; $('mb-schedule-time').value=time; $('mb-schedule-weekday').value=wd; $('mb-schedule-kind').dispatchEvent(new Event('change')); }
+      mbTools=[...(t.default_tools||[])];
       if($('mb-talk')) $('mb-talk').checked=(t.talk_mode||'off')==='on';
       if($('mb-showhow')) $('mb-showhow').checked=(t.show_me_how||'off')==='on';
       initMakeBot(); $('mb-msg').textContent='Template loaded — edit anything, then Create bot.';};
@@ -890,10 +993,14 @@ if($('mb-name-next')) $('mb-name-next').onclick=()=>{const j=$('mb-job'); if(j){
 $('mb-create').onclick=async()=>{
   const name=$('mb-name').value.trim();
   if(!name){$('mb-msg').textContent='Please name your bot first.'; return;}
+  const sk=$('mb-schedule-kind')?$('mb-schedule-kind').value:'off';
+  const st=$('mb-schedule-time')?$('mb-schedule-time').value:'09:00';
+  const wd=$('mb-schedule-weekday')?['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][+$('mb-schedule-weekday').value]:'Monday';
+  const schedule=sk==='off'?'off':sk==='hourly'?'hourly':sk==='daily'?`daily ${st}`:sk==='weekdays'?`weekdays ${st}`:`weekly ${wd} ${st}`;
   const b=await api('/api/bots',{method:'POST',body:JSON.stringify({
     name, job:$('mb-job').value.trim(), instructions:$('mb-instructions').value.trim(),
-    template:mbTemplate, avatar:mbAvatar, provider:$('mb-provider').value, model:$('mb-model').value.trim()||'qwen3.5',
-    routing:$('mb-routing').value, language:$('mb-language')?$('mb-language').value:'auto', talk_mode:$('mb-talk')&&$('mb-talk').checked?'on':'off', show_me_how:$('mb-showhow')&&$('mb-showhow').checked?'on':'off', schedule:$('mb-schedule').value.trim()||'on_demand', enabled_tools:mbTools})});
+    template:mbTemplate, avatar:mbAvatar, avatar_accessory:mbAccessory, persona:$('mb-persona')?$('mb-persona').value.trim():'', provider:$('mb-provider').value, model:$('mb-model').value.trim()||'qwen3.5',
+    routing:$('mb-routing').value, language:$('mb-language')?$('mb-language').value:'auto', talk_mode:$('mb-talk')&&$('mb-talk').checked?'on':'off', show_me_how:$('mb-showhow')&&$('mb-showhow').checked?'on':'off', schedule, enabled_tools:mbTools})});
   $('mb-msg').textContent='Created ✓';
   mbTemplate=''; mbTools=[]; await loadBots(); selectBot(b.id);
 };
@@ -926,6 +1033,12 @@ async function renderPage(name){
     else if(name==='set-secure') el.innerHTML=await secureHtml();
     else if(name==='set-permissions') el.innerHTML=await permissionsHtml();
     else if(name==='set-devices') el.innerHTML=await devicesHtml();
+    else if(name==='set-notifications') el.innerHTML=await notificationsHtml();
+    else if(name==='set-usage') el.innerHTML=await usageHtml();
+    else if(name==='set-browser') el.innerHTML=await browserHtml();
+    else if(name==='set-shortcuts') el.innerHTML=await shortcutsHtml();
+    else if(name==='set-appearance') el.innerHTML=await appearanceHtml();
+    else if(name==='artifacts') el.innerHTML=await artifactsHtml();
     bindPage(name);
   }catch(e){ el.innerHTML='<h2>Error</h2><p>'+esc(e.message)+'</p>'; }
 }
@@ -1053,7 +1166,7 @@ async function routinesHtml(){
   <label>Name</label><input id="rt-name" type="text" placeholder="e.g. Daily BOQ price check">
   <label>Bot</label><select id="rt-bot">${bots.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>
   <label>What should the bot do, every time?</label><textarea id="rt-task" rows="3" placeholder="e.g. Check the price list in the workspace and tell me what changed since yesterday."></textarea>
-  <label>When</label><select id="rt-kind"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every … minutes</option><option value="once">Once</option></select>
+  <label>When</label><select id="rt-kind"><option value="daily">Daily</option><option value="weekdays">Weekdays (Mon–Fri)</option><option value="weekly">Weekly</option><option value="interval">Every … minutes</option><option value="once">Once</option></select>
   <div id="rt-time-row"><label>Time</label><input id="rt-time" type="time" value="09:00"></div>
   <div id="rt-weekday-row" style="display:none"><label>Weekday</label><select id="rt-weekday"><option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option></select></div>
   <div id="rt-interval-row" style="display:none"><label>Every</label><select id="rt-interval"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option><option value="240">4 hours</option><option value="1440">1 day</option></select></div>
@@ -1624,7 +1737,8 @@ const TOOL_GROUPS=[
   ['Web search',['web_search','browser_search']],
   ['Browser automation',['browser_open','browser_read','browser_screenshot','browser_click','browser_type']],
   ['Desktop control',['desktop_inspect','desktop_activate','desktop_click','desktop_type','desktop_key','desktop_screenshot']],
-  ['Files & workspace',['list_files','read_file','write_file','run_command']]
+  ['Files & workspace',['list_files','read_file','write_file','run_command']],
+  ['Memory & planning',['search_chats','manage_tasks']]
 ];
 async function toolsHtml(){
   const list=await api('/api/tools');
@@ -1749,9 +1863,132 @@ async function devicesHtml(){
   <h3>Add a device</h3><div class="row"><div><label>Name</label><input id="dev-name" type="text"></div><div><label>Kind</label><input id="dev-kind" type="text" value="computer"></div></div>
   <div style="margin-top:10px"><button id="dev-add">Add device</button></div><div id="page-msg"></div>`;
 }
+
+// ---------- New Settings pages: Notifications / Usage / Browser / Shortcuts / Appearance + Artifacts ----------
+async function notificationsHtml(){
+  const n=await loadNotifications()||{play_sounds:true,reply_arrived:true,needs_you:true,done:true,failed:true,routine_fired:true,ask_rating:true,quiet_hours_enabled:false,quiet_start:'22:00',quiet_end:'07:00'};
+  const tog=(k,label,note)=>`<label style="display:block;margin:14px 0 2px"><input type="checkbox" data-notif="${k}" ${n[k]?'checked':''}> <b>${label}</b></label><p class="note" style="margin:0 0 0 24px">${note}</p>`;
+  return `<h2>🔔 Notifications</h2><p>What LocalBotz tells you about, while you work. Sounds and toasts only — nothing is sent anywhere.</p>
+  ${tog('play_sounds','Play sounds','A short beep with each notification.')}
+  ${tog('reply_arrived','Reply arrived','When a bot finishes answering you in chat.')}
+  ${tog('needs_you','Needs you','When an office job is waiting for your approval.')}
+  ${tog('done','Done','When a desktop job finishes.')}
+  ${tog('failed','Failed','When a desktop job or routine fails.')}
+  ${tog('routine_fired','Routine fired','When a routine runs.')}
+  ${tog('ask_rating','Ask how the bot is doing','Shows a one-line rating under each reply. Your rating stays on this computer — it is sent nowhere.')}
+  <h3 style="margin-top:28px">Quiet hours</h3>
+  <label style="display:inline"><input type="checkbox" id="nt-quiet" ${n.quiet_hours_enabled?'checked':''}> Quiet hours — no sounds and no spoken nudges</label>
+  <div class="row"><div><label>From</label><input id="nt-start" type="time" value="${esc(n.quiet_start||'22:00')}"></div><div><label>Until</label><input id="nt-end" type="time" value="${esc(n.quiet_end||'07:00')}"></div></div>
+  <p class="note">Quiet hours can cross midnight (22:00–07:00). Off by default.</p>
+  <div id="page-msg"></div>`;
+}
+async function usageHtml(){
+  const u=await api('/api/usage').catch(()=>null);
+  if(!u) return `<h2>📊 Usage</h2><p>Could not load usage.</p><div id="page-msg"></div>`;
+  const money=x=>'$'+Number(x||0).toFixed(4);
+  const m=u.spend_this_month, w=u.this_week;
+  const max=Math.max(1, ...u.daily_14.map(d=>d.calls));
+  const bars=u.daily_14.map(d=>`<div class="bar ${d.calls?'':'zero'}" style="height:${Math.max(2, Math.round(d.calls/max*100))}%" title="${esc(d.date)} — ${d.calls} request(s), ${money(d.cost_usd)}"></div>`).join('');
+  const labels=u.daily_14.map(d=>`<span>${esc(d.label)}</span>`).join('');
+  const byModel=(u.by_model||[]).map(r=>`<tr><td>${esc(r.model)}</td><td>${esc(r.provider||'')}</td><td>${r.calls}</td><td>${r.input_tokens.toLocaleString()}</td><td>${r.output_tokens.toLocaleString()}</td><td>${money(r.cost_usd)}</td></tr>`).join('');
+  return `<h2>📊 Usage</h2><p>What the models have actually done — counted from real calls only. Local models cost $0. No credits, no fake numbers.</p>
+  ${u.tracked?'':`<p class="note"><b>Not tracked yet.</b> LocalBotz only counts real model calls. Chat with a bot and the numbers appear here.</p>`}
+  <h3>Spend this month</h3>
+  <p style="font-size:22px;margin:4px 0"><b>${money(m.cost_usd)}</b> <span class="note">· ${m.calls} request(s) · ${m.input_tokens.toLocaleString()} in / ${m.output_tokens.toLocaleString()} out tokens</span></p>
+  <h3>This week</h3>
+  <table><tr><th>Requests</th><th>Tokens in</th><th>Tokens out</th><th>Est. cost</th></tr><tr><td>${w.calls}</td><td>${w.input_tokens.toLocaleString()}</td><td>${w.output_tokens.toLocaleString()}</td><td>${money(w.cost_usd)}</td></tr></table>
+  <h3>Daily activity — last 14 days</h3>
+  <div class="bars">${bars}</div><div class="bars-labels">${labels}</div>
+  <p class="note">Requests per day, from the real call log.</p>
+  <h3>By model</h3>
+  <table><tr><th>Model</th><th>Provider</th><th>Requests</th><th>Tokens in</th><th>Tokens out</th><th>Est. cost</th></tr>${byModel||'<tr><td colspan="6">No model calls tracked yet.</td></tr>'}</table>
+  <div id="page-msg"></div>`;
+}
+async function browserHtml(){
+  const b=await api('/api/browser-settings');
+  const chromeNote=b.chrome_available?'Chrome is installed on this computer.':'Chrome is not installed on this computer — the agent can only use the built-in browser.';
+  return `<h2>🌐 Browser</h2><p>The built-in browser the agent drives — Chromium, on this computer. Nothing here is a cloud browser.</p>
+  <label style="display:block;margin:14px 0 2px"><input type="checkbox" id="br-enabled" ${b.enabled?'checked':''}> <b>Let the agent control the built-in browser</b></label>
+  <p class="note" style="margin:0 0 0 24px">When off, browser tools refuse with an honest error — the agent cannot open, read, click or type in any browser page.</p>
+  <label>Which browser</label>
+  <select id="br-browser"><option value="builtin" ${b.browser==='builtin'?'selected':''}>Built-in (Chromium)</option><option value="chrome" ${b.browser==='chrome'?'selected':''} ${b.chrome_available?'':'disabled'}>Google Chrome (if installed)</option></select>
+  <p class="note">${esc(chromeNote)} <button class="ghost small" id="br-check-chrome">Check again</button></p>
+  <label>Home page — opened when the agent opens a blank browser tab</label>
+  <input id="br-home" type="text" value="${esc(b.home_page||'')}" placeholder="https://duckduckgo.com">
+  <label>Approval — when the agent may click or type in the browser</label>
+  <select id="br-approval"><option value="ask" ${b.approval==='ask'?'selected':''}>Ask — the agent may only read and open pages</option><option value="always" ${b.approval==='always'?'selected':''}>Always — the agent may click and type too</option></select>
+  <p class="note">Ask still lets the agent read pages; it only blocks clicking and typing. The bot's own approval mode in Settings &gt; Permissions still applies on top.</p>
+  <div style="margin:10px 0"><button id="br-save">Save browser settings</button></div>
+  <h3 style="margin-top:28px">Browsing data</h3>
+  <p class="note">The built-in browser runs on a temporary profile that is thrown away when it closes. Clearing deletes the screenshots the agent saved and closes the browser. It does not touch your files or chats.</p>
+  <div style="margin:8px 0"><button id="br-clear" class="ghost">Clear browsing data</button></div>
+  <div id="page-msg"></div>`;
+}
+async function shortcutsHtml(){
+  const list=await loadShortcuts()||{};
+  const rows=Object.entries(list).map(([id,e])=>`<div class="shortcut-row"><div><b>${esc(e.label)}</b><br><span class="note">${esc(e.desc)}</span></div><span class="keys">${esc(e.keys||'Unbound')}</span><button class="small" data-sc-change="${id}">Change</button> <button class="small ghost" data-sc-unbind="${id}">Unbind</button></div>`).join('');
+  return `<h2>⌨️ Keyboard shortcuts</h2><p>Shortcuts that work anywhere in the app. Change opens a listener — press the new combination, Esc to cancel. Unbound shortcuts do nothing.</p>
+  ${rows}
+  <p class="note">Only shortcuts that do something real are listed — there is no terminal and no tab bar in LocalBotz, so there are no shortcuts for those.</p>
+  <div id="page-msg"></div>`;
+}
+async function appearanceHtml(){
+  const a=await loadAppearance()||{};
+  const opt=(v,sel)=>v===sel?'selected':'';
+  const swatches=[['teal','Teal'],['emerald','Emerald'],['green','Green'],['cyan','Cyan']].map(([v,l])=>`<button type="button" class="ghost small" data-accent="${v}" style="border:2px solid ${a.accent===v?'var(--brand)':'var(--border)'};margin:2px"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${{teal:'#0f766e',emerald:'#047857',green:'#15803d',cyan:'#0e7490'}[v]};vertical-align:-2px;margin-right:6px"></span>${l}</button>`).join('');
+  return `<h2>🎨 Appearance</h2><p>How LocalBotz looks. Everything is stored on this computer and applied straight away.</p>
+  <label>Theme</label><select id="ap-theme"><option value="light" ${opt('light',a.theme)}>Light</option><option value="dark" ${opt('dark',a.theme)}>Dark</option><option value="system" ${opt('system',a.theme)}>System — follow the computer</option></select>
+  <label>Accent — LocalBotz teal, in four shades</label><div>${swatches}</div>
+  <label>Contrast</label><select id="ap-contrast"><option value="system" ${opt('system',a.contrast)}>System</option><option value="standard" ${opt('standard',a.contrast)}>Standard</option><option value="high" ${opt('high',a.contrast)}>High</option></select>
+  <label>Corners</label><select id="ap-corners"><option value="sharp" ${opt('sharp',a.corners)}>Sharp</option><option value="default" ${opt('default',a.corners)}>Default</option><option value="round" ${opt('round',a.corners)}>Round</option></select>
+  <label>Density</label><select id="ap-density"><option value="comfortable" ${opt('comfortable',a.density)}>Comfortable</option><option value="compact" ${opt('compact',a.density)}>Compact</option></select>
+  <label style="display:block;margin:14px 0 2px"><input type="checkbox" id="ap-translucent" ${a.translucent?'checked':''}> <b>Translucent window</b></label><p class="note" style="margin:0 0 0 24px">Sidebar and header turn slightly see-through.</p>
+  <label style="display:block;margin:14px 0 2px"><input type="checkbox" id="ap-tabs-two" ${a.tabs_two_rows?'checked':''}> <b>Two rows of tabs</b></label><p class="note" style="margin:0 0 0 24px">Template tabs in Make a bot wrap into two rows. Off keeps them in one scrolling row.</p>
+  <label style="display:block;margin:14px 0 2px"><input type="checkbox" id="ap-rail" ${a.rail_icons?'checked':''}> <b>Rail icons</b></label><p class="note" style="margin:0 0 0 24px">The sidebar narrows to icons only — hover any icon to see its name.</p>
+  <label>Text size</label><select id="ap-text"><option value="13" ${opt(13,a.text_size)}>13</option><option value="14" ${opt(14,a.text_size)}>14</option><option value="15" ${opt(15,a.text_size)}>15</option></select>
+  <label>Interface font</label><select id="ap-font-ui"><option value="system" ${opt('system',a.font_ui)}>System</option><option value="segoe" ${opt('segoe',a.font_ui)}>Segoe UI</option><option value="arial" ${opt('arial',a.font_ui)}>Arial</option><option value="georgia" ${opt('georgia',a.font_ui)}>Georgia</option><option value="verdana" ${opt('verdana',a.font_ui)}>Verdana</option></select>
+  <label>Code font</label><select id="ap-font-code"><option value="system" ${opt('system',a.font_code)}>System monospace</option><option value="consolas" ${opt('consolas',a.font_code)}>Consolas</option><option value="menlo" ${opt('menlo',a.font_code)}>Menlo</option><option value="courier" ${opt('courier',a.font_code)}>Courier New</option></select>
+  <div style="margin:10px 0"><button id="ap-save">Save appearance</button></div>
+  <div id="page-msg"></div>`;
+}
+let ART_FILTER='all';
+async function artifactsHtml(){
+  const docs=await api('/api/documents').catch(()=>[]);
+  let leads=[]; try{ leads=await api('/api/leads'); }catch(e){}
+  const leadName=id=>(leads.find(l=>l.id===id)||{}).business_name||id;
+  const kindName=f=>({docx:'Word document',xlsx:'Excel sheet',pptx:'Deck'})[f]||'File';
+  const rows=docs.map(d=>{ const isLead=d.office_id==='leads'; const where=isLead?('Lead: '+leadName(d.job_id)):((d.office_name||'Office')+(d.job_title?' — '+d.job_title:'')); return `<tr data-kind="file"><td><b>${esc(d.filename)}</b></td><td>${kindName(d.format)}</td><td>${new Date((d.created_at||0)*1000).toLocaleString()}</td><td>${esc(where)}</td><td><a href="${esc(d.url)}" download><button class="small">Download</button></a></td></tr>`; }).join('');
+  const n=docs.length;
+  const tab=(id,label,count)=>`<button class="ghost small" data-art-tab="${id}" style="${ART_FILTER===id?'border-color:var(--brand);color:var(--brand-ink);font-weight:700':''}">${label} (${count})</button>`;
+  let body='';
+  if(ART_FILTER==='images') body='<p class="note">No images yet — LocalBotz makes documents, not images.</p>';
+  else if(ART_FILTER==='links') body='<p class="note">No links yet — LocalBotz saves files on your computer, not links.</p>';
+  else if(!n) body='<p class="note">Nothing made yet — documents, decks and sheets the agent makes collect here.</p>';
+  else body=`<table><tr><th>Name</th><th>Kind</th><th>Date</th><th>Office / lead</th><th></th></tr>${rows}</table>`;
+  return `<h2>🗂️ Artifacts</h2><p>Everything the agent has made — office job exports and lead proposal packs. Files live on this computer.</p>
+  <div style="display:flex;gap:6px;margin:12px 0">${tab('all','All',n)}${tab('file','Files',n)}${tab('images','Images',0)}${tab('links','Links',0)}</div>
+  ${body}<div id="page-msg"></div>`;
+}
 function bindPage(name){
   const msg=t=>{const m=$('page-msg'); if(m) m.textContent=t;};
-  if(name==='live'){ const ls=$('live-start'); if(ls) ls.onclick=startLive; const lt=$('live-stop'); if(lt) lt.onclick=()=>stopLive('Stopped. The words are saved in the bot\'s chat history.'); const li=$('live-interrupt'); if(li) li.onclick=()=>liveInterrupt(); }
+  if(['home','office','runs'].includes(name)) checkNeedsYou();
+  // Notifications
+  document.querySelectorAll('[data-notif]').forEach(el=>el.onchange=async()=>{ try{ await api('/api/notifications',{method:'POST',body:JSON.stringify({[el.dataset.notif]:el.checked})}); await loadNotifications(); msg('Saved.'); }catch(e){ msg(e.message); } });
+  if(q('nt-quiet')) q('nt-quiet').onchange=async()=>{ try{ await api('/api/notifications',{method:'POST',body:JSON.stringify({quiet_hours_enabled:q('nt-quiet').checked})}); await loadNotifications(); msg('Saved.'); }catch(e){ msg(e.message); } };
+  if(q('nt-start')) q('nt-start').onchange=async()=>{ try{ await api('/api/notifications',{method:'POST',body:JSON.stringify({quiet_start:q('nt-start').value})}); await loadNotifications(); msg('Saved.'); }catch(e){ msg(e.message); } };
+  if(q('nt-end')) q('nt-end').onchange=async()=>{ try{ await api('/api/notifications',{method:'POST',body:JSON.stringify({quiet_end:q('nt-end').value})}); await loadNotifications(); msg('Saved.'); }catch(e){ msg(e.message); } };
+  // Browser
+  if(q('br-save')) q('br-save').onclick=async()=>{ try{ const r=await api('/api/browser-settings',{method:'POST',body:JSON.stringify({enabled:q('br-enabled').checked, browser:q('br-browser').value, home_page:q('br-home').value.trim(), approval:q('br-approval').value})}); msg('Browser settings saved.'); renderPage(name); }catch(e){ msg(e.message); } };
+  if(q('br-check-chrome')) q('br-check-chrome').onclick=async()=>{ q('br-check-chrome').textContent='Checking…'; try{ const r=await api('/api/browser-settings/check-chrome',{method:'POST'}); msg(r.chrome_available?'Chrome found — you can pick it above.':'Chrome is not installed on this computer.'); renderPage(name); }catch(e){ msg(e.message); } };
+  if(q('br-clear')) q('br-clear').onclick=async()=>{ if(!confirm('Clear browsing data? This closes the built-in browser and deletes the screenshots the agent saved.')) return; try{ const r=await api('/api/browser-settings/clear',{method:'POST'}); msg(r.cleared||'Cleared.'); }catch(e){ msg(e.message); } };
+  // Shortcuts
+  document.querySelectorAll('[data-sc-unbind]').forEach(el=>el.onclick=async()=>{ try{ const all=await api('/api/shortcuts'); all[el.dataset.scUnbind].keys=''; await api('/api/shortcuts',{method:'POST',body:JSON.stringify(all)}); await loadShortcuts(); msg('Shortcut unbound.'); renderPage(name); }catch(e){ msg(e.message); } });
+  document.querySelectorAll('[data-sc-change]').forEach(el=>el.onclick=()=>{ CAPTURING_SHORTCUT=el.dataset.scChange; el.textContent='Press a key… (Esc to cancel)'; });
+  // Appearance
+  document.querySelectorAll('[data-accent]').forEach(el=>el.onclick=async()=>{ APPEARANCE=APPEARANCE||{}; APPEARANCE.accent=el.dataset.accent; applyAppearance(); document.querySelectorAll('[data-accent]').forEach(x=>x.style.borderColor=x===el?'var(--brand)':'var(--border)'); });
+  if(q('ap-save')) q('ap-save').onclick=async()=>{ try{ const body={theme:q('ap-theme').value, accent:(APPEARANCE||{}).accent||'teal', contrast:q('ap-contrast').value, corners:q('ap-corners').value, density:q('ap-density').value, text_size:parseInt(q('ap-text').value)||14, font_ui:q('ap-font-ui').value, font_code:q('ap-font-code').value, translucent:q('ap-translucent').checked, tabs_two_rows:q('ap-tabs-two').checked, rail_icons:q('ap-rail').checked}; const a=await api('/api/appearance',{method:'POST',body:JSON.stringify(body)}); APPEARANCE=a; applyAppearance(); if(body.theme==='light'||body.theme==='dark'){ try{ await api('/api/settings',{method:'POST',body:JSON.stringify({theme:body.theme})}); settings.theme=body.theme; }catch(e){} } msg('Appearance saved.'); }catch(e){ msg(e.message); } };
+  // Artifacts filter tabs
+  document.querySelectorAll('[data-art-tab]').forEach(el=>el.onclick=()=>{ ART_FILTER=el.dataset.artTab; renderPage(name); });{ const ls=$('live-start'); if(ls) ls.onclick=startLive; const lt=$('live-stop'); if(lt) lt.onclick=()=>stopLive('Stopped. The words are saved in the bot\'s chat history.'); const li=$('live-interrupt'); if(li) li.onclick=()=>liveInterrupt(); }
   // Home command centre
   if(q('home-hear')||q('home-hear-brief')){ const brief=async()=>{ try{ return (await api('/api/brief')).text||''; }catch(e){ return ''; } };
     if(q('home-hear')) q('home-hear').onclick=async()=>{ const g=await api('/api/character/greet').catch(()=>({greeting:''})); speakAloud((g.greeting||'')+' '+(await brief())); };
@@ -1942,7 +2179,7 @@ function bindPage(name){
     }catch(e){ msg(e.message); }
   };
   document.querySelectorAll('[data-job-stop]').forEach(el=>el.onclick=async()=>{ try{ await api(`/api/desktop/job/${el.dataset.jobStop}/stop`,{method:'POST'}); msg('Job stopped — no further step will run.'); renderPage(name); }catch(e){ msg(e.message); } });
-  document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
+  document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); notify('routine_fired', `Routine "${r.name}" ran: ${r.last_status}.`); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-rt-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/routines/${el.dataset.rtToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-rt-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this routine?')) return; await api(`/api/routines/${el.dataset.rtDel}`,{method:'DELETE'}); renderPage(name);});
   if(q('learn-add')) q('learn-add').onclick=async()=>{try{await api('/api/learnings',{method:'POST',body:JSON.stringify({text:q('learn-text').value,bot_id:q('learn-bot').value})}); msg('Taught — the team will remember that.'); renderPage(name);}catch(e){msg(e.message);}};
@@ -2048,5 +2285,5 @@ if(q('wiz-back-4')) q('wiz-back-4').onclick=()=>{$('wiz-4').classList.add('hidde
 if(q('wiz-skip-4')) q('wiz-skip-4').onclick=wizFinish;
 if(q('wiz-finish')) q('wiz-finish').onclick=wizFinish;
 if(q('wiz-skip')) q('wiz-skip').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})}); showView('chat');};
-loadStatus(); loadProviders().then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; await loadCharacter(); syncFloatbar(); await loadBots(); if(!s.onboarding_done) showWizard(); else showView('home'); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
+loadStatus(); loadProviders().then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; await loadNotifications(); await loadAppearance(); await loadShortcuts(); applyAppearance(); if(window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ if((APPEARANCE||{}).theme==='system') applyAppearance(); }); await loadCharacter(); syncFloatbar(); await loadBots(); if(!s.onboarding_done) showWizard(); else showView('home'); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
 </script>

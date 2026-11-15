@@ -496,6 +496,8 @@ TOOL_DEFS = [
     {"type": "function", "function": {"name": "read_file", "description": "Read a file in the workspace folder (relative path).", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
     {"type": "function", "function": {"name": "write_file", "description": "Write content to a file in the workspace folder (relative path). Creates parent folders.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
     {"type": "function", "function": {"name": "run_command", "description": "Run a safe allowlisted command in the workspace folder (30s timeout). Works the same on Windows, macOS and Linux: ls/dir, pwd, echo, cat/type, head, tail, wc, grep, find, python, node, git, mkdir, date.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "search_chats", "description": "Search your past chats with every bot (stored only on this computer) and return matching replies with the bot name and date.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "manage_tasks", "description": "Work with the persistent-agent task list: action list | add | done | remove. add needs a goal; done and remove need a task_id. Tasks run in the background while the app is open. Omit bot_id to use your own tasks.", "parameters": {"type": "object", "properties": {"action": {"type": "string"}, "goal": {"type": "string"}, "task_id": {"type": "string"}, "bot_id": {"type": "string"}}}}},
 ]
 
 # ---------- storage helpers ----------
@@ -536,6 +538,8 @@ def load_bots():
             b["provider"] = DEFAULT_PROVIDER
         b.setdefault("model", PROVIDERS[b["provider"]]["default_model"])
         b.setdefault("routing", "off")
+        b.setdefault("persona", "")
+        b.setdefault("avatar_accessory", "none")
         b.setdefault("talk_mode", "off")
         b.setdefault("show_me_how", "off")
         b.setdefault("language", "auto")
@@ -663,12 +667,16 @@ def _get_page():
                                "Install browser support with: pip install -r requirements-browser.txt "
                                "&& playwright install chromium — or re-run the starter with --with-browser. "
                                "Everything else in the app works without it.") from e
+        if not load_browser_settings().get("enabled", True):
+            raise RuntimeError("Browser control is off in Settings > Browser — turn it on to let the agent use the built-in browser.")
         try:
             _pw = sync_playwright().start()
             # If a proxy is configured in the environment (e.g. a sandbox or
             # corporate proxy), pass it to Chromium; otherwise go direct.
             # On a normal home computer there is no proxy env var, so this is a no-op.
             launch_kwargs = {"headless": True}
+            if load_browser_settings().get("browser") == "chrome":
+                launch_kwargs["channel"] = "chrome"
             _proxy = os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("HTTP_PROXY")
             if _proxy:
                 from urllib.parse import urlparse
@@ -687,6 +695,11 @@ def _get_page():
 
 def tool_browser_open(url: str) -> str:
     try:
+        url = (url or "").strip()
+        if not url:
+            url = load_browser_settings().get("home_page") or ""
+        if not url:
+            return "No URL given and no home page set (Settings > Browser)."
         page = _get_page()
         page.goto(url, timeout=30000, wait_until="domcontentloaded")
         return f"Opened {url} — title: {page.title()!r}"
@@ -1294,6 +1307,71 @@ def tool_run_command(command: str) -> str:
     except Exception as e:
         return f"run_command failed: {e}"
 
+def tool_search_chats(query: str) -> str:
+    """Search past chats (all bots, this computer only) for a phrase.
+    The data is data/chats/<bot>.json, written by every chat."""
+    q = (query or "").strip().lower()
+    if not q:
+        return "Give a word or phrase to search your past chats for."
+    hits = []
+    for bot in load_bots():
+        for i, m in enumerate(load_chat(bot["id"])):
+            text = (m.get("content") or "")
+            if q in text.lower():
+                when = ""
+                try:
+                    when = datetime.datetime.fromtimestamp(int(m.get("ts") or 0)).strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    pass
+                snippet = text.strip().replace("\n", " ")
+                hits.append(f"[{bot.get('name')} · {m.get('role')} · {when}] {snippet[:300]}")
+                if len(hits) >= 5:
+                    break
+        if len(hits) >= 5:
+            break
+    if not hits:
+        return f"No past chat mentions '{query}'."
+    return "\n\n".join(hits)
+
+
+def tool_manage_tasks(action: str, goal: str = "", task_id: str = "", bot_id: str = "") -> str:
+    """List / add / finish / remove persistent-agent tasks
+    (data/agent_tasks.json). Tasks run in the background while the app
+    is open; this is the same list as the chat panel's task form."""
+    action = (action or "list").strip().lower()
+    tasks = load_tasks()
+    if action == "list":
+        mine = [t for t in tasks if not bot_id or t.get("bot_id") == bot_id]
+        if not mine:
+            return "No tasks yet."
+        return "\n".join(f"{t['id']} [{t.get('status')}] {t.get('goal')}" for t in mine[-10:])
+    if action == "add":
+        goal = (goal or "").strip()
+        if not goal:
+            return "Give a goal for the task."
+        if not bot_id or not get_bot(bot_id):
+            return "That bot does not exist."
+        task = {"id": uuid.uuid4().hex[:8], "bot_id": bot_id, "goal": goal,
+                "status": "pending", "steps": [], "result": "",
+                "created_at": int(time.time()), "finished_at": None}
+        tasks.append(task)
+        save_tasks(tasks)
+        return f"Task added ({task['id']}): {goal}"
+    if action in ("done", "remove"):
+        task = next((t for t in tasks if t["id"] == task_id and (not bot_id or t.get("bot_id") == bot_id)), None)
+        if not task:
+            return f"No task with id {task_id}."
+        if action == "done":
+            task["status"] = "done"
+            task["finished_at"] = int(time.time())
+            save_tasks(tasks)
+            return f"Task {task_id} marked done: {task.get('goal')}"
+        tasks = [t for t in tasks if t["id"] != task_id]
+        save_tasks(tasks)
+        return f"Task {task_id} removed: {task.get('goal')}"
+    return "Action must be list, add, done or remove."
+
+
 TOOLS = {
     "web_search": lambda a: tool_web_search(a.get("query", "")),
     "browser_search": lambda a: tool_browser_search(a.get("query", "")),
@@ -1312,6 +1390,8 @@ TOOLS = {
     "read_file": lambda a: tool_read_file(a.get("path", "")),
     "write_file": lambda a: tool_write_file(a.get("path", ""), a.get("content", "")),
     "run_command": lambda a: tool_run_command(a.get("command", "")),
+    "search_chats": lambda a: tool_search_chats(a.get("query", "")),
+    "manage_tasks": lambda a, b: tool_manage_tasks(a.get("action", "list"), a.get("goal", ""), a.get("task_id", ""), a.get("bot_id", "") or (b or {}).get("id", "")),
 }
 
 
@@ -1319,6 +1399,10 @@ TOOLS = {
 # One store per area, so Settings > Connectors and Library > Connectors (etc.)
 # can never disagree. All files live under data/ (gitignored).
 AVATARS = ["🤖", "👔", "🔬", "🌅", "📰", "📝", "💬", "👀"]
+# Avatar accessories (Make a bot): an emoji drawn over the avatar.
+AVATAR_ACCESSORIES = {"none": "", "glasses": "👓", "shades": "🕶️",
+                      "bow": "🎀", "cap": "🧢", "headphones": "🎧",
+                      "antenna": "📡"}
 CONNECTORS_FILE = DATA_DIR / "connectors.json"
 MCP_FILE = DATA_DIR / "mcp_servers.json"
 SKILLS_FILE = DATA_DIR / "skills.json"
@@ -1328,6 +1412,10 @@ MESSAGING_FILE = DATA_DIR / "messaging.json"
 DEVICES_FILE = DATA_DIR / "devices.json"
 TEMPLATES_FILE = DATA_DIR / "templates.json"
 SHIPPED_TEMPLATES_FILE = BASE_DIR / "templates.json"
+NOTIFICATIONS_FILE = DATA_DIR / "notifications.json"
+BROWSER_SETTINGS_FILE = DATA_DIR / "browser_settings.json"
+SHORTCUTS_FILE = DATA_DIR / "shortcuts.json"
+APPEARANCE_FILE = DATA_DIR / "appearance.json"
 
 SERVICE_CONNECTORS = [
     # Service connectors. "category" groups them in the UI. "token_env"
@@ -1649,6 +1737,12 @@ def _tool_allowed(name: str, bot: dict):
         return False, "shell commands are off (Settings > Permissions)"
     if name.startswith("browser_") and not g.get("browser", True):
         return False, "browser automation is off (Settings > Permissions)"
+    if name.startswith("browser_"):
+        bs = load_browser_settings()
+        if not bs.get("enabled", True):
+            return False, "browser control is off (Settings > Browser)"
+        if name in ("browser_click", "browser_type") and bs.get("approval", "ask") == "ask":
+            return False, "browser approval is Ask — switch it to Always in Settings > Browser to let the agent click or type"
     if name.startswith("desktop_") and not g.get("desktop", True):
         return False, "desktop control is off (Settings > Permissions)"
     if name in ("web_search", "browser_search") and not g.get("web_search", True):
@@ -1666,6 +1760,8 @@ def _execute_tool(name: str, args: dict, bot: dict):
     fn = TOOLS.get(name)
     if not fn:
         return "Unknown tool: " + name, True
+    if name == "manage_tasks":
+        return fn(args, bot), False
     return fn(args), False
 
 def _skills_text_for_bot(bot: dict):
@@ -2029,7 +2125,9 @@ def run_agent(bot: dict, user_text: str,
     steps = []  # Show-me-how steps, filled in as tools run (mock + real).
     profile_text = _business_profile_text()
     char_text = _character_text()
-    system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
+    system = (f"{bot['instructions']}"
+              + (f"\n\nPersona — how you come across: {bot['persona']}" if bot.get("persona") else "")
+              + f"\n\nYour memory about the user:\n{mem_text}\n\n"
               + (f"About this business:\n{profile_text}\n\n" if profile_text else "")
               + (f"{char_text}\n\n" if char_text else "")
               + "You have tools for web search, browser automation, workspace files, "
@@ -2363,6 +2461,8 @@ class BotCreate(BaseModel):
     talk_mode: str = "off"
     show_me_how: str = "off"
     language: str = "auto"
+    persona: str = ""
+    avatar_accessory: str = "none"
     enabled_tools: list = []
     skills: list = []
 
@@ -2373,6 +2473,8 @@ class BotUpdate(BaseModel):
     provider: str = ""
     model: str = ""
     avatar: str = ""
+    persona: str = ""
+    avatar_accessory: str = ""
     schedule: str = ""
     routing: str = ""
     talk_mode: str = ""
@@ -2667,7 +2769,9 @@ def create_bot(body: BotCreate):
            "template": body.template, "job": job,
            "instructions": instructions or "You are a helpful local assistant.",
            "provider": provider, "model": model,
-           "avatar": body.avatar or (tpl["avatar"] if tpl else "🤖"),
+           "avatar": body.avatar or (tpl["avatar"] if tpl else "\U0001f916"),
+           "avatar_accessory": body.avatar_accessory if body.avatar_accessory in AVATAR_ACCESSORIES else "none",
+           "persona": (body.persona or "").strip()[:200],
            "schedule": body.schedule or (tpl["schedule"] if tpl else "on_demand"),
            "enabled_tools": (lambda _t: (_t + ["desktop_inspect"] if _t and "desktop_inspect" not in _t else _t))(body.enabled_tools or (tpl["default_tools"] if tpl else [])),
            "skills": body.skills or ["research", "file-help", "browser-help"],
@@ -2683,6 +2787,7 @@ def create_bot(body: BotCreate):
     if tpl and body.show_me_how not in ("on",) and (tpl.get("show_me_how") or "off") == "on":
         bot["show_me_how"] = "on"
     bots.append(bot); save_bots(bots)
+    _sync_bot_schedule(bot)
     return bot
 
 @app.patch("/api/bots/{bot_id}")
@@ -2695,6 +2800,10 @@ def update_bot(bot_id: str, body: BotUpdate):
         v = getattr(body, field)
         if v:
             bot[field] = v.strip() if isinstance(v, str) else v
+    if body.persona is not None:
+        bot["persona"] = (body.persona or "").strip()[:200]
+    if body.avatar_accessory in AVATAR_ACCESSORIES:
+        bot["avatar_accessory"] = body.avatar_accessory
     if body.provider and body.provider.lower() in PROVIDERS:
         bot["provider"] = body.provider.lower()
         if not body.model:
@@ -2716,6 +2825,8 @@ def update_bot(bot_id: str, body: BotUpdate):
     if body.persistent is not None:
         bot["persistent"] = bool(body.persistent)
     save_bots(bots)
+    if body.schedule:
+        _sync_bot_schedule(bot)
     return bot
 
 @app.get("/api/bots/{bot_id}")
@@ -2724,6 +2835,65 @@ def get_one_bot(bot_id: str):
     if not bot:
         raise HTTPException(404, "Bot not found")
     return bot
+
+# ---------- Bot schedule -> routine ---------------------------------------
+# Make a bot can put a bot on a schedule (Off / Hourly / Daily / Weekdays /
+# Weekly). The schedule lives on the bot as a plain string; the routine
+# that actually runs it is created here, marked bot_schedule=True, so
+# changing the schedule to Off removes it again.
+def _parse_bot_schedule(value):
+    """'hourly' / 'daily 09:00' / 'weekdays 09:00' / 'weekly Monday 09:00'
+    -> routine fields, or None for Off / on_demand / empty."""
+    v = (value or "").strip().lower()
+    if not v or v in ("off", "on_demand"):
+        return None
+    if v == "hourly":
+        return {"kind": "interval", "interval_minutes": 60, "time": "", "weekday": None}
+    m = re.match(r"^(daily|weekdays)\s+(\d{1,2}:\d{2})$", v)
+    if m:
+        return {"kind": m.group(1), "time": m.group(2), "weekday": None,
+                "interval_minutes": None}
+    m = re.match(r"^weekly\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(\d{1,2}:\d{2})$", v)
+    if m:
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        return {"kind": "weekly", "time": m.group(2), "weekday": days.index(m.group(1)),
+                "interval_minutes": None}
+    return None
+
+
+def _sync_bot_schedule(bot):
+    """Create / update / remove the routine that runs this bot on its
+    schedule. Returns the routine, or None when the schedule is Off."""
+    routines = load_routines()
+    mine = [r for r in routines if r.get("bot_schedule") and r.get("bot_id") == bot["id"]]
+    parsed = _parse_bot_schedule(bot.get("schedule") or "")
+    if not parsed:
+        if mine:
+            routines = [r for r in routines if r not in mine]
+            save_routines(routines)
+        return None
+    task = (bot.get("instructions") or bot.get("job") or "").strip()
+    fields = {"name": f"{bot['name']} — scheduled", "bot_id": bot["id"],
+              "task": task, "kind": parsed["kind"], "time": parsed.get("time") or "",
+              "weekday": parsed.get("weekday"), "interval_minutes": parsed.get("interval_minutes"),
+              "bot_schedule": True}
+    if mine:
+        r = mine[0]
+        changed = any(r.get(k) != fields[k] for k in ("kind", "time", "weekday", "interval_minutes", "task"))
+        r.update(fields)
+        if changed and r.get("enabled", True):
+            r["next_run"] = _next_run_after(r, int(time.time()))
+        routines = [x for x in routines if x not in mine[1:]]
+        save_routines(routines)
+        return r
+    routine = {"id": uuid.uuid4().hex[:8], **fields, "enabled": True,
+               "runs": [], "last_run": None, "last_status": None,
+               "last_result": "", "created_at": int(time.time())}
+    routine["next_run"] = _next_run_after(routine, int(time.time()))
+    routines.append(routine)
+    save_routines(routines)
+    return routine
+
 
 # ---------- Office: run a team of agents locally -----------------------
 # Modelled on Munder Difflin (HarnessMD/munder-difflin, MIT): an office
@@ -4228,6 +4398,34 @@ def post_chat(bot_id: str, body: ChatIn):
     out.update(extra or {})
     return out
 
+
+@app.post("/api/bots/{bot_id}/chat/rate")
+def rate_reply(bot_id: str, body: dict):
+    """Rate one assistant reply (1–5 stars + an optional comment).
+    Stored on the message itself in data/chats/<bot>.json — it is
+    never sent anywhere."""
+    bot = get_bot(bot_id)
+    if not bot:
+        raise HTTPException(404, "Bot not found")
+    history = load_chat(bot_id)
+    try:
+        idx = int(body.get("index"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Give the message index to rate.")
+    if not 0 <= idx < len(history) or history[idx].get("role") != "assistant":
+        raise HTTPException(400, "That message cannot be rated.")
+    try:
+        rating = int(body.get("rating"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Rating must be 1 to 5 stars.")
+    if not 1 <= rating <= 5:
+        raise HTTPException(400, "Rating must be 1 to 5 stars.")
+    history[idx]["rating"] = rating
+    history[idx]["rating_comment"] = (body.get("comment") or "").strip()[:500]
+    history[idx]["rated_at"] = int(time.time())
+    save_chat(bot_id, history)
+    return history[idx]
+
 class ShowMeHowIn(BaseModel):
     task: str = ""
     talk: bool = False
@@ -4949,7 +5147,7 @@ def delete_task(bot_id: str, task_id: str):
 # schedule — it never fires a backlog of missed runs. A routine only
 # runs while the app is running; it is not a system service.
 ROUTINES_FILE = DATA_DIR / "routines.json"
-ROUTINE_KINDS = ("daily", "weekly", "interval", "once")
+ROUTINE_KINDS = ("daily", "weekly", "weekdays", "interval", "once")
 # A routine that is already running must not be started again.
 _RUNNING_ROUTINES = set()
 
@@ -4995,6 +5193,11 @@ def _next_run_after(routine, from_ts):
         cand += datetime.timedelta(days=1)
     if kind == "daily" or kind == "once":
         return int(cand.timestamp())
+    if kind == "weekdays":
+        # Next weekday (Monday-Friday) at HH:MM.
+        while cand.weekday() >= 5:
+            cand += datetime.timedelta(days=1)
+        return int(cand.timestamp())
     if kind == "weekly":
         weekday = routine.get("weekday")
         if not isinstance(weekday, int) or not 0 <= weekday <= 6:
@@ -5010,6 +5213,8 @@ def _routine_schedule_text(routine):
     kind = routine.get("kind")
     if kind == "daily":
         return f"Daily at {routine.get('time')}"
+    if kind == "weekdays":
+        return f"Weekdays (Mon–Fri) at {routine.get('time')}"
     if kind == "weekly":
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         wd = routine.get("weekday")
@@ -5147,7 +5352,7 @@ def _validate_routine_fields(body, routine=None):
     if "kind" in body:
         kind = (body.get("kind") or "").strip().lower()
         if kind not in ROUTINE_KINDS:
-            return None, "Kind must be daily, weekly, interval or once."
+            return None, "Kind must be daily, weekly, weekdays, interval or once."
         fields["kind"] = kind
     if "time" in body:
         fields["time"] = (body.get("time") or "").strip()
@@ -5168,7 +5373,7 @@ def _validate_routine_fields(body, routine=None):
         if not fields.get("task") and not fields.get("desktop_action"):
             return None, "Give the routine a task, or a desktop action."
     kind = fields.get("kind")
-    if kind in ("daily", "weekly", "once"):
+    if kind in ("daily", "weekly", "weekdays", "once"):
         if not _parse_hhmm(fields.get("time") or ""):
             return None, "Give a time like 09:00."
     if kind == "weekly":
@@ -7791,6 +7996,317 @@ def set_data_folder(body: DataFolderIn):
     return {"path": str(p), "moved": moved, "needs_restart": True,
             "note": "Restart LocalBotz to use the new folder (close this window, double-click start.bat again)."
                     + (" Your data was copied there." if moved else " Your old data stays in the old folder.")}
+
+
+# ---------- Settings: Notifications / Usage / Browser / Shortcuts / Appearance
+# Four small JSON stores under data/, one per page — the same pattern as
+# the other settings stores. Nothing here leaves the computer.
+
+def _default_notifications():
+    return {"play_sounds": True, "reply_arrived": True, "needs_you": True,
+            "done": True, "failed": True, "routine_fired": True,
+            "ask_rating": True, "quiet_hours_enabled": False,
+            "quiet_start": "22:00", "quiet_end": "07:00"}
+
+
+def load_notifications():
+    d = _load_json(NOTIFICATIONS_FILE, {})
+    merged = _default_notifications()
+    if isinstance(d, dict):
+        merged.update({k: v for k, v in d.items() if k in merged})
+    return merged
+
+
+def save_notifications(d):
+    _save_json(NOTIFICATIONS_FILE, d)
+    return d
+
+
+def _in_quiet_hours(notifs=None):
+    """True when quiet hours are on and now falls inside the range
+    (handles overnight ranges like 22:00–07:00)."""
+    n = notifs or load_notifications()
+    if not n.get("quiet_hours_enabled"):
+        return False
+    start = _parse_hhmm(n.get("quiet_start") or "")
+    end = _parse_hhmm(n.get("quiet_end") or "")
+    if not start or not end:
+        return False
+    now = datetime.datetime.now()
+    cur = (now.hour, now.minute)
+    if start <= end:
+        return start <= cur < end
+    return cur >= start or cur < end
+
+
+@app.get("/api/notifications")
+def get_notifications():
+    return load_notifications()
+
+
+@app.post("/api/notifications")
+def set_notifications(body: dict):
+    n = load_notifications()
+    for k in _default_notifications():
+        if k in body:
+            n[k] = body[k]
+    save_notifications(n)
+    return n
+
+
+@app.get("/api/usage")
+def get_usage():
+    """Real usage only, from data/wallet.json (record_usage writes one
+    entry per model call). No entry, no number — the page says so."""
+    w = load_wallet()
+    usage = w.get("usage", [])
+    now = int(time.time())
+    month_start = datetime.datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_ts = int(month_start.timestamp())
+    week_ts = now - 7 * 86400
+    day0 = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _sum(entries):
+        return {"calls": sum(x.get("calls", 0) for x in entries),
+                "input_tokens": sum(x.get("input_tokens", 0) for x in entries),
+                "output_tokens": sum(x.get("output_tokens", 0) for x in entries),
+                "cost_usd": round(sum(x.get("est_cost_usd", 0) for x in entries), 6)}
+
+    month_entries = [x for x in usage if (x.get("ts") or 0) >= month_ts]
+    week_entries = [x for x in usage if (x.get("ts") or 0) >= week_ts]
+    daily = []
+    for i in range(13, -1, -1):
+        d = day0 - datetime.timedelta(days=i)
+        lo, hi = int(d.timestamp()), int((d + datetime.timedelta(days=1)).timestamp())
+        entries = [x for x in usage if lo <= (x.get("ts") or 0) < hi]
+        row = _sum(entries)
+        row["date"] = d.strftime("%Y-%m-%d")
+        row["label"] = d.strftime("%a %d")
+        daily.append(row)
+    by_model = {}
+    for x in usage:
+        key = x.get("model") or "unknown"
+        by_model.setdefault(key, {"model": key, "provider": x.get("provider") or "",
+                                  "calls": 0, "input_tokens": 0,
+                                  "output_tokens": 0, "cost_usd": 0.0})
+        by_model[key]["calls"] += x.get("calls", 0)
+        by_model[key]["input_tokens"] += x.get("input_tokens", 0)
+        by_model[key]["output_tokens"] += x.get("output_tokens", 0)
+        by_model[key]["cost_usd"] = round(by_model[key]["cost_usd"] + x.get("est_cost_usd", 0), 6)
+    return {"tracked": bool(usage), "total_entries": len(usage),
+            "spend_this_month": _sum(month_entries),
+            "this_week": _sum(week_entries),
+            "daily_14": daily,
+            "by_model": sorted(by_model.values(), key=lambda r: -r["calls"])}
+
+
+def _default_browser_settings():
+    return {"enabled": True, "browser": "builtin",
+            "home_page": "https://duckduckgo.com", "approval": "ask",
+            "chrome_available": False, "chrome_checked_at": None}
+
+
+def load_browser_settings():
+    d = _load_json(BROWSER_SETTINGS_FILE, {})
+    merged = _default_browser_settings()
+    if isinstance(d, dict):
+        merged.update({k: v for k, v in d.items() if k in merged})
+    return merged
+
+
+def save_browser_settings(d):
+    _save_json(BROWSER_SETTINGS_FILE, d)
+    return d
+
+
+def _chrome_available():
+    """Is Google Chrome actually installed (Playwright channel 'chrome')?
+    Tries a real launch and closes it straight away."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            b = pw.chromium.launch(channel="chrome", headless=True)
+            b.close()
+        return True
+    except Exception:
+        return False
+
+
+@app.get("/api/browser-settings")
+def get_browser_settings():
+    bs = load_browser_settings()
+    if not bs.get("chrome_checked_at"):
+        bs["chrome_available"] = _chrome_available()
+        bs["chrome_checked_at"] = int(time.time())
+        save_browser_settings(bs)
+    return bs
+
+
+@app.post("/api/browser-settings")
+def set_browser_settings(body: dict):
+    bs = load_browser_settings()
+    if "enabled" in body:
+        bs["enabled"] = bool(body["enabled"])
+    if "browser" in body:
+        choice = (body["browser"] or "").strip().lower()
+        if choice not in ("builtin", "chrome"):
+            raise HTTPException(400, "Browser must be Built-in or Chrome.")
+        if choice == "chrome" and not bs.get("chrome_available"):
+            raise HTTPException(400, "Chrome is not installed on this computer, so the agent cannot use it. Install Google Chrome first, then check again.")
+        bs["browser"] = choice
+    if "home_page" in body:
+        bs["home_page"] = (body["home_page"] or "").strip()
+    if "approval" in body:
+        approval = (body["approval"] or "").strip().lower()
+        if approval not in ("ask", "always"):
+            raise HTTPException(400, "Approval must be Ask or Always.")
+        bs["approval"] = approval
+    save_browser_settings(bs)
+    return bs
+
+
+@app.post("/api/browser-settings/check-chrome")
+def check_chrome():
+    bs = load_browser_settings()
+    bs["chrome_available"] = _chrome_available()
+    bs["chrome_checked_at"] = int(time.time())
+    save_browser_settings(bs)
+    return bs
+
+
+@app.post("/api/browser-settings/clear")
+def clear_browsing_data():
+    """Close the built-in browser (its temporary profile is discarded)
+    and delete the screenshots the agent saved. Nothing else is kept
+    in the browser, so there is nothing else to clear."""
+    global _pw, _browser, _page
+    closed = False
+    with _browser_lock:
+        try:
+            if _page is not None:
+                _page.close()
+        except Exception:
+            pass
+        try:
+            if _browser is not None:
+                _browser.close()
+                closed = True
+        except Exception:
+            pass
+        try:
+            if _pw is not None:
+                _pw.stop()
+        except Exception:
+            pass
+        _pw = _browser = _page = None
+    shots = list(SHOTS_DIR.glob("*.png")) if SHOTS_DIR.exists() else []
+    deleted = 0
+    for p in shots:
+        try:
+            p.unlink()
+            deleted += 1
+        except Exception:
+            pass
+    return {"browser_closed": closed, "screenshots_deleted": deleted,
+            "cleared": "Built-in browser closed (its temporary profile was discarded) and "
+                      f"{deleted} saved screenshot(s) deleted from data/screenshots/."}
+
+
+DEFAULT_SHORTCUTS = {
+    "new_chat": {"label": "New chat", "desc": "Start a fresh chat with the bot you have open",
+                 "keys": "Ctrl+N"},
+    "new_bot": {"label": "New bot", "desc": "Open Make a bot",
+                "keys": "Ctrl+Shift+B"},
+    "toggle_sidebar": {"label": "Toggle sidebar", "desc": "Hide or show the left sidebar",
+                       "keys": "Ctrl+B"},
+    "open_settings": {"label": "Open settings", "desc": "Open Settings — General",
+                      "keys": "Ctrl+,"},
+}
+
+
+def load_shortcuts():
+    stored = _load_json(SHORTCUTS_FILE, {})
+    out = {}
+    for sid, dflt in DEFAULT_SHORTCUTS.items():
+        entry = dict(dflt)
+        if isinstance(stored, dict) and isinstance(stored.get(sid), dict):
+            entry.update({k: v for k, v in stored[sid].items() if k in entry})
+        out[sid] = entry
+    return out
+
+
+def save_shortcuts(d):
+    _save_json(SHORTCUTS_FILE, d)
+    return d
+
+
+@app.get("/api/shortcuts")
+def get_shortcuts():
+    return load_shortcuts()
+
+
+@app.post("/api/shortcuts")
+def set_shortcuts(body: dict):
+    current = load_shortcuts()
+    for sid, entry in (body or {}).items():
+        if sid not in DEFAULT_SHORTCUTS or not isinstance(entry, dict):
+            continue
+        keys = entry.get("keys")
+        if keys is None:
+            continue
+        current[sid]["keys"] = str(keys).strip()
+    save_shortcuts(current)
+    return current
+
+
+def _default_appearance():
+    return {"theme": "system", "accent": "teal", "contrast": "system",
+            "corners": "default", "density": "comfortable",
+            "text_size": 14, "font_ui": "system", "font_code": "system",
+            "translucent": False, "tabs_two_rows": True, "rail_icons": False}
+
+
+APPEARANCE_CHOICES = {
+    "theme": ("light", "dark", "system"),
+    "accent": ("teal", "emerald", "green", "cyan"),
+    "contrast": ("system", "standard", "high"),
+    "corners": ("sharp", "default", "round"),
+    "density": ("comfortable", "compact"),
+    "text_size": (13, 14, 15),
+    "font_ui": ("system", "segoe", "arial", "georgia", "verdana"),
+    "font_code": ("system", "consolas", "menlo", "courier"),
+}
+
+
+def load_appearance():
+    d = _load_json(APPEARANCE_FILE, {})
+    merged = _default_appearance()
+    if isinstance(d, dict):
+        merged.update({k: v for k, v in d.items() if k in merged})
+    return merged
+
+
+def save_appearance(d):
+    _save_json(APPEARANCE_FILE, d)
+    return d
+
+
+@app.get("/api/appearance")
+def get_appearance():
+    return load_appearance()
+
+
+@app.post("/api/appearance")
+def set_appearance(body: dict):
+    a = load_appearance()
+    for k, choices in APPEARANCE_CHOICES.items():
+        if k in body and body[k] in choices:
+            a[k] = body[k]
+    for k in ("translucent", "tabs_two_rows", "rail_icons"):
+        if k in body:
+            a[k] = bool(body[k])
+    save_appearance(a)
+    return a
 
 
 @app.get("/api/settings")
