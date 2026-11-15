@@ -45,25 +45,18 @@ the README.
 
 No keys of your own? Rent our computer instead. Premium models —
 Claude Sonnet, GPT, Gemini — run on the LocalBotz server (the VPS
-gateway in `server/`), using the owner's provider keys, which stay
-on the server and never reach your computer.
+gateway, run by the service owner), using the owner's provider keys,
+which stay on the server and never reach your computer.
 
 - Register on the server: in the app, Settings → Connectors →
   VPS Premium → "Register on the VPS" (name + email), or the
-  sign-up page `https://YOUR-VPS/register`. The server creates
-  your workspace and gives you your own token.
+  sign-up page `https://api.localbotz.io/register`. The server
+  creates your account and gives you your own token.
 - Your token goes in Settings → Connectors → VPS Premium. Then
   pick provider **VPS Premium** per bot.
-- Usage is metered to your workspace wallet (see Super Admin →
-  wallets + metering, and `server/README.md` for the admin panel).
-  That is the "rent" — you pay for what the premium models use,
-  nothing else.
-- The three operating modes (Super Admin): **Master Managed Fixed**
-  (owner supplies master keys, fixed default LLM, tenants
-  zero-config), **Master User-Selectable** (owner curates the
-  allowed LLM roster, tenants pick from it), **BYOK** (tenants
-  bring their own keys, host pays nothing). The rent-from-us path
-  is the first two; BYOK is option 2 above.
+- Usage is metered by the server — that is the "rent": you pay
+  for what the premium models use, nothing else. The app's
+  Wallet page (Settings → Wallet) tracks your estimated spend.
 
 ## Your office runs on any of the three
 

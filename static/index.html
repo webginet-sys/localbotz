@@ -141,9 +141,6 @@
     <img class="logo" src="/logo-animated.svg" alt="LocalBotz" onerror="this.onerror=null;this.src='/logo.png';">
     <p class="sub">Personal agent · local model · browser tools · no cloud</p>
     <div class="status" id="status">Checking model…</div>
-    <div class="navsec">Workspace</div>
-    <div style="margin:0 16px 12px"><select id="ws-select" title="Active workspace — mode, wallet and keys follow this workspace"></select>
-    <div id="ws-info" style="font-size:13px;color:#666;margin-top:6px"></div></div>
     <div class="navsec">Bots</div>
     <ul class="botlist" id="botlist"></ul>
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
@@ -360,9 +357,7 @@ function fillModelList(sel, currentModel, providerId){
     o.textContent='⚠ Could not load the model list — press ↻ Models to retry';
     sel.appendChild(o); return;
   }
-  const allowed=EFFECTIVE?EFFECTIVE.allowed_providers:null;
   (availableModels.sources||[]).forEach(src=>{
-    if(allowed && !allowed.includes(src.provider)) return;
     const group=document.createElement('optgroup');
     group.label=sourceLabel(src)+(src.status==='available'?' ✓':' — '+(src.reason||'unavailable'));
     if(src.status==='available'){
@@ -409,7 +404,7 @@ function renderChat(msgs){const c=$('chat'); c.innerHTML='';
     if(m.role==='assistant' && m.cost_usd!==undefined){
       const f=document.createElement('div');
       f.style.cssText='font-size:12px;color:#888;margin-top:8px';
-      f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)} · Wallet $${Number(m.wallet_balance??NaN).toFixed(2)}${m.mode?` · ${m.mode} mode`:''}${m.key_source?` · key: ${m.key_source}`:''}${m.routed_from?` · routed free to local (from ${m.routed_from.provider})`:''}`;
+      f.textContent=`💰 Cost $${Number(m.cost_usd||0).toFixed(4)}${m.key_source?` · key: ${m.key_source}`:''}${m.routed_from?` · routed free to local (from ${m.routed_from.provider})`:''}`;
       d.appendChild(f);}
     if(m.steps&&m.steps.length){const st=document.createElement('div'); st.className='tools';
       st.innerHTML='<strong>👀 Here\'s how I did it:</strong><ol>'+m.steps.map(s=>`<li>${esc(s.plain||('Step '+s.n))}${s.screenshot?` <a href="/${esc(s.screenshot)}" target="_blank">📷 see this step</a>`:''}<br><span class="note">${esc((s.result_summary||'').slice(0,160))}</span></li>`).join('')+'</ol>';
@@ -448,7 +443,7 @@ async function send(){const inp=$('input'); const text=inp.value.trim(); if(!tex
   const msgs=await api(`/api/bots/${current.id}/chat`);
   msgs.push({role:'user',content:text}); renderChat(msgs);
   $('chat').insertAdjacentHTML('beforeend','<div class="msg assistant">Thinking… (may use tools — up to 8 steps)</div>');
-  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace(), talk:talkUsed||speakOn, show_me_how:showHowOn, language:chatLangOverride})});
+  try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, talk:talkUsed||speakOn, show_me_how:showHowOn, language:chatLangOverride})});
     talkUsed=false;
     renderChat(await api(`/api/bots/${current.id}/chat`));
     if(res.reply) speakText(res.reply);
@@ -758,44 +753,6 @@ function livePlayPcm(b64, rate){
   }catch(e){ /* a bad audio chunk never breaks the session */ }
 }
 
-// ---------- Workspaces + operating mode (set by the VPS owner) ----------
-let EFFECTIVE=null;
-function currentWorkspace(){ return ($('ws-select')&&$('ws-select').value) || localStorage.getItem('localbotz-ws') || 'default'; }
-async function loadWorkspaces(){
-  const list=await api('/api/workspaces');
-  const sel=$('ws-select'); const saved=localStorage.getItem('localbotz-ws')||'default';
-  sel.innerHTML=list.map(w=>`<option value="${w.id}">${esc(w.name)} — ${esc(w.mode||'inherit')}</option>`).join('');
-  sel.value=list.some(w=>w.id===saved)?saved:(list[0]?list[0].id:'default');
-  localStorage.setItem('localbotz-ws', sel.value);
-  await loadEffective();
-}
-async function loadEffective(){
-  try{ EFFECTIVE=await api('/api/platform/effective?workspace='+encodeURIComponent(currentWorkspace())); }
-  catch(e){ EFFECTIVE=null; return; }
-  const bal=Number(EFFECTIVE.wallet_balance||0);
-  $('ws-info').innerHTML=`Mode: <b>${esc(EFFECTIVE.mode)}</b> (${esc(EFFECTIVE.mode_source||'')}) · Wallet: <b>$${bal.toFixed(2)}</b>${bal>0&&bal<Number(EFFECTIVE.low_balance_warn_usd||1)?' <span style="color:#b45309">low balance</span>':''}${bal<=0?' <span style="color:#b91c1c">empty — paid chats blocked</span>':''}`;
-  applyPickerVisibility();
-  if(availableModels) { fillModelList($('botmodel-list'), current?current.model:'', $('botprovider')?$('botprovider').value:'lmstudio'); fillModelList($('mb-model-list'), $('mb-model')?$('mb-model').value:'', $('mb-provider')?$('mb-provider').value:'lmstudio'); }
-}
-function applyPickerVisibility(){
-  if(!EFFECTIVE) return;
-  const fixed=EFFECTIVE.mode==='fixed';
-  const fixedLabel=fixed?`Fixed model: ${EFFECTIVE.fixed_llm.provider}/${EFFECTIVE.fixed_llm.model} (set by the VPS owner)`:'';
-  ['botprovider','botmodel','botmodel-list','refresh-models','applybot'].forEach(id=>{const el=$(id); if(el) el.style.display=fixed?'none':'';});
-  if(fixed && current) $('botmeta').textContent=fixedLabel;
-  const mbNote=$('mb-mode-note');
-  if(fixed && !mbNote){
-    const note=document.createElement('p'); note.id='mb-mode-note'; note.className='note';
-    note.textContent='Fixed mode: this workspace uses the VPS owner’s fixed model ('+EFFECTIVE.fixed_llm.provider+'/'+EFFECTIVE.fixed_llm.model+'). The provider/model pickers are hidden.';
-    $('view-makebot').insertBefore(note, $('view-makebot').querySelector('h3'));
-  } else if(!fixed && mbNote) mbNote.remove();
-  // Filter the provider dropdowns to what this workspace may use.
-  if(!fixed && EFFECTIVE.allowed_providers){
-    ['botprovider','mb-provider'].forEach(id=>{const sel=$(id); if(!sel) return;
-      [...sel.options].forEach(o=>{ o.disabled=!EFFECTIVE.allowed_providers.includes(o.value); });
-    });
-  }
-}
 // ---------- Make a Bot ----------
 const AVATARS=["🤖","👔","🔬","🌅","📰","📝","💬","👀"];
 const TABS=[["featured","Featured"],["personal_assistant","Personal Assistant"],["productivity","Productivity"],["research","Research"],["sectors","Sectors"],["more","More"]];
@@ -1609,7 +1566,7 @@ function bindPage(name){
   if(q('vps-save')) q('vps-save').onclick=async()=>{const body={base_url:q('vps-url').value.trim()}; const tok=q('vps-token').value.trim(); if(tok) body.token=tok; await api('/api/vps/config',{method:'POST',body:JSON.stringify(body)}); q('vps-token').value=''; await loadProviders(); msg('VPS Premium saved. Pick provider “VPS Premium” per bot to use it.'); renderPage(name);};
   if(q('vps-test')) q('vps-test').onclick=async()=>{const r=await api('/api/connectors/provider/vps/test',{method:'POST'}); msg(`VPS Premium: ${r.status} — ${r.detail||''}`);};
   if(q('vps-models')) q('vps-models').onclick=async()=>{const r=await api('/api/vps/models'); const out=$('vps-models-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Premium models on your VPS:</p><ul>${(r.models||[]).map(m=>`<li><code>${esc(m)}</code></li>`).join('')||'<li>None listed by the gateway.</li>'}</ul>`; msg(r.error||`${(r.models||[]).length} premium model(s) listed.`);};
-  if(q('vps-prices')) q('vps-prices').onclick=async()=>{const r=await api('/api/vps/pricing'); const out=$('vps-prices-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Renting premium models costs (USD per 1M tokens):</p><table><tr><th>Model</th><th>Input / 1M</th><th>Output / 1M</th></tr>${(r.models||[]).map(m=>`<tr><td><code>${esc(m.id)}</code></td><td>$${m.per_1m_input_usd}</td><td>$${m.per_1m_output_usd}</td></tr>`).join('')}</table><p class="note">Local models are always free. Prices are set by the VPS owner in the admin panel.</p>`;};
+  if(q('vps-prices')) q('vps-prices').onclick=async()=>{const r=await api('/api/vps/pricing'); const out=$('vps-prices-out'); if(out) out.innerHTML=r.error?`<p class="note">${esc(r.error)}</p>`:`<p>Renting premium models costs (USD per 1M tokens):</p><table><tr><th>Model</th><th>Input / 1M</th><th>Output / 1M</th></tr>${(r.models||[]).map(m=>`<tr><td><code>${esc(m.id)}</code></td><td>$${m.per_1m_input_usd}</td><td>$${m.per_1m_output_usd}</td></tr>`).join('')}</table><p class="note">Local models are always free. Prices are set by the VPS owner.</p>`;};
   if(q('vps-register')) q('vps-register').onclick=async()=>{
     const out=$('vps-register-out');
     const name=q('vps-reg-name').value.trim(), email=q('vps-reg-email').value.trim();
@@ -1787,6 +1744,5 @@ if(q('wiz-back-4')) q('wiz-back-4').onclick=()=>{$('wiz-4').classList.add('hidde
 if(q('wiz-skip-4')) q('wiz-skip-4').onclick=wizFinish;
 if(q('wiz-finish')) q('wiz-finish').onclick=wizFinish;
 if(q('wiz-skip')) q('wiz-skip').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})}); showView('chat');};
-loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; await loadCharacter(); syncFloatbar(); await loadBots(); if(!s.onboarding_done) showWizard(); else showView('home'); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
-$('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };
+loadStatus(); loadProviders().then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; await loadCharacter(); syncFloatbar(); await loadBots(); if(!s.onboarding_done) showWizard(); else showView('home'); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
 </script>

@@ -38,9 +38,8 @@ that answered).
 
 ## Honest limits
 
-- Routing never overrides the Master Fixed model (Super Admin's fixed
-  LLM always wins), and it never routes a bot that is already on a
-  local provider — there is nothing to save.
+- Routing never routes a bot that is already on a local provider —
+  there is nothing to save.
 - Routing is a word-and-length check, not a judgement of the question.
   A short question that needs deep knowledge still goes local if it
   has no hard-work words. Turn it Off per bot if you want that bot to

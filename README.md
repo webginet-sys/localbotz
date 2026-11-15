@@ -376,7 +376,7 @@ Give your agents your computer — or rent one from us.
    Premium models (Claude Sonnet, GPT, Gemini) from our server:
    register on the VPS (Settings → Connectors → VPS Premium →
    "Register on the VPS"), pick provider **VPS Premium** per bot,
-   and usage is metered to your workspace wallet.
+   and usage is metered by the server — you pay for what you use.
 
 A different bot — or a different member of your Office team — can
 run a different way. See `docs/how-it-runs.md`.
@@ -607,15 +607,14 @@ Five more ways LocalBotz works for a business, all of them approval-first:
   pairing. Customers message your business number, the bot drafts a reply,
   and nothing is sent until you approve it in Messaging channels. Senders
   not on the allowlist get nothing. See `docs/whatsapp-agent.md`.
-- **WhatsApp + Marketing from your own panels.** The same agent also
-  runs on the VPS gateway, so approvals work even when your computer is
-  off. Users connect their WhatsApp Business number + Meta tokens and
-  their Facebook / LinkedIn / X / Instagram accounts from the user panel
-  (WhatsApp and Marketing pages); admins see every workspace's status
-  and can enable or disable WhatsApp per workspace from the admin panel.
-  Tokens are masked everywhere and never logged. Posting still happens
-  in the app for now. See `docs/panels-whatsapp.md`.
-- **Always-on monitors.** A deal sitting Quoted for 3 days (or Negotiation
+- **WhatsApp + Marketing from the VPS.** The same agent also
+  runs on our server, so approvals work even when your computer is
+  off. Connect your WhatsApp Business number + Meta tokens and
+  your Facebook / LinkedIn / X / Instagram accounts from the user
+  panel at https://api.localbotz.io/account (WhatsApp and
+  Marketing pages). Tokens are masked everywhere and never logged.
+  Posting still happens in the app for now. See
+  `docs/whatsapp-agent.md`.
   for 7) gets a chase draft and a task, once per deal. See the "Always-on
   monitors" section of `docs/deal-workflows.md`.
 - **📣 Marketing — write, approve, post.** Compose a post, approve it,
@@ -733,20 +732,15 @@ you what is actually usable **right now**:
 
 ## Premium models from a VPS
 
-If Thomas (or you) runs the gateway in `server/` on a VPS, you can use
-premium models — **Claude Sonnet, GPT, Gemini** — without putting any
-provider API key on your own computer:
+The premium models — **Claude Sonnet, GPT, Gemini** — run on our
+server, so you can use them without putting any provider API key
+on your own computer. The gateway lives on the VPS (it is not part
+of this download); you only need the base URL and your token:
 
-1. **On the VPS** (see `server/README.md` for the full deploy — SSH or
-   Tailscale, systemd or Docker, nginx + Let's Encrypt for public
-   access): copy `server/.env.example` to `server/.env`, set
-   `PREMIUM_API_TOKEN` (a long random token you issue to users) and
-   **your** provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
-   `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). The
-   premium model list is `PREMIUM_MODELS` in that file — default
-   `claude-sonnet-4-5,gpt-4o,gpt-4o-mini,gemini-2.5-flash,gemini-2.5-pro`;
-   add newer ids there (and `deepseek-chat` / `deepseek-reasoner` for
-   DeepSeek) and restart the gateway.
+1. **Register:** in the app, Settings → Connectors → **VPS
+   Premium** → "Register on the VPS" (name + email), or the
+   sign-up page `https://api.localbotz.io/register`. The server
+   gives you your own token.
 2. **In the app:** Settings → Connectors → **VPS Premium** — paste the
    gateway base URL (e.g. `https://YOUR-VPS/v1`) and the token the VPS
    owner issued you, then **List premium models**. Or set in `.env`:
@@ -760,92 +754,24 @@ client only sends its own user token. If the VPS is unreachable or the
 token is wrong, the app shows a clear error and falls back to the
 local model (LM Studio).
 
-## Operating models (Super Admin)
+## Your keys, your choice
 
-LocalBotz can run as a small platform, not just a single-user app.
-There are three operating modes. The Super Admin (the owner) picks the
-global default; each workspace can inherit it or override it.
+LocalBotz is a single-user app — one person, one computer, your data.
 
-Set `ADMIN_TOKEN` in `.env` (a long random token) to enable the
-**👑 Super Admin** panel in the sidebar. Without it, the panel is
-disabled and the app behaves as a single-user app in Selectable mode.
-
-### Mode 1 — Master Managed Fixed (zero-configuration)
-
-- The Super Admin enters the master platform API keys (Anthropic,
-  OpenAI, DeepSeek, Gemini, OpenRouter, Groq, Mistral, Cerebras, VPS)
-  in **Super Admin → Master platform keys** (stored in `.env`, masked),
-  and assigns **one fixed default LLM** (+ one fixed Voice model).
-- Tenants in this mode see **no provider/model picker at all** — every
-  chat uses the fixed model. Zero configuration for the tenant.
-- Usage is metered and billed to the workspace wallet (see below).
-
-### Mode 2 — Master User-Selectable (curated roster)
-
-- The Super Admin supplies the master keys (as above) and curates an
-  allowed roster of LLM + Voice models (Super Admin → Model roster).
-- Tenants can freely pick any model from that enabled roster, without
-  entering any API key of their own.
-- Usage is metered and billed to the workspace wallet, as in Mode 1.
-
-### Mode 3 — BYOK (Bring Your Own Key)
-
-- The tenant connects their **own** personal API keys in their
-  workspace's Secure store (per provider).
-- The host incurs **zero third-party API cost** for that workspace —
-  usage is tracked only, at $0 host cost, and no wallet billing applies
-  to API usage.
-- A BYOK workspace with no key for a provider cannot use that provider
-  until the tenant adds their own key.
-
-**Local models (LM Studio / Ollama) are always free in all three modes**
-— no key, no wallet, no metering charge.
-
-### Workspaces / tenants
-
-Workspaces live in `data/workspaces.json` and are switched from the
-sidebar dropdown. Each workspace has: a name, an operating mode
-(`inherit` = follow the global mode, or its own `fixed` / `selectable` /
-`byok`), a wallet balance, and members (names only in v1). Bots are
-shared across workspaces in v1; the mode, wallet, roster and keys are
-what change per workspace.
-
-### Wallets + metering
-
-- Each workspace has its own wallet: balance, transaction log and usage
-  history (`data/wallets/<workspace>.json`, plus `data/metering.jsonl`).
-- The Super Admin tops a wallet up manually (Super Admin → Workspaces →
-  Top up; no real payments in v0.3 — it is a recorded manual balance).
-- Metering: tokens from the provider's usage counts when returned,
-  otherwise estimated as characters ÷ 4; characters are counted too.
-  Prices are per 1,000 tokens in/out per model (and per character for
-  voice) in `data/pricing.json`, editable in Super Admin → Pricing.
-- When a workspace wallet is **empty ($0.00)**, paid chats are blocked
-  with a clear message (local models still work). Below the low-balance
-  threshold (default $1.00, in pricing) the chat shows a warning.
-- Every chat footer shows its cost, the wallet balance after the chat,
-  the mode, and which key paid for it (`master` / `byok` / `local`) —
-  the key itself is never logged or shown.
-
-### Voice models
-
-Roster entries have a type: `llm` or `voice`, plus provider, model id
-and an enabled flag. Voice models (e.g. OpenAI `tts-1`, `tts-1-hd`,
-`gpt-4o-mini-tts`) are selectable in the roster. TTS works through
-`POST /api/voice/tts` via the provider's OpenAI-compatible endpoint
-when a key is present (master or BYOK, per the workspace mode); when
-no key is configured the endpoint returns an honest "not configured"
-error — audio is never faked.
-
-### Switching a workspace between modes
-
-- **Globally:** Super Admin → Operating mode → pick Fixed, Selectable
-  or BYOK → Save. Workspaces set to `inherit` follow it immediately.
-- **Per workspace:** Super Admin → Workspaces → change that workspace's
-  mode (or `PATCH /api/workspaces/<id>` with `{"mode": "byok"}`).
-- The agent and the model picker enforce the mode on every chat:
-  Fixed hides the picker, Selectable limits it to the roster, BYOK
-  requires the tenant's own key for that provider (or a local model).
+- **Your computer (free):** the local model (LM Studio / Qwen3.5)
+  costs nothing and needs no key.
+- **Your subscriptions:** your own provider API keys live in
+  Settings → Secure store (or `.env`), shown masked only, never
+  logged. Add a key, pick the provider per bot, and chat.
+- **Rent one from us:** premium models from our server, with your
+  own VPS token (see "Premium models from a VPS" above).
+- **Cost estimates:** every chat footer shows the estimated cost
+  of that reply, and Settings → Wallet tracks your total estimated
+  spend against a monthly budget you set. There is no billing in
+  this app.
+- **Voice:** text-to-speech (`POST /api/voice/tts`) works with your
+  own OpenAI-compatible key; when no key is configured it returns
+  an honest "not configured" error — audio is never faked.
 
 ## If LM Studio is not running
 
@@ -919,8 +845,6 @@ start.bat              Windows starter (venv + core deps, browser optional + run
 start.sh               macOS/Linux starter (venv + core deps, browser optional + run)
 requirements.txt       Core: fastapi, uvicorn, httpx (full install also adds requirements-browser.txt: Playwright + Chromium)
 requirements-browser.txt  Optional: playwright (browser automation)
-server/                VPS Premium gateway (FastAPI): app.py, requirements.txt,
-                       Dockerfile, .env.example, README.md (SSH/Tailscale deploy)
 .env.example           LLM_BASE_URL / MODEL (qwen3.5) / VPS_BASE_URL + VPS_API_TOKEN /
                        all optional provider API keys
 LICENSE                MIT — copyright Thomas

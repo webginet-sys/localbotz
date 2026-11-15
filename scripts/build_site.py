@@ -369,16 +369,16 @@ PAGES["business.html"] = (
     <div class="cards">
       <div class="card"><div class="icon">🏢</div><div class="tag">Teams</div><h3><a href="office.html">Office AI teams</a></h3><p>Hire a team for each department — construction, MEP, electrical, IT services, e-commerce and more. One boss, 143 roles, shared memory, and an Auditor who checks every job before you approve it.</p></div>
       <div class="card"><div class="icon">☁️</div><div class="tag">Cloud</div><h3>Cloud Office</h3><p>Rent a computer from us instead of running one yourself. Your office lives on our server — 2 vCPU, 8 GB RAM, 100 GB disk — and your team works there even when your computer is off. The monthly price is set by the server owner in the admin panel.</p></div>
-      <div class="card"><div class="icon">🔑</div><div class="tag">Premium</div><h3>VPS Premium models</h3><p>Claude Sonnet, GPT and Gemini from our server, metered to your workspace wallet. Register on the server, get your own token, pick VPS Premium per bot. <a href="pricing.html">See the prices</a>.</p></div>
+      <div class="card"><div class="icon">🔑</div><div class="tag">Premium</div><h3>VPS Premium models</h3><p>Claude Sonnet, GPT and Gemini from our server, pay-as-you-go and metered by our server. Register on the server, get your own token, pick VPS Premium per bot. <a href="pricing.html">See the prices</a>.</p></div>
     </div>
 
     <h2 class="section">Three ways to run a business on it</h2>
-    <p class="lead">The owner supplies the keys and the rules. The team just works.</p>
+    <p class="lead">Three ways to run — pick the one that fits. The team just works.</p>
     <div class="steps">
-      <div class="step"><span class="num">1</span><h3>Master Managed Fixed</h3><p>The owner supplies the master keys and assigns one fixed default model. Tenants do nothing — zero config — and usage is metered to their workspace wallet.</p></div>
-      <div class="step"><span class="num">2</span><h3>Master User-Selectable</h3><p>The owner supplies the master keys and curates the allowed model roster. Tenants pick from the roster. No one needs their own keys.</p></div>
-      <div class="step"><span class="num">3</span><h3>BYOK</h3><p>Tenants bring their own keys. The host pays nothing for API usage — local models and the tenants' own keys do the work.</p></div>
-      <div class="step"><span class="num">✓</span><h3>Local models are always free</h3><p>In every mode, the local model costs the host nothing and is never metered.</p></div>
+      <div class="step"><span class="num">1</span><h3>Your computer</h3><p>Free. The local model (LM Studio / Qwen3.5) runs on your own computer — nothing leaves it, no keys, no bills.</p></div>
+      <div class="step"><span class="num">2</span><h3>Your subscriptions</h3><p>Your own API keys (Claude, ChatGPT, Gemini and more) in the Secure store. You pay your provider directly; LocalBotz adds nothing.</p></div>
+      <div class="step"><span class="num">3</span><h3>Rent one from us</h3><p>Premium models from our server with your own token. Pay-as-you-go, metered by the server — you pay for what you use.</p></div>
+      <div class="step"><span class="num">✓</span><h3>Local models are always free</h3><p>The local model costs nothing and is never metered.</p></div>
     </div>
 
     <h2 class="section">Built for office, sales and marketing</h2>
@@ -400,7 +400,7 @@ PAGES["business.html"] = (
 
     <h2 class="section">Questions people ask</h2>
     <div class="faq">
-      <details><summary>Do I need my own API keys?</summary><p>No. In the two Master modes the owner supplies the keys and the team just works. In BYOK mode each tenant brings their own. And the local model needs no key at all.</p></details>
+      <details><summary>Do I need my own API keys?</summary><p>No. The local model needs no key at all, and premium models from our server need only your VPS token. If you want to use Claude, ChatGPT or Gemini directly, add your own key once in Settings &gt; Secure store.</p></details>
       <details><summary>Who sees my team's work?</summary><p>Your office, its memory and its files live on your computer — or on the rented server you registered on. Nothing is shared between workspaces, and usage is logged as counts and costs only, never message content.</p></details>
       <details><summary>What does the Cloud Office cost?</summary><p>The server owner sets the Cloud Office monthly price in the admin panel. Until it is set, the panel shows that the price is not set yet — we don't invent one here.</p></details>
     </div>
@@ -505,7 +505,6 @@ PAGES["publications.html"] = (
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/business-profile.md">Business profile</a></h3><p>Your company, once: the single profile every bot, office job and proposal draws on.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/whatsapp-agent.md">WhatsApp sales agent</a></h3><p>Official Business API only, allowlist, draft first — nothing sent until you approve it.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/marketing.md">Marketing publisher</a></h3><p>Write once, approve, then post or schedule — and which platforms really post today.</p></div>
-      <div class="card"><div class="tag">Guide</div><h3><a href="docs/panels-whatsapp.md">Panels: WhatsApp &amp; Marketing</a></h3><p>Doing it all from the user and admin panels: hosted WhatsApp approval and per-platform credentials.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/documents.md">Office documents</a></h3><p>Real Word, Excel and PowerPoint output from office jobs — with money kept as numbers, not text.</p></div>
     </div>
 
@@ -544,7 +543,7 @@ PAGES["open-source.html"] = (
     <p class="lead">Everything. The app, the premium gateway, the installer, the docs — all of it.</p>
     <div class="cards">
       <div class="card"><div class="icon">💬</div><div class="tag">The app</div><h3>LocalBotz itself</h3><p>Python, FastAPI, plain HTML and JavaScript. No build step, no Electron. Bots, office teams, workrooms, deals, voice, WhatsApp, leads — all in one repo.</p></div>
-      <div class="card"><div class="icon">☁️</div><div class="tag">The gateway</div><h3>VPS Premium gateway</h3><p>The server that rents premium models: registration, per-user tokens, metering, the admin panel and the user panel. In <code>server/</code>.</p></div>
+      <div class="card"><div class="icon">☁️</div><div class="tag">The gateway</div><h3>VPS Premium gateway</h3><p>The server that rents premium models: registration, per-user tokens, metering, and the user panel. It runs on our VPS.</p></div>
       <div class="card"><div class="icon">🪟</div><div class="tag">The installer</div><h3>Windows installer &amp; wheels</h3><p>The Inno Setup script, the GitHub Actions build, and the script that packs every Python library as offline wheels.</p></div>
     </div>
 
@@ -1129,7 +1128,6 @@ PAGES["help.html"] = (
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/business-profile.md">Business profile</a></h3><p>Your company, once.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/whatsapp-agent.md">WhatsApp agent</a></h3><p>Draft first, approve, then send.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/marketing.md">Marketing publisher</a></h3><p>Draft, approve, post or schedule.</p></div>
-      <div class="card"><div class="tag">Guide</div><h3><a href="docs/panels-whatsapp.md">Panels: WhatsApp &amp; Marketing</a></h3><p>Doing it all from the panels.</p></div>
       <div class="card"><div class="tag">Guide</div><h3><a href="docs/documents.md">Office documents</a></h3><p>Real Word, Excel and PowerPoint output.</p></div>
     </div>
 

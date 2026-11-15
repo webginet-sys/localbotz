@@ -12,8 +12,9 @@ anything through LocalBotz itself. See `docs/how-it-runs.md`.
 ## Rent-from-us prices (USD per 1M tokens)
 
 These are the defaults, the providers' public list prices. The
-server owner can change any of them in the admin panel (Pricing),
-and the new price applies to later requests.
+server owner can change any of them in the VPS admin panel
+(https://api.localbotz.io/admin), and the new price applies to
+later requests.
 
 | Model | Input / 1M | Output / 1M |
 |---|---|---|
@@ -35,40 +36,15 @@ always free and never appear in the price list.
 
 ## Where the prices live
 
-- **Server:** `server/data/pricing.json` on the VPS, managed
-  through the admin panel (`GET /admin` → Pricing) or the API
-  (`GET /admin/pricing`, `POST /admin/pricing`, header
-  `X-Admin-Token`). The same table is used to price every premium
-  request: each completed chat writes its cost into `usage.log`.
+- **Server:** the price table lives on the VPS and is set by the
+  server owner in the VPS admin panel
+  (https://api.localbotz.io/admin). The same table prices every
+  premium request.
 - **Public price list:** `GET /v1/pricing` on the gateway — no
   auth needed, so users can see what renting costs before they
   register. The app shows it under Settings → Connectors →
   VPS Premium → Show prices.
-- **Client:** the app's own Super Admin pricing
-  (`data/pricing.json`, Settings → Super Admin) is the same
-  table for the client's own metering and wallets. Keep the two
-  in step when you change a price.
-
-## The pricing panel (admin panel → Pricing)
-
-Open `GET /admin` on the VPS, enter the admin token, go to
-**Pricing**. You see one row per premium model with its input
-and output price per 1M tokens. Change a number, hit **Save
-pricing** — done. There is nothing else to configure: no plans,
-no tiers, no hidden fees. Pay-as-you-go only.
-
-## Revenue (admin panel → Revenue)
-
-Every premium request is metered: tokens in/out and cost, per
-workspace and per model, in `usage.log`. The **Revenue** tab
-shows total revenue, requests billed, paying workspaces, cost by
-model, and the last 14 days. That is the money the rented server
-has earned. The **Overview** tab shows the same total at a glance.
-
-## Wallets (client Super Admin)
-
-On the client side, workspaces have wallets (`data/wallets/`)
-and metering (`data/metering.jsonl`): master-paid usage is
-charged to the workspace wallet at these prices, with a low
-balance warning (default $1). Local and BYOK usage costs the
-host $0 and is tracked only. See Super Admin → Wallet in the app.
+- **Client:** the app keeps a copy of the price table in
+  `data/pricing.json` for cost estimates only — the estimated
+  cost shown under each chat reply and in Settings → Wallet.
+  Local models are always $0.
