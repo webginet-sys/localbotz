@@ -132,6 +132,7 @@ if not errorlevel 1 goto :have_lmstudio
 if exist "%LOCALAPPDATA%\LM-Studio\LM Studio.exe" goto :have_lmstudio
 if exist "%LOCALAPPDATA%\Programs\LM-Studio\LM Studio.exe" goto :have_lmstudio
 echo [LocalBotz] LM Studio was not found — installing it for you now.
+echo [LocalBotz] LM Studio was not found — installing it for you now. >> install.log
 echo [LocalBotz] This is part of the LocalBotz install. No separate download.
 where winget >nul 2>&1
 if not errorlevel 1 (
@@ -152,6 +153,7 @@ pause
 goto :venv
 :lmstudio_installed
 echo [LocalBotz] LM Studio installed.
+echo [LocalBotz] LM Studio installed. >> install.log
 
 :have_lmstudio
 REM Make `lms` available, then download the model and start the server.
@@ -164,10 +166,12 @@ if errorlevel 1 (
 where lms >nul 2>&1
 if errorlevel 1 goto :venv
 echo [LocalBotz] Setting up LM Studio (model Qwen3.5 + local server)...
+echo [LocalBotz] Setting up LM Studio (model Qwen3.5 + local server)... >> install.log
 lms bootstrap >nul 2>&1
 lms ls 2>nul | findstr /I "qwen3.5" >nul
 if not errorlevel 1 goto :model_present
 echo [LocalBotz] Downloading the Qwen3.5 model (~6 GB, first time only)...
+echo [LocalBotz] Downloading the Qwen3.5 model (~6 GB, first time only)... >> install.log
 lms get qwen/qwen3.5-9b --yes
 if errorlevel 1 lms get qwen3.5-9b --yes
 :model_present
@@ -176,6 +180,7 @@ lms load qwen3.5-9b --yes >nul 2>&1
 if errorlevel 1 lms load qwen/qwen3.5-9b --yes >nul 2>&1
 lms server start >nul 2>&1
 echo [LocalBotz] LM Studio server should now be on http://localhost:1234
+echo [LocalBotz] LM Studio server should now be on http://localhost:1234 >> install.log
 
 REM ---------- Where should the data live? Asked once, on first install. ----------
 REM The app's memory — bots, memory, offices, workrooms, documents — can
@@ -215,6 +220,7 @@ goto :venv
 :venv
 if not exist ".venv\Scripts\python.exe" (
   echo [LocalBotz] Creating virtual environment (.venv)...
+  echo [LocalBotz] Creating virtual environment (.venv)... >> install.log
   python -m venv .venv
   if errorlevel 1 (
     echo [LocalBotz] Failed to create .venv. Try: python -m venv .venv
@@ -237,6 +243,7 @@ if exist "vendor\wheels\*.whl" (
 )
 
 echo [LocalBotz] Installing core dependencies (lightweight)...
+  echo [LocalBotz] Installing core dependencies (lightweight)... >> install.log
 ".venv\Scripts\python.exe" -m pip install -q --upgrade pip
 call :pip_req requirements.txt
 if errorlevel 1 (
@@ -247,6 +254,7 @@ if errorlevel 1 (
 
 REM ---------- Browser automation — always installed upfront ----------
 echo [LocalBotz] Installing browser automation (Playwright + Chromium)...
+  echo [LocalBotz] Installing browser automation (Playwright + Chromium)... >> install.log
 echo [LocalBotz] This is part of the full install, so browser automation
 echo [LocalBotz] is ready before you need it — nothing to install later.
 call :pip_req requirements-browser.txt
@@ -265,6 +273,7 @@ if errorlevel 1 (
 )
 REM ---------- Desktop control — always installed upfront ----------
 echo [LocalBotz] Installing desktop control (mouse/keyboard/window tools)...
+  echo [LocalBotz] Installing desktop control (mouse/keyboard/window tools)... >> install.log
 echo [LocalBotz] This is part of the full install, so a bot can use the
 echo [LocalBotz] desktop apps on this computer — Excel, the BOQ, the old
 echo [LocalBotz] accounting software — with nothing to install later.
@@ -281,6 +290,7 @@ echo [LocalBotz] and Talk still works — the Live Voice page will say so.
 call :pip_req requirements-live.txt
 if errorlevel 1 echo [LocalBotz] NOTE: live voice install did not work. Chat and Talk still work; live voice needs a Gemini key and this package.
 echo [LocalBotz] Verifying the full install (Python, packages, Chromium)...
+  echo [LocalBotz] Verifying the full install (Python, packages, Chromium)... >> install.log
 ".venv\Scripts\python.exe" scripts\check_install.py
 if errorlevel 1 (
   echo [LocalBotz] Install check reported a problem above. Fix it and
@@ -303,6 +313,7 @@ if "%HAVEPORT%"=="0" (
   )
 )
 echo [LocalBotz] Starting on %APP_URL% — open that in your browser.
+  echo [LocalBotz] Starting on %APP_URL% >> install.log
 echo [LocalBotz] Keep this black window open — LocalBotz runs inside it.
 echo [LocalBotz] Your app opens in the browser in a few seconds. If it
 echo [LocalBotz] does not open by itself, type %APP_URL% into Chrome or Edge.
