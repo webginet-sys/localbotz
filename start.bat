@@ -303,6 +303,13 @@ if "%HAVEPORT%"=="0" (
   )
 )
 echo [LocalBotz] Starting on %APP_URL% — open that in your browser.
+echo [LocalBotz] Keep this black window open — LocalBotz runs inside it.
+echo [LocalBotz] Your app opens in the browser in a few seconds. If it
+echo [LocalBotz] does not open by itself, type %APP_URL% into Chrome or Edge.
+REM Open the browser a few seconds after the app starts, so the user
+REM actually sees the app instead of just a black window. This runs in
+REM its own tiny window and never stops the app if it fails.
+start "" /min cmd /c "ping -n 6 127.0.0.1 >nul & start %APP_URL%"
 ".venv\Scripts\python.exe" app.py %APP_ARGS%
 set APP_EXIT=%ERRORLEVEL%
 echo [LocalBotz] %DATE% %TIME% - LocalBotz stopped, exit code %APP_EXIT% >> install.log

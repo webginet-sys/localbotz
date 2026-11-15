@@ -519,6 +519,36 @@ needs internet and a Gemini key in Secure store — live usage is
 billed to the key owner. Without a key the page says so honestly and
 refuses to start. Full details: `docs/live-voice.md`.
 
+## Muse — the character who lives in your PC
+
+Sidebar → 🏠 Home. **Muse** is the one character who lives on this
+computer — the name Thomas chose. Muse greets you by name, remembers
+what you teach it, and speaks as one voice across every bot. Pick how
+Muse speaks (Mentor, Friend, Professional, or your own words) and your
+voice speed and pitch in Settings → Character, or in step 4 of the
+first-run wizard.
+
+Home is your day at a glance: today's brief (routines due, deals gone
+quiet, new leads — built only from your real data, never invented),
+deals needing attention, and what the team has learned. **Speaks first**
+is off by default: switch on the morning brief and spoken nudges and
+Home prepares them for you to hear with one tap — browsers do not let
+a page speak without you tapping first, so Muse never talks out of
+nowhere on its own.
+
+**Phone link** (Settings → Phone link) is the bridge to the future
+mobile app: make a one-time 6-digit code on the PC, open the phone page
+on your phone, enter the code, and talk or type to the same Muse while
+the PC is on and the phone is on the same Wi-Fi. No cloud relay, no
+audio saved. Full details and honest limits: `docs/character.md`.
+
+**Floating bar**: a small bar at the top of the app always shows what
+Muse is doing (Idle / Listening / Working), with one-tap Talk and a
+⏹ Stop button. The 🖥️ Desktop page can run a short job of desktop
+steps; while it runs, a live card says "Working on step X of Y" and
+Stop (or Esc) really cancels it — no further step runs, and the stop
+is logged. This is an in-app bar, not a separate always-on-top window.
+
 ## Languages — every country, every language
 
 LocalBotz knows **199 countries and 186 languages** (`languages.json`:

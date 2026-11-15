@@ -64,6 +64,14 @@
   .tag.bad{background:#fde8e8}.tag.warn{background:#fff3cd}.tag.ok{background:#e2f5e9}
   .note{background:#fffbe8;border:1px solid #eee0a0;border-radius:8px;padding:10px 12px;font-size:14px;margin:10px 0}
   .hidden{display:none}
+  /* Floating bar + live job overlay (Muse status, always in reach) */
+  #floatbar{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;padding:8px 16px;background:#fff;border-bottom:1px solid #e3e0d9;font-size:14px}
+  body.dark #floatbar{background:#2a2a2e;border-color:#444}
+  #floatbar .dot{flex:none}
+  #float-status{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #float-notch{position:sticky;top:0;z-index:20;padding:6px 16px}
+  #job-overlay{position:sticky;top:0;z-index:30;margin:0 16px;padding:12px 14px;background:#fffbe8;border:1px solid #eee0a0;border-radius:0 0 10px 10px}
+  body.dark #job-overlay{background:#3a3220;border-color:#665c2e}
   @media(max-width:700px){aside{width:220px}}
 </style>
 </head>
@@ -79,6 +87,7 @@
     <div class="navsec">Bots</div>
     <ul class="botlist" id="botlist"></ul>
     <button class="navbtn" id="newbotbtn">＋ Make a bot</button>
+    <button class="navbtn" data-view="home">🏠 Home — your day at a glance</button>
     <button class="navbtn" data-view="office">🏢 Office — your AI team</button>
     <button class="navbtn" data-view="workroom">📁 Workroom — documents with proof</button>
     <button class="navbtn" data-view="routines">⏰ Routines — work that runs itself</button>
@@ -97,6 +106,8 @@
     <button class="navbtn" data-view="lib-tools">🛠 Tools</button>
     <div class="navsec">Settings</div>
     <button class="navbtn" data-view="set-general">⚙️ General</button>
+    <button class="navbtn" data-view="character">🤖 Character — Muse</button>
+    <button class="navbtn" data-view="phone">📱 Phone link — call Muse from your phone</button>
     <button class="navbtn" data-view="set-connectors">🔌 Connectors</button>
     <button class="navbtn" data-view="set-wallet">💳 Wallet</button>
     <button class="navbtn" data-view="set-secure">🔐 Secure store</button>
@@ -106,6 +117,22 @@
     <button class="navbtn" data-view="admin">👑 Super Admin</button>
   </aside>
   <main>
+    <!-- FLOATING BAR — Muse's status, always in reach -->
+    <div id="floatbar">
+      <span id="float-dot" class="dot" style="background:#aaa"></span>
+      <span id="float-status"><b>🤖 Muse</b> — Idle</span>
+      <button class="ghost small" id="float-talk" title="Talk to Muse — tap, speak in plain words">🎙️ Talk</button>
+      <button class="ghost small hidden" id="float-stop" title="Stop what Muse is doing">⏹ Stop</button>
+      <button class="ghost small" id="float-min" title="Hide this bar (bring it back from Settings > Character)">—</button>
+    </div>
+    <div id="float-notch" class="hidden"><button class="ghost small" id="float-restore">🤖 Muse — show the bar</button></div>
+    <!-- LIVE OVERLAY — shown while a desktop job runs, with a real Stop -->
+    <div id="job-overlay" class="hidden">
+      <div id="job-overlay-text" style="font-weight:600">Working…</div>
+      <div id="job-overlay-prog" style="color:#666;font-size:13px;margin:4px 0"></div>
+      <button class="small" id="job-stop">⏹ Stop</button>
+      <span style="color:#666;font-size:13px;margin-left:8px">Esc stops it too. Stopping cancels the job — no further step runs, and the stop is logged.</span>
+    </div>
     <!-- CHAT VIEW -->
     <div id="view-chat" style="display:flex;flex-direction:column;flex:1;min-height:0">
       <header>
@@ -173,9 +200,9 @@
     <!-- FIRST-RUN WIZARD -->
     <div id="view-wizard" class="view hidden">
       <h2>Welcome to LocalBotz 👋</h2>
-      <p>Three quick steps and your office is set up. You can change everything later in Settings.</p>
+      <p>Four quick steps and your office is set up. You can change everything later in Settings.</p>
       <div id="wiz-1">
-        <h3>Step 1 of 3 — How should LocalBotz run?</h3>
+        <h3>Step 1 of 4 — How should LocalBotz run?</h3>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="computer" checked> <b>🖥️ On my computer</b> — free, on your downloaded local model (LM Studio / Qwen3.5). Nothing leaves the computer.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="subscriptions"> <b>🔑 With my subscriptions</b> — Claude, ChatGPT, Grok, Gemini and more, using keys you already pay for.</label>
         <label style="display:block;margin:8px 0"><input type="radio" name="wiz-run" value="rent"> <b>☁️ Rent one from us</b> — premium models from our server, metered to your wallet. No keys of your own.</label>
@@ -187,19 +214,27 @@
         <button id="wiz-next-1">Next →</button> <button class="ghost" id="wiz-skip">Skip setup</button>
       </div>
       <div id="wiz-2" class="hidden">
-        <h3>Step 2 of 3 — Your first bot</h3>
+        <h3>Step 2 of 4 — Your first bot</h3>
         <label>Bot name</label><input id="wiz-bot-name" type="text" value="Morning Brief" placeholder="e.g. Morning Brief">
         <label>Start from a template</label><select id="wiz-bot-tpl"></select>
         <p class="note">The template fills in the instructions — you can edit them later.</p>
         <button id="wiz-back-2" class="ghost">← Back</button> <button id="wiz-next-2">Next →</button>
       </div>
       <div id="wiz-3" class="hidden">
-        <h3>Step 3 of 3 — Your first office</h3>
+        <h3>Step 3 of 4 — Your first office</h3>
         <label>Office name</label><input id="wiz-office-name" type="text" value="My Office" placeholder="e.g. My Office">
         <label>First deal — title (optional)</label><input id="wiz-deal-title" type="text" placeholder="e.g. Villa fit-out">
         <label>First deal — client (optional)</label><input id="wiz-deal-client" type="text" placeholder="e.g. Pearl Homes">
         <label style="display:inline"><input type="checkbox" id="wiz-autostart" checked> Start LocalBotz when the computer starts — so routines, jobs and workflows keep running while the computer is on</label>
-        <div style="margin-top:10px"><button id="wiz-back-3" class="ghost">← Back</button> <button id="wiz-finish">Finish — open my office ✓</button></div>
+        <div style="margin-top:10px"><button id="wiz-back-3" class="ghost">← Back</button> <button id="wiz-next-3">Next →</button></div>
+      </div>
+      <div id="wiz-4" class="hidden">
+        <h3>Step 4 of 4 — Meet Muse (optional)</h3>
+        <p>Muse is the character who lives on this computer — the voice you talk to. Pick how Muse speaks and what to call you. Skip this and Muse starts as a calm mentor.</p>
+        <label>What should I call you?</label><input id="wiz-user-name" type="text" placeholder="e.g. Thomas">
+        <label>How should Muse speak?</label><select id="wiz-char-style"><option value="mentor">Mentor — calm, encouraging, to the point</option><option value="friend">Friend — warm, easy, short sentences</option><option value="professional">Professional — courteous office colleague</option></select>
+        <label style="display:inline"><input type="checkbox" id="wiz-brief"> Prepare a morning brief at 08:00 — a spoken summary of your day (you tap to hear it; Muse never speaks on its own)</label>
+        <div style="margin-top:10px"><button id="wiz-back-4" class="ghost">← Back</button> <button id="wiz-finish">Finish — open my office ✓</button> <button class="ghost" id="wiz-skip-4">Skip this step</button></div>
       </div>
       <div id="wiz-msg"></div>
     </div>
@@ -209,6 +244,8 @@
 let bots=[], current=null, providers=[], templates=[], allTools=[], settings={};
 let mbAvatar="🤖", mbTemplate="", mbTools=[];
 const $=id=>document.getElementById(id);
+const q=id=>$(id); // top-level shortcut — the wizard wiring and wfStepsRender use it outside bindPage
+const msg=t=>{const m=$('page-msg'); if(m) m.textContent=t;}; // top-level too — persistent-toggle, wizFinish and the floating bar use it outside bindPage
 async function api(p,o={}){const r=await fetch(p,{headers:{'Content-Type':'application/json'},...o}); if(!r.ok) throw new Error(await r.text()); return r.json();}
 function esc(s){return String(s??'').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function showView(name){
@@ -217,7 +254,7 @@ function showView(name){
   $('view-chat').style.display = name==='chat' ? 'flex' : 'none';
   $('view-makebot').classList.toggle('hidden', name!=='makebot');
   $('view-wizard').classList.toggle('hidden', name!=='wizard');
-  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live','languages'].includes(name);
+  const _isPage=name.startsWith('lib-')||name.startsWith('set-')||['admin','office','workroom','routines','deals','runs','desktop','live','languages','home','character','phone'].includes(name);
   if(name!=='live' && typeof stopLive==='function') stopLive('You left the Live Voice page — the mic is off.');
   $('view-page').classList.toggle('hidden', !_isPage);
   if(_isPage) renderPage(name);
@@ -347,20 +384,22 @@ async function selectBot(id){current=bots.find(b=>b.id===id); if(!current) retur
   showView('chat'); renderChat(await api(`/api/bots/${id}/chat`)); loadMemory(); loadTasks(); loadStatus();
 }
 async function send(){const inp=$('input'); const text=inp.value.trim(); if(!text||!current) return;
-  inp.value=''; const msgs=await api(`/api/bots/${current.id}/chat`);
+  inp.value=''; setMuseStatus('Working','Thinking…');
+  const msgs=await api(`/api/bots/${current.id}/chat`);
   msgs.push({role:'user',content:text}); renderChat(msgs);
   $('chat').insertAdjacentHTML('beforeend','<div class="msg assistant">Thinking… (may use tools — up to 8 steps)</div>');
   try{const res=await api(`/api/bots/${current.id}/chat`,{method:'POST',body:JSON.stringify({message:text, workspace:currentWorkspace(), talk:talkUsed||speakOn, show_me_how:showHowOn, language:chatLangOverride})});
     talkUsed=false;
     renderChat(await api(`/api/bots/${current.id}/chat`));
     if(res.reply) speakText(res.reply);
+    setMuseStatus('Idle');
     if(res.error==='model_unavailable'&&res.suggested_model){const b=document.createElement('button'); b.textContent=`Switch to ${res.suggested_model} (${res.suggested_provider}) — available now`; b.style.margin='10px 20px';
       b.onclick=async()=>{await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({provider:res.suggested_provider,model:res.suggested_model})}); await loadBots(); selectBot(current.id);};
       $('chat').appendChild(b);}
     if(res.fallback_available){const b=document.createElement('button'); b.textContent='Switch this bot to LM Studio (local fallback)'; b.style.margin='10px 20px';
       b.onclick=async()=>{await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({provider:'lmstudio',model:'qwen3.5'})}); await loadBots(); selectBot(current.id);};
       $('chat').appendChild(b);}
-  }catch(e){alert('Chat failed: '+e.message);}
+  }catch(e){alert('Chat failed: '+e.message); setMuseStatus('Idle');}
 }
 $('send').onclick=send;
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter') send();});
@@ -398,6 +437,35 @@ function effLangCode(){ if(chatLangOverride) return chatLangOverride; if(current
 function speechLangTag(){ const c=effLangCode(); if(!c) return navigator.language||'en-GB'; return LANG_TAG[c]||c; }
 function langIsRTL(code){ if(!LANGCAT||!code) return false; const l=(LANGCAT.languages||[]).find(x=>x.code===code); return !!(l&&l.rtl); }
 async function fillChatLang(){ const sel=$('chat-lang'); if(!sel) return; await loadLanguages(); const cur=(current&&current.language)||'auto'; sel.innerHTML=langOptions(cur)+`<option value="__all__">🌍 All languages…</option>`; sel.value=cur; }
+let CHARACTER=null;
+async function loadCharacter(){ try{ CHARACTER=await api('/api/character'); }catch(e){ CHARACTER=null; } return CHARACTER; }
+function applyCharVoice(u){
+  if(!CHARACTER) return;
+  try{ if(CHARACTER.voice_rate) u.rate=Number(CHARACTER.voice_rate)||1; }catch(e){}
+  try{ if(CHARACTER.voice_pitch) u.pitch=Number(CHARACTER.voice_pitch)||1; }catch(e){}
+  try{
+    const vs=window.speechSynthesis.getVoices()||[];
+    const want=(CHARACTER.voice_name||'').trim().toLowerCase();
+    if(want){ const v=vs.find(x=>x.name&&x.name.toLowerCase().includes(want)); if(v){ u.voice=v; return; } }
+    const c=(effLangCode()||'en').toLowerCase();
+    const v=vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c))||vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c.slice(0,2)));
+    if(v) u.voice=v;
+  }catch(e){}
+}
+function speakAloud(text){
+  // Explicit tap (Hear my brief / Hear this nudge / Test greeting) — speaks
+  // even when "Listen" is off. Browsers only allow speech after a tap,
+  // so nothing here ever speaks on its own.
+  if(!('speechSynthesis' in window)){ alert('This browser has no speech — the text is on the page to read.'); return; }
+  try{
+    window.speechSynthesis.cancel();
+    const clean=String(text||'').replace(/[#*`_\[\]()]/g,' ').replace(/\s+/g,' ').trim();
+    if(!clean) return;
+    const u=new SpeechSynthesisUtterance(clean.slice(0,1500)); u.lang=speechLangTag();
+    applyCharVoice(u);
+    window.speechSynthesis.speak(u);
+  }catch(e){ /* speech is a nicety — never break the page */ }
+}
 function speakText(text){
   if(!speakOn || !('speechSynthesis' in window)) return;
   try{
@@ -407,7 +475,7 @@ function speakText(text){
     // Short plain replies only: first two sentences, max ~600 chars.
     const short=clean.split(/(?<=[.!?])\s+/).slice(0,2).join(' ').slice(0,600);
     const u=new SpeechSynthesisUtterance(short); u.lang=speechLangTag();
-    try{const vs=window.speechSynthesis.getVoices()||[]; const c=(effLangCode()||'en').toLowerCase(); const v=vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c))||vs.find(x=>x.lang&&x.lang.toLowerCase().startsWith(c.slice(0,2))); if(v) u.voice=v;}catch(e){}
+    applyCharVoice(u);
     window.speechSynthesis.speak(u);
   }catch(e){ /* speech is a nicety — never break the chat */ }
 }
@@ -422,7 +490,7 @@ function startTalk(){
   try{
     recog=new SR(); recog.lang=speechLangTag(); recog.interimResults=true; recog.continuous=false;
     const btn=$('talk-btn'); if(btn) btn.textContent='🎙️ Listening… tap to stop';
-    recognising=true;
+    recognising=true; setMuseStatus('Listening','Listening…');
     recog.onresult=e=>{
       let interim='', final='';
       for(let i=e.resultIndex;i<e.results.length;i++){
@@ -433,8 +501,8 @@ function startTalk(){
       if(final){ talkUsed=true; inp.value=final.trim(); recognising=false; if(btn) btn.textContent='🎙️ Talk'; try{recog.stop();}catch(err){} send(); }
       else if(interim){ inp.value=interim; }
     };
-    recog.onerror=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; };
-    recog.onend=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; };
+    recog.onerror=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; if(floatState.status==='Listening') setMuseStatus('Idle'); };
+    recog.onend=()=>{ recognising=false; const b=$('talk-btn'); if(b) b.textContent='🎙️ Talk'; if(floatState.status==='Listening') setMuseStatus('Idle'); };
     recog.start();
   }catch(e){ recognising=false; alert('Could not start listening: '+e.message); }
 }
@@ -444,6 +512,79 @@ if($('speak-toggle')) $('speak-toggle').onclick=()=>{ speakOn=!speakOn; localSto
 if($('chat-lang')) $('chat-lang').onchange=()=>{ const v=$('chat-lang').value; if(v==='__all__'){ showView('languages'); fillChatLang(); return; } chatLangOverride=(v==='auto')?null:v; };
 if($('showhow-toggle')) $('showhow-toggle').onclick=async()=>{ showHowOn=!showHowOn; syncTalkButtons(); if(current){ try{ await api(`/api/bots/${current.id}`,{method:'PATCH',body:JSON.stringify({show_me_how:showHowOn?'on':'off'})}); await loadBots(); current=bots.find(b=>b.id===current.id); }catch(e){ /* toggle still works for this chat */ } } };
 syncTalkButtons();
+
+// ---------- Floating bar + live job overlay ----------
+// A small bar at the top of the app, always there: Muse's status
+// (Idle / Listening / Working), one-tap Talk, and a Stop button that
+// actually stops the running desktop job (or the in-flight desktop
+// action, or the spoken reply) — it never just hides the card.
+// This is an in-app bar, not a separate always-on-top OS window:
+// that would need a desktop shell change, and it is not built here.
+let floatState={status:'Idle', detail:'', jobId:null, jobTimer:null, deskAbort:null};
+function setMuseStatus(status, detail){
+  floatState.status=status; floatState.detail=detail||'';
+  const dot=$('float-dot'), txt=$('float-status');
+  if(dot){ dot.className='dot'+(status==='Listening'?' ok':status==='Working'?' mock':status==='Stopped'?' bad':''); dot.style.background=status==='Idle'?'#aaa':''; }
+  if(txt) txt.innerHTML=`<b>🤖 Muse</b> — ${esc(status)}${detail?` — ${esc(detail)}`:''}`;
+  const stop=$('float-stop');
+  if(stop) stop.classList.toggle('hidden', !(status==='Working'||status==='Listening'||floatState.jobId));
+}
+function syncFloatbar(){
+  const on=!(CHARACTER&&CHARACTER.floatbar_enabled===false);
+  const min=localStorage.getItem('localbotz-floatbar-min')==='1';
+  $('floatbar').classList.toggle('hidden', !on||min);
+  $('float-notch').classList.toggle('hidden', !on||!min);
+}
+if($('float-talk')) $('float-talk').onclick=()=>{ showView('chat'); setTimeout(()=>{ if(current) startTalk(); else msg('Pick a bot first, then tap Talk.'); }, 100); };
+if($('float-stop')) $('float-stop').onclick=()=>stopCurrentJob();
+if($('float-min')) $('float-min').onclick=()=>{ localStorage.setItem('localbotz-floatbar-min','1'); syncFloatbar(); };
+if($('float-restore')) $('float-restore').onclick=()=>{ localStorage.removeItem('localbotz-floatbar-min'); syncFloatbar(); };
+async function stopCurrentJob(){
+  // Stop, in order: the running desktop job, the in-flight desktop
+  // action, the live voice session, the spoken reply. Then Idle.
+  try{
+    if(floatState.jobId){ const id=floatState.jobId; floatState.jobId=null; await api(`/api/desktop/job/${id}/stop`,{method:'POST'}); }
+  }catch(e){ /* job may already be done — fall through to the rest */ }
+  if(floatState.deskAbort){ try{ floatState.deskAbort.abort(); }catch(e){} floatState.deskAbort=null; }
+  if(typeof liveState!=='undefined'&&liveState) stopLive('Stopped by you.');
+  if('speechSynthesis' in window) try{ window.speechSynthesis.cancel(); }catch(e){}
+  if(recognising&&recog){ try{ recog.stop(); }catch(e){} }
+  setMuseStatus('Stopped','Stopped by you.'); hideJobOverlay();
+  setTimeout(()=>{ if(floatState.status==='Stopped') setMuseStatus('Idle'); }, 4000);
+}
+function showJobOverlay(text, prog){
+  const o=$('job-overlay'); if(!o) return;
+  o.classList.remove('hidden');
+  $('job-overlay-text').textContent=text;
+  $('job-overlay-prog').textContent=prog||'';
+  const b=$('job-stop'); b.textContent='⏹ Stop'; b.onclick=()=>stopCurrentJob();
+}
+function hideJobOverlay(){ const o=$('job-overlay'); if(o) o.classList.add('hidden'); }
+function startJobPoll(id){
+  floatState.jobId=id; setMuseStatus('Working','Desktop job running…');
+  if(floatState.jobTimer) clearInterval(floatState.jobTimer);
+  showJobOverlay('Working on the desktop…','');
+  floatState.jobTimer=setInterval(async()=>{
+    try{
+      const j=await api('/api/desktop/job/'+id);
+      const total=(j.steps||[]).length, cur=Math.min((j.current_index||0)+1, total);
+      if(j.status==='running'){
+        showJobOverlay(`Working on step ${cur} of ${total} — ${j.current_plain||''}`, `Step ${cur} of ${total} · job ${j.id}`);
+      } else {
+        clearInterval(floatState.jobTimer); floatState.jobTimer=null; floatState.jobId=null;
+        const done=j.status==='done'?`Done ✓ — ${total} step(s) finished.`:
+          j.status==='stopped'?`Stopped — finished ${j.results?j.results.length:0} of ${total} step(s). Nothing else ran.`:
+          `Job ${j.status} — see the Desktop page for what happened.`;
+        showJobOverlay(done, `Job ${j.id} · ${j.status}`);
+        const b=$('job-stop'); b.textContent='Dismiss'; b.onclick=()=>hideJobOverlay();
+        setMuseStatus('Idle');
+      }
+    }catch(e){ clearInterval(floatState.jobTimer); floatState.jobTimer=null; floatState.jobId=null; hideJobOverlay(); setMuseStatus('Idle'); }
+  }, 1000);
+}
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'&&$('job-overlay')&&!$('job-overlay').classList.contains('hidden')) stopCurrentJob();
+});
 
 // ---------- Live Voice (real-time) ----------
 // Mic open, model answers out loud, interrupt any time. Audio is
@@ -713,6 +854,9 @@ async function renderPage(name){
     else if(name==='desktop') el.innerHTML=await desktopHtml();
     else if(name==='live') el.innerHTML=await liveHtml();
     else if(name==='languages') el.innerHTML=await languagesHtml();
+    else if(name==='home') el.innerHTML=await homeHtml();
+    else if(name==='character') el.innerHTML=await characterHtml();
+    else if(name==='phone') el.innerHTML=await phoneHtml();
     else if(name==='lib-connectors'||name==='set-connectors') el.innerHTML=await connectorsHtml(name.startsWith('set-'));
     else if(name==='lib-messaging'||name==='set-messaging') el.innerHTML=await messagingHtml();
     else if(name==='lib-mcp') el.innerHTML=await mcpHtml();
@@ -725,6 +869,102 @@ async function renderPage(name){
     else if(name==='set-devices') el.innerHTML=await devicesHtml();
     bindPage(name);
   }catch(e){ el.innerHTML='<h2>Error</h2><p>'+esc(e.message)+'</p>'; }
+}
+// ---------- Home command centre + Character + Phone link ----------
+// Home is the default view: one glance at the day, built from real data
+// only. The character (Muse) greets you; the brief is read from the
+// stored data, never invented; nothing speaks unless you tap a button.
+async function homeHtml(){
+  const home=await api('/api/home');
+  const brief=home.brief||{lines:[],counts:{}};
+  const ch=home.character||{name:'Muse'};
+  const nudge=brief.nudge;
+  const deals=(home.deals_needing_attention||[]);
+  const routines=(home.routines_due_today||[]);
+  const counts=home.counts||{};
+  return `<h2>🏠 Home — your day at a glance</h2>
+  <div style="background:#fff;border:1px solid #e3e0d9;border-radius:10px;padding:16px;margin-bottom:14px">
+    <div style="font-size:32px">🤖</div>
+    <h3 style="margin:6px 0">${esc(home.greeting||'Hello.')}</h3>
+    <p style="color:#666;margin:4px 0">Muse lives on this computer — talk to ${esc(ch.name)} in plain words, no prompting, no menus.</p>
+    <button id="home-hear">🔊 Hear my brief</button>
+    <button id="home-talk" class="ghost">🎙️ Talk</button>
+    <button id="home-live" class="ghost">🔴 Live Voice</button>
+  </div>
+  <h3>Today's brief</h3>
+  <div style="background:#fff;border:1px solid #e3e0d9;border-radius:10px;padding:14px;margin-bottom:14px">
+    <p style="margin:0 0 6px">${brief.lines.map(l=>esc(l)).join('<br>')}</p>
+    <p class="note" style="margin:6px 0">Built from your routines, deals, leads and tasks — nothing here is invented. If it says nothing needs attention, that is because nothing does.</p>
+    <button id="home-hear-brief" class="ghost">🔊 Hear this brief</button>
+    <button id="home-refresh-brief" class="ghost">↻ Refresh the brief</button>
+  </div>
+  ${nudge?`<h3>🔔 Spoken nudge</h3>
+  <div style="background:#fffbe8;border:1px solid #eee0a0;border-radius:10px;padding:14px;margin-bottom:14px">
+    <p style="margin:0 0 8px">${esc(nudge.text||'')}</p>
+    <button id="home-hear-nudge">🔊 Hear this nudge</button>
+    <button id="home-open-deal" class="ghost" data-deal="${esc(nudge.deal_id||'')}">Open the deal</button>
+    <p class="note" style="margin:8px 0 0">Muse never speaks on its own — tap to hear it. Spoken nudges are off by default; switch them on in Settings &gt; Character.</p>
+  </div>`:''}
+  <h3>Deals needing attention</h3>
+  ${deals.length?`<table><tr><th>Deal</th><th>Client</th><th>Stage</th><th></th></tr>${deals.map(d=>`<tr><td>${esc(d.title||'')}</td><td>${esc(d.client||'')}</td><td>${esc(d.stage||'')}</td><td><button class="small" data-home-deal="${esc(d.id||'')}">Open</button></td></tr>`).join('')}</table>`:'<p class="note">No deals waiting on a reply for 3 days or more.</p>'}
+  <h3>Routines due today</h3>
+  ${routines.length?`<ul>${routines.map(r=>`<li><b>${esc(r.name||'')}</b> — ${esc(r.schedule_text||'')}</li>`).join('')}</ul>`:'<p class="note">No routines due today.</p>'}
+  <div class="row">
+    <div><h3>Your office</h3><p>${counts.bots||0} bot(s) · ${counts.deals||0} deal(s) · ${counts.leads||0} lead(s) · ${counts.workrooms||0} workroom(s) · ${counts.learnings||0} thing(s) learned</p></div>
+    <div><h3>What the team has learned lately</h3>${(home.recent_learnings||[]).length?`<ul>${home.recent_learnings.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`:'<p class="note">Nothing learned yet.</p>'}</div>
+  </div>
+  <div id="page-msg"></div>`;
+}
+async function characterHtml(){
+  const ch=await api('/api/character');
+  const styleOpts=[['mentor','Mentor — calm, encouraging, to the point'],['friend','Friend — warm, easy, short sentences'],['professional','Professional — courteous office colleague'],['custom','Custom — write it yourself below']].map(([v,l])=>`<option value="${v}" ${ch.style===v?'selected':''}>${l}</option>`).join('');
+  const remRows=(ch.remembers||[]).map((r,i)=>`<li>${esc(r)} <button class="small" data-char-forget="${i}">Forget</button></li>`).join('');
+  return `<h2>🤖 Character — Muse</h2>
+  <p class="note">Muse is the one character who lives on this computer. Bots still do the jobs; Muse is who you talk to — the voice, the greeting, the memory. Change anything here and every bot speaks as Muse from then on.</p>
+  <label>Character name</label><input id="ch-name" type="text" value="${esc(ch.name||'Muse')}">
+  <label>How should ${esc(ch.name||'Muse')} speak?</label><select id="ch-style">${styleOpts}</select>
+  <label>Custom way of speaking (only when style is Custom)</label><textarea id="ch-custom" rows="2" placeholder="e.g. Speak like a Doha site engineer: short, direct, no fluff.">${esc(ch.custom_style||'')}</textarea>
+  <label>Your name (so ${esc(ch.name||'Muse')} can greet you by name)</label><input id="ch-user" type="text" value="${esc(ch.user_name||'')}" placeholder="e.g. Thomas">
+  <label>Greeting (leave empty for the normal time-of-day greeting — use {user} for your name)</label><input id="ch-greeting" type="text" value="${esc(ch.greeting||'')}" placeholder="e.g. Good morning, {user}. Ready when you are.">
+  <div class="row"><div><label>Voice speed (0.5 slow — 2.0 fast)</label><input id="ch-rate" type="number" step="0.1" min="0.5" max="2" value="${ch.voice_rate||1}"></div><div><label>Voice pitch (0.5 low — 2.0 high)</label><input id="ch-pitch" type="number" step="0.1" min="0.5" max="2" value="${ch.voice_pitch||1}"></div></div>
+  <label>Voice name (optional — part of a voice name your browser offers, e.g. "Google UK English Male")</label><input id="ch-voice" type="text" value="${esc(ch.voice_name||'')}">
+  <label style="display:block;margin:8px 0"><input type="checkbox" id="ch-enabled" ${ch.enabled?'checked':''}> Character on — bots speak as ${esc(ch.name||'Muse')} (switch off and bots speak as themselves)</label>
+  <label style="display:block;margin:8px 0"><input type="checkbox" id="ch-floatbar" ${ch.floatbar_enabled!==false?'checked':''}> Show the floating bar at the top of the app — Muse's status, one-tap Talk, and the Stop button (minimise it with — on the bar itself)</label>
+  <h3>Speaks first — only when you switch it on</h3>
+  <p class="note">Muse never speaks out of nowhere on its own: browsers do not allow a page to play audio without you tapping first. “Speaks first” means the Home page prepares things for you to hear with one tap — a morning brief, and a nudge when a deal goes quiet.</p>
+  <label style="display:block;margin:6px 0"><input type="checkbox" id="ch-speaks" ${ch.speaks_first_enabled?'checked':''}> Let Muse speak first (morning brief + nudges, both need their own switch below)</label>
+  <label style="display:block;margin:6px 0"><input type="checkbox" id="ch-brief" ${ch.morning_brief_enabled?'checked':''}> Morning brief — prepare today's brief every morning at</label>
+  <input id="ch-brief-time" type="time" value="${esc(ch.morning_brief_time||'08:00')}">
+  <label style="display:block;margin:6px 0"><input type="checkbox" id="ch-nudges" ${ch.spoken_nudges_enabled?'checked':''}> Spoken nudges — when a deal goes quiet, leave a nudge on the Home page to hear</label>
+  <label>Quiet hours (optional, e.g. 22:00–07:00 — shown as a reminder, not enforced by the browser)</label><input id="ch-quiet" type="text" value="${esc(ch.quiet_hours||'')}" placeholder="e.g. 22:00–07:00">
+  <div style="margin:10px 0"><button id="ch-save">Save character</button> <button id="ch-test" class="ghost">🔊 Hear the greeting</button></div>
+  <h3>Things ${esc(ch.name||'Muse')} remembers about you</h3>
+  ${remRows?`<ul>${remRows}</ul>`:'<p class="note">Nothing remembered yet — teach Muse a fact about you, your business, or how you like things done.</p>'}
+  <label>Remember something new</label><input id="ch-remember" type="text" placeholder="e.g. My company is Al Rayyan Trading — we do MEP in Doha">
+  <div style="margin:8px 0"><button id="ch-remember-add">Remember this</button></div>
+  <div id="page-msg"></div>`;
+}
+async function phoneHtml(){
+  const st=await api('/api/phone/status');
+  return `<h2>📱 Phone link — call Muse from your phone</h2>
+  <p class="note">The bridge to the future LocalBotz mobile app — not the app itself. Link your phone once with a code, then talk or type to Muse from the phone while this PC is on and LocalBotz is open. The phone page is the same Muse, the same chat history.</p>
+  <h3>Your phone page</h3>
+  <p>Open this address on your phone: <code>${esc(st.url||'')}</code><br>
+  This PC on your Wi-Fi: <code>${esc(st.local_address||'')} : ${esc(st.port||'8000')}</code><br>
+  ${st.paired?`✅ A phone is linked (${st.sessions} session(s)).`:'No phone linked yet.'}
+  ${st.active_code?`<br>⏳ A code is waiting — it expires at ${new Date(st.code_expires_at*1000).toLocaleTimeString()}.`:''}</p>
+  <div style="margin:10px 0"><button id="ph-pair">Make a new 6-digit code</button> <button id="ph-open" class="ghost">Open the phone page</button> <button id="ph-revoke" class="ghost">Unlink every phone</button></div>
+  <div id="ph-code" style="font-size:28px;letter-spacing:6px;margin:10px 0"></div>
+  <p class="note" id="ph-msg">The code lasts 10 minutes and works once. It is shown once here and stored only as a hash on this PC — never sent anywhere.</p>
+  <h3>Honest limits</h3>
+  <ul>
+    <li>The PC must stay on and LocalBotz open — if the PC sleeps or the app closes, the phone cannot reach Muse.</li>
+    <li>Your phone must be on the same Wi-Fi and able to reach this PC. If it cannot, the phone page will say so plainly.</li>
+    <li>There is no cloud relay yet — this is your home/office Wi-Fi only, not the internet. That is on purpose: your voice and chats stay on your own machines.</li>
+    <li>This is LocalBotz's own pairing code — not WhatsApp pairing, and nothing to do with WhatsApp Web.</li>
+    <li>Talk on the phone needs Chrome or Edge; otherwise you can type. No audio is saved, on the phone or on the PC.</li>
+  </ul>
+  <div id="page-msg"></div>`;
 }
 async function routinesHtml(){
   const routines=await api('/api/routines');
@@ -809,6 +1049,8 @@ async function desktopHtml(){
   const st=await api('/api/desktop/status');
   const snap=await api('/api/desktop/snapshot');
   const log=await api('/api/desktop/log');
+  const jobs=await api('/api/desktop/jobs').catch(()=>[]);
+  const jobRows=(jobs||[]).slice(0,10).map(j=>`<tr><td>${esc(j.id||'')}</td><td>${esc(j.status||'')}</td><td>${(j.results||[]).length} of ${(j.steps||[]).length} step(s)</td><td style="white-space:pre-wrap">${esc(j.current_plain||(j.plain||[]).join(' · ')||'')}</td><td>${j.status==='running'?`<button class="small" data-job-stop="${esc(j.id)}">⏹ Stop</button>`:''}</td></tr>`).join('');
   const winRows=(snap.windows||[]).map(w=>`<tr><td><b>${esc(w.ref)}</b></td><td>${esc(w.title)}</td><td>${esc(w.app||'')}</td><td>${w.focused?'● focused':''}</td></tr>`).join('');
   const elRows=(snap.elements||[]).map(e=>`<tr><td><b>${esc(e.ref)}</b></td><td>${esc(e.name||'')}</td><td>${esc(e.type||'')}</td><td>${e.x!=null?`(${e.x}, ${e.y})`:''}</td><td>${esc(e.value||'')}</td></tr>`).join('');
   const logRows=(log||[]).slice(0,30).map(l=>`<tr><td>${new Date(l.at*1000).toLocaleString()}</td><td>${esc(l.action)}</td><td>${esc(l.target||'')}</td><td>${esc(l.source||'')}</td><td>${l.verified?'✓ verified':'—'}</td><td style="white-space:pre-wrap">${esc((l.result||'').slice(0,200))}</td></tr>`).join('');
@@ -830,6 +1072,12 @@ async function desktopHtml(){
   <label>Keys to press</label><input id="desk-keys" type="text" placeholder="e.g. enter, tab, ctrl+s">
   <div style="margin:8px 0"><button id="desk-act">Do it on the desktop</button> <button id="desk-refresh">↻ Refresh the list</button></div>
   <div id="desk-result"></div>
+  <h3>Run a desktop job — a few steps, with a real Stop</h3>
+  <p class="note">One step per line, in order — e.g. <code>inspect</code>, <code>activate w1</code>, <code>click e1</code>, <code>type e1 2,390,907</code>, <code>key ctrl+s</code>, <code>screenshot</code>. The job runs one step at a time with a short pause between steps, the floating bar shows “Working on step X”, and ⏹ Stop (or Esc) cancels it — no further step runs, and the stop is logged. Clicking and typing need Desktop control on in Settings &gt; Permissions.</p>
+  <label>Steps — one per line</label><textarea id="desk-job-steps" rows="4" placeholder="inspect&#10;activate w1&#10;click e2">inspect</textarea>
+  <div style="margin:8px 0"><button id="desk-job-run">▶ Run this job</button></div>
+  <h3>Recent desktop jobs</h3>
+  ${jobRows?`<table><tr><th>Job</th><th>Status</th><th>Steps done</th><th>Now / last step</th><th></th></tr>${jobRows}</table>`:'<p class="note">No desktop jobs yet. Run one above.</p>'}
   <h3>Desktop log — every action, verified or not</h3>
   ${logRows?`<table><tr><th>When</th><th>Action</th><th>Target</th><th>From</th><th>Verified</th><th>Result</th></tr>${logRows}</table>`:'<p class="note">Nothing on the desktop yet. Inspect it above, or let a bot or a workflow do something.</p>'}
   <div id="page-msg"></div>`;
@@ -1271,6 +1519,30 @@ async function devicesHtml(){
 function bindPage(name){
   const msg=t=>{const m=$('page-msg'); if(m) m.textContent=t;};
   if(name==='live'){ const ls=$('live-start'); if(ls) ls.onclick=startLive; const lt=$('live-stop'); if(lt) lt.onclick=()=>stopLive('Stopped. The words are saved in the bot\'s chat history.'); const li=$('live-interrupt'); if(li) li.onclick=()=>liveInterrupt(); }
+  // Home command centre
+  if(q('home-hear')||q('home-hear-brief')){ const brief=async()=>{ try{ return (await api('/api/brief')).text||''; }catch(e){ return ''; } };
+    if(q('home-hear')) q('home-hear').onclick=async()=>{ const g=await api('/api/character/greet').catch(()=>({greeting:''})); speakAloud((g.greeting||'')+' '+(await brief())); };
+    if(q('home-hear-brief')) q('home-hear-brief').onclick=async()=>speakAloud(await brief());
+    if(q('home-refresh-brief')) q('home-refresh-brief').onclick=async()=>{ await api('/api/brief/prepare',{method:'POST'}); renderPage(name); };
+    if(q('home-talk')) q('home-talk').onclick=()=>{ showView('chat'); setTimeout(()=>{ if(current) startTalk(); else msg('Pick a bot first, then tap Talk.'); }, 100); };
+    if(q('home-live')) q('home-live').onclick=()=>showView('live'); }
+  if(q('home-hear-nudge')) q('home-hear-nudge').onclick=async()=>{ const b=await api('/api/brief').catch(()=>({})); if(b.nudge&&b.nudge.text) speakAloud(b.nudge.text); };
+  document.querySelectorAll('[data-home-deal]').forEach(el=>el.onclick=()=>{ currentDeal=el.dataset.homeDeal; showView('deals'); });
+  // Character page
+  if(q('ch-save')) q('ch-save').onclick=async()=>{ try{
+    const body={name:q('ch-name').value, style:q('ch-style').value, custom_style:q('ch-custom').value, user_name:q('ch-user').value, greeting:q('ch-greeting').value,
+      voice_rate:parseFloat(q('ch-rate').value)||1, voice_pitch:parseFloat(q('ch-pitch').value)||1, voice_name:q('ch-voice').value,
+      enabled:q('ch-enabled').checked, speaks_first_enabled:q('ch-speaks').checked, morning_brief_enabled:q('ch-brief').checked,
+      morning_brief_time:q('ch-brief-time').value, spoken_nudges_enabled:q('ch-nudges').checked, quiet_hours:q('ch-quiet').value, floatbar_enabled:q('ch-floatbar').checked};
+    await api('/api/character',{method:'PUT',body:JSON.stringify(body)}); await loadCharacter(); syncFloatbar(); msg('Character saved — every bot now speaks as '+body.name+'.'); renderPage(name);
+  }catch(e){ msg(e.message); } };
+  if(q('ch-test')) q('ch-test').onclick=async()=>{ try{ const g=await api('/api/character/greet'); speakAloud(g.greeting||'Hello.'); }catch(e){ msg(e.message); } };
+  if(q('ch-remember-add')) q('ch-remember-add').onclick=async()=>{ try{ const r=await api('/api/character/remember',{method:'POST',body:JSON.stringify({text:q('ch-remember').value})}); msg(r.duplicate?'Already remembered.':'Remembered.'); renderPage(name); }catch(e){ msg(e.message); } };
+  document.querySelectorAll('[data-char-forget]').forEach(el=>el.onclick=async()=>{ await api(`/api/character/remember/${el.dataset.charForget}`,{method:'DELETE'}); renderPage(name); });
+  // Phone link page
+  if(q('ph-pair')) q('ph-pair').onclick=async()=>{ try{ const r=await api('/api/phone/pair',{method:'POST'}); const el=$('ph-code'); if(el) el.textContent=r.code.split('').join(' '); const m=$('ph-msg'); if(m) m.textContent=`Code ${r.code} — open ${r.url} on your phone and enter it. It lasts 10 minutes and works once.`; msg('Code made — enter it on the phone within 10 minutes.'); }catch(e){ msg(e.message); } };
+  if(q('ph-open')) q('ph-open').onclick=async()=>{ const st=await api('/api/phone/status'); window.open(st.url,'_blank'); };
+  if(q('ph-revoke')) q('ph-revoke').onclick=async()=>{ if(!confirm('Unlink every phone?')) return; await api('/api/phone/revoke',{method:'POST'}); msg('Every phone unlinked.'); renderPage(name); };
   document.querySelectorAll('[data-conn]').forEach(el=>el.onchange=async()=>{const [kind,id]=el.dataset.conn.split(':'); await api(`/api/connectors/${kind}/${id}/toggle`,{method:'POST',body:JSON.stringify({enabled:el.checked})}); msg('Saved.');});
   document.querySelectorAll('[data-test]').forEach(el=>el.onclick=async()=>{const [kind,id]=el.dataset.test.split(':'); const r=await api(`/api/connectors/${kind}/${id}/test`,{method:'POST'}); msg(`${id}: ${r.status} — ${r.detail||''}`); renderPage(name);});
   document.querySelectorAll('[data-tool]').forEach(el=>el.onclick=async()=>{await api(`/api/tools/${el.dataset.tool}`,{method:'POST',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
@@ -1288,7 +1560,6 @@ function bindPage(name){
     const bid=get('bot_id'); if(bid!==undefined) body.bot_id=bid;
     const tok=get('token'); if(tok) body.token=tok;
     await api(`/api/messaging/${id}`,{method:'POST',body:JSON.stringify(body)}); msg(id==='telegram'?'Saved. Telegram polling starts within seconds when the channel is enabled with a token.':'Saved.');});
-  const q=id=>$(id);
   if(q('mcp-add')) q('mcp-add').onclick=async()=>{let env={}; try{env=JSON.parse(q('mcp-env').value||'{}');}catch(e){msg('Env must be valid JSON.');return;}
     await api('/api/mcp-servers',{method:'POST',body:JSON.stringify({name:q('mcp-name').value,command_or_url:q('mcp-cmd').value,env})}); renderPage(name);};
   if(q('skill-add')) q('skill-add').onclick=async()=>{await api('/api/skills',{method:'POST',body:JSON.stringify({name:q('skill-name').value,instructions:q('skill-inst').value,source:q('skill-src').value})}); renderPage(name);};
@@ -1366,8 +1637,34 @@ function bindPage(name){
   document.querySelectorAll('[data-job-export]').forEach(el=>el.onclick=async()=>{try{const d=await api(`/api/offices/${currentOffice}/jobs/${el.dataset.jobExport}/export`,{method:'POST',body:JSON.stringify({format:el.dataset.fmt})}); msg(`Exported as ${d.filename} (${(d.size_bytes/1024).toFixed(1)} KB) — it is in Documents below. Click it to download.`); renderPage(name);}catch(e){msg(e.message);}});
   if(q('rt-kind')) q('rt-kind').onchange=()=>{const k=q('rt-kind').value; q('rt-time-row').style.display=(k==='interval')?'none':'block'; q('rt-weekday-row').style.display=(k==='weekly')?'block':'none'; q('rt-interval-row').style.display=(k==='interval')?'block':'none';};
   if(q('rt-create')) q('rt-create').onclick=async()=>{try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:q('rt-name').value,bot_id:q('rt-bot').value,task:q('rt-task').value,kind:q('rt-kind').value,time:q('rt-time').value,weekday:parseInt(q('rt-weekday').value),interval_minutes:parseInt(q('rt-interval').value),desktop_action:q('rt-desktop-action')?q('rt-desktop-action').value:'',desktop_target:q('rt-desktop-target')?q('rt-desktop-target').value:'',desktop_text:q('rt-desktop-text')?q('rt-desktop-text').value:'',desktop_keys:q('rt-desktop-keys')?q('rt-desktop-keys').value:''})}); msg('Routine created — it will run on its own from now.'); renderPage(name);}catch(e){msg(e.message);}};
-  if(q('desk-act')) q('desk-act').onclick=async()=>{const b=q('desk-act'); b.disabled=true; b.textContent='Working…'; try{const r=await api('/api/desktop/action',{method:'POST',body:JSON.stringify({action:q('desk-action').value,target:q('desk-target').value,text:q('desk-text').value,keys:q('desk-keys').value})}); const el=q('desk-result'); if(el) el.innerHTML='<p style="white-space:pre-wrap">'+esc(r.result||'')+'</p>'; renderPage(name);}catch(e){msg(e.message); b.disabled=false; b.textContent='Do it on the desktop';}};
+  if(q('desk-act')) q('desk-act').onclick=async()=>{const b=q('desk-act'); b.disabled=true; b.textContent='Working…';
+    const action=q('desk-action').value, target=q('desk-target').value;
+    setMuseStatus('Working',`Desktop: ${action} ${target}`.trim());
+    showJobOverlay(`Working — ${action}${target?` ${target}`:''}`,'One desktop action. Stop cancels the wait — if the click already happened, it cannot be undone.');
+    const ac=new AbortController(); floatState.deskAbort=ac;
+    try{const r=await api('/api/desktop/action',{method:'POST',body:JSON.stringify({action,target,text:q('desk-text').value,keys:q('desk-keys').value}),signal:ac.signal});
+      const el=q('desk-result'); if(el) el.innerHTML='<p style="white-space:pre-wrap">'+esc(r.result||'')+'</p>'; setMuseStatus('Idle'); hideJobOverlay(); renderPage(name);
+    }catch(e){ if(e.name==='AbortError'){ msg('Stopped.'); setMuseStatus('Stopped','Stopped by you.'); }
+      else { msg(e.message); setMuseStatus('Idle'); }
+      hideJobOverlay(); b.disabled=false; b.textContent='Do it on the desktop'; }
+    finally{ if(floatState.deskAbort===ac) floatState.deskAbort=null; }};
   if(q('desk-refresh')) q('desk-refresh').onclick=()=>renderPage(name);
+  if(q('desk-job-run')) q('desk-job-run').onclick=async()=>{
+    const lines=q('desk-job-steps').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const steps=[];
+    for(const line of lines){
+      const parts=line.split(/\s+/); const action=(parts[0]||'').toLowerCase();
+      if(action==='type'){ steps.push({action, target:parts[1]||'', text:line.split(/\s+/).slice(2).join(' ')}); }
+      else if(action==='key'){ steps.push({action, keys:parts.slice(1).join(' ')}); }
+      else { steps.push({action, target:parts[1]||''}); }
+    }
+    if(!steps.length){ msg('Write at least one step first — e.g. inspect'); return; }
+    try{ const job=await api('/api/desktop/job',{method:'POST',body:JSON.stringify({steps})});
+      msg(`Job ${job.id} started — ${steps.length} step(s). The bar shows each step; Stop cancels it.`);
+      startJobPoll(job.id);
+    }catch(e){ msg(e.message); }
+  };
+  document.querySelectorAll('[data-job-stop]').forEach(el=>el.onclick=async()=>{ try{ await api(`/api/desktop/job/${el.dataset.jobStop}/stop`,{method:'POST'}); msg('Job stopped — no further step will run.'); renderPage(name); }catch(e){ msg(e.message); } });
   document.querySelectorAll('[data-rt-run]').forEach(el=>el.onclick=async()=>{try{const r=await api(`/api/routines/${el.dataset.rtRun}/run`,{method:'POST'}); msg(`Routine ran: ${r.last_status}.`); renderPage(name);}catch(e){msg(e.message);}});
   document.querySelectorAll('[data-rt-toggle]').forEach(el=>el.onclick=async()=>{await api(`/api/routines/${el.dataset.rtToggle}`,{method:'PATCH',body:JSON.stringify({enabled:el.dataset.on==='true'})}); renderPage(name);});
   document.querySelectorAll('[data-rt-del]').forEach(el=>el.onclick=async()=>{if(!confirm('Delete this routine?')) return; await api(`/api/routines/${el.dataset.rtDel}`,{method:'DELETE'}); renderPage(name);});
@@ -1441,7 +1738,7 @@ async function showWizard(){
   const tpls=await api('/api/templates');
   $('wiz-bot-tpl').innerHTML=tpls.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
   try{const df=await api('/api/settings/data-folder'); $('wiz-data-default').textContent=df.default_path; if(!(df.drives||[]).includes('D:')) $('wiz-data-d-row').classList.add('hidden');}catch(e){}
-  $('wiz-1').classList.remove('hidden'); $('wiz-2').classList.add('hidden'); $('wiz-3').classList.add('hidden');
+  $('wiz-1').classList.remove('hidden'); $('wiz-2').classList.add('hidden'); $('wiz-3').classList.add('hidden'); $('wiz-4').classList.add('hidden');
   showView('wizard');
 }
 async function wizFinish(){
@@ -1458,6 +1755,8 @@ async function wizFinish(){
     await api('/api/offices',{method:'POST',body:JSON.stringify({name:officeName, description:'Set up by the first-run wizard', boss_name:'Office Manager'})});
     const dt=$('wiz-deal-title').value.trim(), dc=$('wiz-deal-client').value.trim();
     if(dt&&dc) await api('/api/deals',{method:'POST',body:JSON.stringify({department:'general', title:dt, client:dc, value:null, currency:'QAR'})});
+    const wizUser=$('wiz-user-name').value.trim(), wizStyle=$('wiz-char-style').value, wizBrief=$('wiz-brief').checked;
+    if(wizUser||wizBrief) await api('/api/character',{method:'PUT',body:JSON.stringify({user_name:wizUser, style:wizStyle, morning_brief_enabled:wizBrief, speaks_first_enabled:wizBrief})});
     await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})});
     await loadBots(); selectBot(b.id);
     msg('Welcome to LocalBotz — your office is set up. ✓');
@@ -1467,8 +1766,11 @@ if(q('wiz-next-1')) q('wiz-next-1').onclick=()=>{wizRunMode=document.querySelect
 if(q('wiz-back-2')) q('wiz-back-2').onclick=()=>{$('wiz-2').classList.add('hidden'); $('wiz-1').classList.remove('hidden');};
 if(q('wiz-next-2')) q('wiz-next-2').onclick=()=>{$('wiz-2').classList.add('hidden'); $('wiz-3').classList.remove('hidden');};
 if(q('wiz-back-3')) q('wiz-back-3').onclick=()=>{$('wiz-3').classList.add('hidden'); $('wiz-2').classList.remove('hidden');};
+if(q('wiz-next-3')) q('wiz-next-3').onclick=()=>{$('wiz-3').classList.add('hidden'); $('wiz-4').classList.remove('hidden');};
+if(q('wiz-back-4')) q('wiz-back-4').onclick=()=>{$('wiz-4').classList.add('hidden'); $('wiz-3').classList.remove('hidden');};
+if(q('wiz-skip-4')) q('wiz-skip-4').onclick=wizFinish;
 if(q('wiz-finish')) q('wiz-finish').onclick=wizFinish;
 if(q('wiz-skip')) q('wiz-skip').onclick=async()=>{await api('/api/settings',{method:'POST',body:JSON.stringify({onboarding_done:true})}); showView('chat');};
-loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; if(!s.onboarding_done) showWizard(); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
+loadStatus(); loadProviders().then(()=>loadWorkspaces()).then(()=>loadAvailableModels()); loadBots(); (async()=>{const s=await api('/api/settings'); settings=s; await loadCharacter(); syncFloatbar(); await loadBots(); if(!s.onboarding_done) showWizard(); else showView('home'); await loadLanguages(); fillChatLang();})(); setInterval(loadStatus,15000);
 $('ws-select').onchange=async()=>{ localStorage.setItem('localbotz-ws',$('ws-select').value); await loadEffective(); loadStatus(); };
 </script>

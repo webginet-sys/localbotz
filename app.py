@@ -35,6 +35,7 @@ Env (see .env.example):
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import platform
@@ -42,6 +43,7 @@ import shutil
 import socket
 import sys
 import re
+import secrets
 import shlex
 import subprocess
 import threading
@@ -2035,8 +2037,10 @@ def run_agent(bot: dict, user_text: str, workspace_id: str = "default",
     lang_rule = _language_rule(eff_lang)
     steps = []  # Show-me-how steps, filled in as tools run (mock + real).
     profile_text = _business_profile_text()
+    char_text = _character_text()
     system = (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
               + (f"About this business:\n{profile_text}\n\n" if profile_text else "")
+              + (f"{char_text}\n\n" if char_text else "")
               + "You have tools for web search, browser automation, workspace files, "
               "safe shell commands, and desktop control (desktop_inspect first, "
               "then act by ref and check the verified result). Use them when needed, "
@@ -4605,8 +4609,10 @@ def _live_system_prompt(bot: dict) -> str:
     mem = load_memory(bot["id"])
     mem_text = "\n".join(f"- {f}" for f in mem.get("facts", [])) or "(no memory yet)"
     learn_text = _learnings_text(bot_id=bot["id"])
+    char_text = _character_text()
     return (f"{bot['instructions']}\n\nYour memory about the user:\n{mem_text}\n\n"
-            "You are in a LIVE voice conversation. The user is talking, not "
+            + (f"{char_text}\n\n" if char_text else "")
+            + "You are in a LIVE voice conversation. The user is talking, not "
             "typing. Reply in short plain sentences, no jargon, no menus, no "
             "tutorials. If something is unclear, ask ONE simple question in "
             "plain words. Never ask the user to write a better prompt. Keep "
@@ -5121,6 +5127,15 @@ def _persistent_worker():
                     ran = True
             if not ran:
                 if _check_due_posts():
+                    ran = True
+            if not ran:
+                # Morning brief (once a day, at the set time) and spoken
+                # nudges (once per deal per day) — prepared, never played
+                # out loud by themselves; the Home page shows a button.
+                if _check_morning_brief():
+                    ran = True
+            if not ran:
+                if _check_spoken_nudges():
                     ran = True
         except Exception:
             time.sleep(30)
@@ -6369,6 +6384,634 @@ def put_business_profile(body: dict):
         raise HTTPException(400, "Give the company a name — that is the one required field.")
     p.setdefault("created_at", int(time.time()))
     return save_business_profile(p)
+
+
+# ---------- Living character: Muse, who lives in your PC ----------
+# Stonic-inspired, LocalBotz-native. The character is Muse — the name
+# Thomas already chose for his assistant. One character, not a cast: it
+# greets you by name, remembers what you tell it, and speaks first only
+# when you switch that on (default off). Nothing here copies Stonic or
+# JARVIS names, branding or the sci-fi HUD look, and nothing is copied
+# code — every line below is LocalBotz's own.
+CHARACTER_FILE = DATA_DIR / "character.json"
+PHONE_CODES_FILE = DATA_DIR / "phone_codes.json"
+BRIEF_FILE = DATA_DIR / "brief.json"
+CHARACTER_STYLES = ("mentor", "friend", "professional", "custom")
+
+
+def _default_character():
+    return {"name": "Muse", "style": "mentor", "custom_style": "",
+            "user_name": "", "greeting": "",
+            "voice_rate": 1.0, "voice_pitch": 1.0, "voice_name": "",
+            "remembers": [], "enabled": True,
+            "speaks_first_enabled": False, "morning_brief_enabled": False,
+            "morning_brief_time": "08:00", "spoken_nudges_enabled": False,
+            "quiet_hours": "", "last_brief_date": "", "last_nudge": {},
+            "floatbar_enabled": True,
+            "created_at": int(time.time()), "updated_at": int(time.time())}
+
+
+def load_character():
+    d = _load_json(CHARACTER_FILE, None)
+    if not isinstance(d, dict):
+        return _default_character()
+    merged = _default_character()
+    merged.update(d)
+    if merged.get("style") not in CHARACTER_STYLES:
+        merged["style"] = "mentor"
+    if not isinstance(merged.get("remembers"), list):
+        merged["remembers"] = []
+    merged["remembers"] = [str(x).strip() for x in merged["remembers"]
+                           if str(x).strip()][:50]
+    if not isinstance(merged.get("last_nudge"), dict):
+        merged["last_nudge"] = {}
+    return merged
+
+
+def save_character(d):
+    d["updated_at"] = int(time.time())
+    _save_json(CHARACTER_FILE, d)
+    return d
+
+
+def _character_style_text(char):
+    if char.get("style") == "custom" and (char.get("custom_style") or "").strip():
+        return (char["custom_style"] or "").strip()
+    return {"mentor": ("Speak like a calm, experienced mentor: plain, "
+                       "encouraging, to the point. Celebrate progress, "
+                       "never lecture."),
+            "friend": ("Speak like a warm, easy friend: plain, cheerful, "
+                       "short sentences. Never formal."),
+            "professional": ("Speak like a professional office colleague: "
+                             "plain, courteous, concise. No slang, no small "
+                             "talk unless the user starts it.")}.get(
+        char.get("style") or "mentor",
+        "Speak plainly, warmly and briefly.")
+
+
+def _character_text(char=None):
+    """Prompt block for the character, or '' when it is switched off."""
+    char = char or load_character()
+    if not char.get("enabled", True):
+        return ""
+    name = (char.get("name") or "Muse").strip()
+    lines = [f"You are {name}, the assistant who lives on this computer. "
+             f"You are one character the user talks to — not a menu, not a "
+             f"list of bots. You remember the user and talk like a person "
+             f"they work with, not like a search box.",
+             f"Your way of speaking: {_character_style_text(char)}"]
+    if (char.get("user_name") or "").strip():
+        lines.append(f"The user is called {(char['user_name']).strip()} — "
+                     f"use their name now and then, naturally.")
+    remembers = [r for r in (char.get("remembers") or []) if str(r).strip()]
+    if remembers:
+        lines.append("Things you remember about the user:\n" +
+                     "\n".join(f"- {r}" for r in remembers[:10]))
+    return "\n".join(lines)
+
+
+def _greeting_for(char=None, now=None):
+    """Plain-language greeting from the time of day — never invents facts."""
+    char = char or load_character()
+    now = now or datetime.datetime.now()
+    hour = now.hour
+    part = ("Good morning" if hour < 12 else
+            "Good afternoon" if hour < 18 else "Good evening")
+    name = (char.get("name") or "Muse").strip()
+    user = (char.get("user_name") or "").strip()
+    if (char.get("greeting") or "").strip():
+        return (char["greeting"].strip()
+                .replace("{name}", name).replace("{user}", user or "friend"))
+    if user:
+        return f"{part}, {user}. {name} here — what are we doing first?"
+    return f"{part}. {name} here — what are we doing first?"
+
+
+def _build_brief_data(now=None):
+    """Today's brief, built ONLY from real stored data. Every line names
+    a real routine, deal, lead or task — or says plainly that there is
+    nothing. No number or date is ever invented here."""
+    now = now or datetime.datetime.now()
+    today = now.date().isoformat()
+    lines = []
+    counts = {"routines_due": 0, "stuck_deals": 0, "new_leads": 0,
+              "pending_tasks": 0}
+    # Routines due today.
+    due_routines = []
+    for r in load_routines():
+        if not r.get("enabled"):
+            continue
+        nxt = r.get("next_run")
+        if nxt and datetime.datetime.fromtimestamp(nxt).date().isoformat() == today:
+            due_routines.append(r)
+    counts["routines_due"] = len(due_routines)
+    if due_routines:
+        names = ", ".join(r.get("name", "routine") for r in due_routines[:5])
+        lines.append(f"{len(due_routines)} routine(s) due today: {names}.")
+    # Deals gone quiet: Quoted / Negotiation with no movement for 3+ days.
+    stuck = []
+    for d in load_deals():
+        if (d.get("stage") or "") not in ("quoted", "negotiation"):
+            continue
+        try:
+            last = _deal_last_activity(d)
+        except Exception:
+            last = d.get("updated_at") or d.get("created_at") or 0
+        if int(time.time()) - int(last or 0) >= 3 * 86400:
+            stuck.append(d)
+    counts["stuck_deals"] = len(stuck)
+    if stuck:
+        names = ", ".join(
+            f"{d.get('title') or 'a deal'} for {d.get('client') or 'a client'}"
+            for d in stuck[:5])
+        lines.append(f"{len(stuck)} deal(s) waiting on a reply for 3 days or "
+                     f"more: {names}.")
+    # New leads.
+    try:
+        new_leads = [x for x in load_leads() if x.get("status") == "new"]
+    except Exception:
+        new_leads = []
+    counts["new_leads"] = len(new_leads)
+    if new_leads:
+        names = ", ".join(x.get("business_name", "a business")
+                          for x in new_leads[:5])
+        lines.append(f"{len(new_leads)} new lead(s): {names}.")
+    # Pending tasks.
+    try:
+        pending = [t for t in load_tasks() if t.get("status") == "pending"]
+    except Exception:
+        pending = []
+    counts["pending_tasks"] = len(pending)
+    if pending:
+        lines.append(f"{len(pending)} task(s) still waiting in the background.")
+    if not lines:
+        lines = ["Nothing needs your attention today — no routines due, "
+                 "no deals waiting, no new leads."]
+    return {"date": today, "lines": lines, "counts": counts,
+            "text": " ".join(lines)}
+
+
+def _prepare_brief(now=None):
+    """Build today's brief and store it (so the Home page and the worker
+    share one prepared copy). Returns the brief dict."""
+    brief = _build_brief_data(now)
+    brief["prepared_at"] = int(time.time())
+    brief["spoken"] = False
+    stored = _load_json(BRIEF_FILE, None)
+    nudge = stored.get("nudge") if isinstance(stored, dict) else None
+    if nudge:
+        brief["nudge"] = nudge
+    _save_json(BRIEF_FILE, brief)
+    return brief
+
+
+def _check_morning_brief():
+    """Worker hook: once a day, at the set time, prepare the morning
+    brief — once only (last_brief_date), never repeated. Returns True
+    when a brief was prepared."""
+    try:
+        char = load_character()
+        if not char.get("morning_brief_enabled"):
+            return False
+        hm = _parse_hhmm(char.get("morning_brief_time") or "08:00")
+        if not hm:
+            return False
+        now = datetime.datetime.now()
+        today = now.date().isoformat()
+        if char.get("last_brief_date") == today:
+            return False
+        if (now.hour, now.minute) < hm:
+            return False
+        _prepare_brief(now)
+        char["last_brief_date"] = today
+        save_character(char)
+        return True
+    except Exception:
+        return False
+
+
+def _check_spoken_nudges():
+    """Worker hook: when a monitor has fired for a deal today, leave one
+    spoken nudge on the Home brief — once per deal per day, and only
+    when the user switched spoken nudges on. Never audio by itself:
+    the Home page shows a button and the user taps it to hear it."""
+    try:
+        char = load_character()
+        if not (char.get("speaks_first_enabled")
+                and char.get("spoken_nudges_enabled")):
+            return False
+        today = datetime.date.today().isoformat()
+        for monitor in load_monitors():
+            for run in (monitor.get("runs") or [])[-20:]:
+                if not run.get("at"):
+                    continue
+                if datetime.datetime.fromtimestamp(
+                        run["at"]).date().isoformat() != today:
+                    continue
+                deal_id = run.get("deal_id") or ""
+                if not deal_id or char.get("last_nudge", {}).get(deal_id) == today:
+                    continue
+                deal = next((d for d in load_deals()
+                             if d.get("id") == deal_id), None)
+                if not deal:
+                    continue
+                text = (f"Heads up — the {deal.get('title') or 'deal'} deal "
+                        f"for {deal.get('client') or 'a client'} has had no "
+                        f"reply. The chase draft is ready on the deal.")
+                brief = _load_json(BRIEF_FILE, None)
+                brief = brief if isinstance(brief, dict) else _build_brief_data()
+                brief["nudge"] = {"text": text, "deal_id": deal_id,
+                                  "at": int(time.time())}
+                _save_json(BRIEF_FILE, brief)
+                char.setdefault("last_nudge", {})[deal_id] = today
+                save_character(char)
+                return True
+        return False
+    except Exception:
+        return False
+
+
+@app.get("/api/character")
+def get_character():
+    return load_character()
+
+
+@app.put("/api/character")
+def put_character(body: dict):
+    char = load_character()
+    if "name" in body:
+        name = _as_text(body.get("name"))
+        if not name:
+            raise HTTPException(400, "Give your character a name — e.g. Muse.")
+        if len(name) > 60:
+            raise HTTPException(400, "Keep the name under 60 characters.")
+        char["name"] = name
+    if "style" in body:
+        style = _as_text(body.get("style")).lower()
+        if style not in CHARACTER_STYLES:
+            raise HTTPException(400, "Style must be mentor, friend, professional or custom.")
+        char["style"] = style
+    if "custom_style" in body:
+        char["custom_style"] = _as_text(body.get("custom_style"))[:500]
+    if "user_name" in body:
+        char["user_name"] = _as_text(body.get("user_name"))[:100]
+    if "greeting" in body:
+        char["greeting"] = _as_text(body.get("greeting"))[:200]
+    if "voice_rate" in body:
+        try:
+            rate = float(body.get("voice_rate"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Voice speed must be a number, e.g. 1.0.")
+        if not 0.5 <= rate <= 2.0:
+            raise HTTPException(400, "Voice speed must be between 0.5 and 2.0.")
+        char["voice_rate"] = rate
+    if "voice_pitch" in body:
+        try:
+            pitch = float(body.get("voice_pitch"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Voice pitch must be a number, e.g. 1.0.")
+        if not 0.5 <= pitch <= 2.0:
+            raise HTTPException(400, "Voice pitch must be between 0.5 and 2.0.")
+        char["voice_pitch"] = pitch
+    if "voice_name" in body:
+        char["voice_name"] = _as_text(body.get("voice_name"))[:100]
+    if "remembers" in body:
+        val = body.get("remembers")
+        if isinstance(val, str):
+            val = [val]
+        if not isinstance(val, list):
+            raise HTTPException(400, "Things to remember must be a list of short notes.")
+        char["remembers"] = [str(x).strip() for x in val
+                             if str(x).strip()][:50]
+    for key in ("enabled", "speaks_first_enabled", "morning_brief_enabled",
+                "spoken_nudges_enabled", "floatbar_enabled"):
+        if key in body:
+            char[key] = bool(body.get(key))
+    if "morning_brief_time" in body:
+        if not _parse_hhmm(body.get("morning_brief_time") or ""):
+            raise HTTPException(400, "Give the morning brief time like 08:00.")
+        char["morning_brief_time"] = body.get("morning_brief_time")
+    if "quiet_hours" in body:
+        char["quiet_hours"] = _as_text(body.get("quiet_hours"))[:50]
+    return save_character(char)
+
+
+@app.post("/api/character/remember", status_code=201)
+def add_character_memory(body: dict):
+    text = _as_text(body.get("text"))
+    if not text:
+        raise HTTPException(400, "Write something to remember first.")
+    if len(text) > 200:
+        raise HTTPException(400, "Keep each remembered note under 200 characters.")
+    char = load_character()
+    if text in char.get("remembers", []):
+        return {"remembers": char["remembers"], "duplicate": True}
+    char.setdefault("remembers", []).append(text)
+    char["remembers"] = char["remembers"][:50]
+    save_character(char)
+    return {"remembers": char["remembers"], "duplicate": False}
+
+
+@app.delete("/api/character/remember/{index}")
+def delete_character_memory(index: int):
+    char = load_character()
+    remembers = char.get("remembers", [])
+    if not 0 <= index < len(remembers):
+        raise HTTPException(404, "Nothing remembered at that number.")
+    removed = remembers.pop(index)
+    save_character(char)
+    return {"removed": removed, "remembers": remembers}
+
+
+@app.post("/api/character/greet")
+def greet_character():
+    char = load_character()
+    brief = _build_brief_data()
+    headline = brief["lines"][0] if brief.get("lines") else ""
+    return {"greeting": _greeting_for(char), "name": char.get("name") or "Muse",
+            "user_name": char.get("user_name") or "",
+            "brief_headline": headline, "brief": brief}
+
+
+@app.get("/api/brief")
+def get_brief():
+    stored = _load_json(BRIEF_FILE, None)
+    brief = _build_brief_data()
+    if isinstance(stored, dict) and stored.get("date") == brief["date"]:
+        brief["prepared_at"] = stored.get("prepared_at")
+        brief["spoken"] = stored.get("spoken", False)
+        if stored.get("nudge"):
+            brief["nudge"] = stored.get("nudge")
+    char = load_character()
+    brief["speaks_first_enabled"] = bool(char.get("speaks_first_enabled"))
+    brief["morning_brief_enabled"] = bool(char.get("morning_brief_enabled"))
+    brief["morning_brief_time"] = char.get("morning_brief_time") or "08:00"
+    return brief
+
+
+@app.post("/api/brief/prepare")
+def prepare_brief_now():
+    return _prepare_brief()
+
+
+@app.get("/api/home")
+def get_home():
+    """Everything the Home command centre shows, from real data only."""
+    char = load_character()
+    brief = _build_brief_data()
+    stored = _load_json(BRIEF_FILE, None)
+    if isinstance(stored, dict) and stored.get("date") == brief["date"] \
+            and stored.get("nudge"):
+        brief["nudge"] = stored.get("nudge")
+    try:
+        bots = load_bots()
+    except Exception:
+        bots = []
+    try:
+        deals = load_deals()
+    except Exception:
+        deals = []
+    try:
+        leads = load_leads()
+    except Exception:
+        leads = []
+    workrooms = _load_json(DATA_DIR / "workrooms.json", None)
+    if not isinstance(workrooms, list):
+        workrooms = []
+    try:
+        learnings = load_learnings()
+    except Exception:
+        learnings = []
+    try:
+        chain_runs = load_chain_runs()
+    except Exception:
+        chain_runs = []
+    return {"greeting": _greeting_for(char),
+            "character": {"name": char.get("name") or "Muse",
+                          "style": char.get("style") or "mentor",
+                          "user_name": char.get("user_name") or "",
+                          "enabled": bool(char.get("enabled", True)),
+                          "voice_rate": char.get("voice_rate") or 1.0,
+                          "voice_pitch": char.get("voice_pitch") or 1.0,
+                          "voice_name": char.get("voice_name") or "",
+                          "floatbar_enabled": bool(char.get("floatbar_enabled", True))},
+            "brief": brief,
+            "counts": {"bots": len(bots), "deals": len(deals),
+                       "leads": len(leads), "workrooms": len(workrooms),
+                       "learnings": len(learnings)},
+            "deals_needing_attention": [
+                {"id": d.get("id"), "title": d.get("title"),
+                 "client": d.get("client"),
+                 "stage": _stage_label(_deal_department(d), d.get("stage", ""))}
+                for d in load_deals()
+                if (d.get("stage") or "") in ("quoted", "negotiation")
+                and int(time.time()) - int(
+                    _deal_last_activity(d) or d.get("updated_at") or 0) >= 3 * 86400][:5],
+            "routines_due_today": [
+                {"id": r.get("id"), "name": r.get("name"),
+                 "schedule_text": r.get("schedule_text") or ""}
+                for r in load_routines() if r.get("enabled")
+                and r.get("next_run") and datetime.datetime.fromtimestamp(
+                    r["next_run"]).date().isoformat() == brief["date"]][:5],
+            "recent_learnings": [l.get("text") for l in (learnings or [])[-3:]],
+            "recent_runs": [{"status": r.get("status"),
+                            "at": r.get("finished_at") or r.get("created_at")}
+                           for r in (chain_runs or [])[:3]]}
+
+
+# ---------- Phone link — call Muse from your phone ----------
+# Bridge to the future mobile app, not the mobile app itself. The phone
+# talks to THIS computer while the app is open: a one-time 6-digit code
+# (10 minutes, hashed, one use) pairs the phone, which then gets a
+# session token (7 days, hashed). No VPS relay, no WhatsApp QR pairing
+# (ban risk) — LocalBotz's own account-bound code only. The PC must stay
+# on and the phone must reach it on the same Wi-Fi; the page says so
+# plainly when it cannot.
+PHONE_CODE_TTL_SECONDS = 600
+PHONE_SESSION_TTL_SECONDS = 7 * 86400
+
+
+def _load_phone_store():
+    d = _load_json(PHONE_CODES_FILE, None)
+    if not isinstance(d, dict):
+        return {"codes": [], "sessions": []}
+    d.setdefault("codes", [])
+    d.setdefault("sessions", [])
+    return d
+
+
+def _save_phone_store(d):
+    _save_json(PHONE_CODES_FILE, d)
+    return d
+
+
+def _phone_local_address():
+    try:
+        host = socket.gethostname()
+        addr = socket.gethostbyname(host)
+        if addr and not addr.startswith("127."):
+            return addr
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+def _phone_url():
+    port = os.getenv("PORT", "8000")
+    return f"http://{_phone_local_address()}:{port}/phone"
+
+
+def _phone_session_valid(token):
+    if not token:
+        return False
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    store = _load_phone_store()
+    now = int(time.time())
+    store["sessions"] = [s for s in store.get("sessions", [])
+                         if s.get("expires_at", 0) > now]
+    _save_phone_store(store)
+    return any(s.get("token_hash") == digest for s in store["sessions"])
+
+
+@app.get("/api/phone/status")
+def phone_status():
+    store = _load_phone_store()
+    now = int(time.time())
+    active = [c for c in store.get("codes", [])
+              if not c.get("used") and c.get("expires_at", 0) > now]
+    sessions = [s for s in store.get("sessions", [])
+                if s.get("expires_at", 0) > now]
+    return {"paired": bool(sessions), "active_code": bool(active),
+            "code_expires_at": active[0]["expires_at"] if active else None,
+            "sessions": len(sessions),
+            "url": _phone_url(), "local_address": _phone_local_address(),
+            "port": os.getenv("PORT", "8000"),
+            "note": ("Your phone must be on the same Wi-Fi and able to reach "
+                     "this PC while LocalBotz is open. If the phone cannot "
+                     "reach this address, it will say so on the phone page.")}
+
+
+@app.post("/api/phone/pair", status_code=201)
+def phone_pair():
+    code = f"{secrets.randbelow(900000) + 100000:06d}"
+    store = _load_phone_store()
+    now = int(time.time())
+    store["codes"] = [c for c in store.get("codes", [])
+                      if not c.get("used") and c.get("expires_at", 0) > now]
+    store["codes"].append({"code_hash": hashlib.sha256(
+        code.encode("utf-8")).hexdigest(),
+        "created_at": now, "expires_at": now + PHONE_CODE_TTL_SECONDS,
+        "used": False})
+    _save_phone_store(store)
+    # The code is shown once, here. It is stored only as a hash.
+    return {"code": code, "url": _phone_url(),
+            "expires_at": now + PHONE_CODE_TTL_SECONDS,
+            "expires_in_seconds": PHONE_CODE_TTL_SECONDS}
+
+
+@app.post("/api/phone/verify")
+def phone_verify(body: dict):
+    code = _as_text(body.get("code")).strip()
+    if not code.isdigit() or len(code) != 6:
+        raise HTTPException(400, "Enter the 6-digit code from Settings > Phone link.")
+    digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    store = _load_phone_store()
+    now = int(time.time())
+    entry = next((c for c in store.get("codes", [])
+                  if c.get("code_hash") == digest), None)
+    if not entry:
+        raise HTTPException(400, "That code does not match. Make a new one on the PC.")
+    if entry.get("used"):
+        raise HTTPException(400, "That code was already used. Make a new one on the PC.")
+    if entry.get("expires_at", 0) <= now:
+        raise HTTPException(400, "That code has expired (10 minutes). Make a new one on the PC.")
+    entry["used"] = True
+    token = "phs_" + secrets.token_urlsafe(24)
+    store.setdefault("sessions", []).append(
+        {"token_hash": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+         "created_at": now, "expires_at": now + PHONE_SESSION_TTL_SECONDS})
+    _save_phone_store(store)
+    return {"session_token": token, "expires_at": now + PHONE_SESSION_TTL_SECONDS}
+
+
+@app.post("/api/phone/revoke")
+def phone_revoke():
+    _save_phone_store({"codes": [], "sessions": []})
+    return {"revoked": True,
+            "note": "Every phone is unlinked. Make a new code to link a phone again."}
+
+
+@app.get("/phone")
+def phone_page():
+    """Phone-friendly page: enter the 6-digit code once, then talk or
+    type to Muse — the same character, the same chat history. No audio
+    is ever saved. Served as one small page so the phone needs nothing
+    installed."""
+    return Response(content=PHONE_HTML, media_type="text/html")
+
+
+PHONE_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalBotz — Muse on your phone</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#f6f5f2;color:#1a1a1a}
+main{max-width:560px;margin:0 auto;padding:20px}
+h1{font-size:22px} .note{background:#fffbe8;border:1px solid #eee0a0;border-radius:8px;padding:10px;font-size:14px}
+input,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit;box-sizing:border-box}
+button{background:#0d9488;color:#fff;border:0;padding:11px 16px;border-radius:8px;font:inherit;cursor:pointer;margin-top:8px}
+button.ghost{background:#eee;color:#222}
+#chat{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.msg{padding:10px 12px;border-radius:10px;white-space:pre-wrap;line-height:1.5}
+.msg.user{background:#0d9488;color:#fff;align-self:flex-end;max-width:85%}
+.msg.assistant{background:#fff;border:1px solid #e3e0d9;align-self:flex-start;max-width:90%}
+.hidden{display:none}</style></head><body><main>
+<h1>🤖 Muse — on your phone</h1>
+<p class="note">This talks to LocalBotz on your computer. The PC must stay on,
+LocalBotz must be open, and your phone must be on the same Wi-Fi and able to
+reach it. If the phone cannot reach the PC, the chat below will say so —
+nothing is sent anywhere else.</p>
+<div id="pair">
+<label>6-digit code — from Settings &gt; Phone link on the PC</label>
+<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="e.g. 482913">
+<button id="pair-btn">Link this phone</button>
+<p id="pair-msg" class="note hidden"></p>
+</div>
+<div id="talk" class="hidden">
+<p id="greet"></p>
+<div id="chat"></div>
+<label>Talk or type — plain words, no prompting</label>
+<textarea id="msg" rows="2" placeholder="Say what you want…"></textarea>
+<button id="send">Send</button>
+<button id="mic" class="ghost">🎙️ Talk</button>
+<button id="speak" class="ghost">🔊 Hear replies: off</button>
+<p class="note">Talk needs Chrome or Edge on the phone. Replies are read out
+loud only after you tap “Hear replies” — browsers do not let a page speak
+without you tapping first. No audio is saved, on the phone or on the PC.</p>
+</div>
+<script>
+let token=sessionStorage.getItem('localbotz-phone')||'', botId='', speakOn=false, recog=null;
+const $=id=>document.getElementById(id);
+async function j(p,o={}){const r=await fetch(p,{headers:{'Content-Type':'application/json',...(token?{'X-Phone-Token':token}:{})},...o}); if(!r.ok) throw new Error(await r.text()); return r.json();}
+function line(who,text){const d=document.createElement('div'); d.className='msg '+(who==='You'?'user':'assistant'); d.textContent=(who?who+': ':'')+text; $('chat').appendChild(d); d.scrollIntoView();}
+async function enter(){
+  $('pair').classList.add('hidden'); $('talk').classList.remove('hidden');
+  try{ const bots=await j('/api/bots'); botId=(bots[0]||{}).id||'';
+    const g=await j('/api/character/greet'); $('greet').textContent=g.greeting||'';
+    const h=await j('/api/bots/'+botId+'/chat').catch(()=>({messages:[]})); (h.messages||[]).slice(-6).forEach(m=>line(m.role==='user'?'You':'Muse', m.content||''));
+  }catch(e){ $('greet').textContent='Connected, but the PC did not answer: '+e.message+' — check the PC is on, LocalBotz is open, and you are on the same Wi-Fi.'; }
+}
+$('pair-btn').onclick=async()=>{ const m=$('pair-msg'); m.classList.remove('hidden');
+  try{ const r=await j('/api/phone/verify',{method:'POST',body:JSON.stringify({code:$('code').value.trim()})}); token=r.session_token; sessionStorage.setItem('localbotz-phone',token); m.textContent='Linked ✓ — this phone stays linked for 7 days. You can unlink it any time from Settings > Phone link.'; enter(); }
+  catch(e){ m.textContent='Could not link: '+e.message; } };
+$('send').onclick=async()=>{ const text=$('msg').value.trim(); if(!text||!botId) return; $('msg').value=''; line('You',text);
+  try{ const r=await j('/api/bots/'+botId+'/chat',{method:'POST',body:JSON.stringify({message:text,talk:true})}); line('Muse', r.reply||r.content||'(no reply)'); if(speakOn) speak(r.reply||r.content||''); }
+  catch(e){ line('Muse','The PC did not answer: '+e.message); } };
+$('speak').onclick=()=>{ speakOn=!speakOn; $('speak').textContent=speakOn?'🔊 Hear replies: on':'🔊 Hear replies: off'; if(!speakOn&&'speechSynthesis' in window) speechSynthesis.cancel(); };
+function speak(t){ if(!('speechSynthesis' in window)) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(String(t||'').split(/(?<=[.!?])\\s+/).slice(0,2).join(' ').slice(0,600)); speechSynthesis.speak(u);}catch(e){} }
+$('mic').onclick=()=>{ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){ alert('Talk needs Chrome or Edge — your browser has no speech recognition. You can still type.'); return; }
+  try{ recog=new SR(); recog.lang=navigator.language||'en-GB'; recog.interimResults=false; recog.onresult=e=>{ $('msg').value=e.results[0][0].transcript; $('send').click(); }; recog.onerror=()=>{}; recog.start(); }catch(e){ alert('Could not start listening: '+e.message); } };
+if(token) enter();
+</script></main></body></html>"""
 
 
 # ---------- Lead hunting — find new clients, sort them, turn them into deals ----------
@@ -8078,6 +8721,166 @@ def desktop_action(body: DesktopActionIn):
                          keys=body.keys, x=body.x, y=body.y,
                          source=body.source or "manual")
     return {"action": action, "result": result, "snapshot": _desktop_snapshot()}
+
+
+# ---------- Desktop jobs — a few desktop steps, with a real Stop ----------
+# The floating bar's live overlay watches one of these. A job is a short
+# list of desktop steps run in order in a background thread, with a
+# pause between steps so the desktop can settle — and so Stop has
+# something to stop. Stop sets the job to "stopped"; the runner checks
+# the flag before every step and never starts another one. Nothing is
+# hidden: the job record keeps every step, its result, and where it
+# stopped. Permission-gated exactly like a single desktop action:
+# the global Desktop toggle and the per-tool toggles must allow every
+# step's tool, or the job is refused up front with a 403.
+DESKTOP_JOBS_FILE = DATA_DIR / "desktop_jobs.json"
+DESKTOP_JOB_STEP_DELAY_SECONDS = 1.5
+
+
+def load_desktop_jobs():
+    jobs = _load_json(DESKTOP_JOBS_FILE, None)
+    return jobs if isinstance(jobs, list) else []
+
+
+def save_desktop_jobs(jobs):
+    _save_json(DESKTOP_JOBS_FILE, jobs[-50:])
+    return jobs
+
+
+def _desktop_job_plain(step):
+    try:
+        return _plain_step(f"desktop_{step.get('action', '')}",
+                           {"target": step.get("target", ""),
+                            "text": step.get("text", ""),
+                            "keys": step.get("keys", "")})
+    except Exception:
+        return f"{step.get('action', '')} {step.get('target', '')}".strip()
+
+
+def _validate_desktop_job_steps(raw):
+    if not isinstance(raw, list) or not raw:
+        raise HTTPException(400, "Give the job at least one desktop step.")
+    if len(raw) > 10:
+        raise HTTPException(400, "Keep the job to 10 steps or fewer.")
+    steps = []
+    for s in raw:
+        if not isinstance(s, dict):
+            raise HTTPException(400, "Each step must be an action with a target.")
+        action = (s.get("action") or "").strip().lower()
+        if action.startswith("desktop_"):
+            action = action[len("desktop_"):]
+        if action not in DESKTOP_ACTIONS:
+            raise HTTPException(400, f"Desktop action must be one of: {', '.join(DESKTOP_ACTIONS)}.")
+        steps.append({"action": action,
+                      "target": _as_text(s.get("target"))[:200],
+                      "text": _as_text(s.get("text"))[:500],
+                      "keys": _as_text(s.get("keys"))[:100]})
+    return steps
+
+
+def _run_desktop_job(job_id):
+    """Background runner: one step at a time, checking the stop flag
+    before every step. Never crashes the app."""
+    try:
+        jobs = load_desktop_jobs()
+        job = next((j for j in jobs if j.get("id") == job_id), None)
+        if not job:
+            return
+        for i, step in enumerate(job.get("steps", [])):
+            jobs = load_desktop_jobs()
+            job = next((j for j in jobs if j.get("id") == job_id), None)
+            if not job or job.get("status") != "running":
+                return  # stopped (or deleted) — do not start another step
+            job["current_index"] = i
+            job["current_plain"] = _desktop_job_plain(step)
+            save_desktop_jobs(jobs)
+            result = _desktop_do(step["action"], target=step.get("target", ""),
+                                 text=step.get("text", ""), keys=step.get("keys", ""),
+                                 source=f"desktop-job:{job_id}")
+            jobs = load_desktop_jobs()
+            job = next((j for j in jobs if j.get("id") == job_id), None)
+            if not job:
+                return
+            job.setdefault("results", []).append(
+                {"step": i + 1, "action": step["action"],
+                 "target": step.get("target", ""),
+                 "plain": job.get("current_plain", ""),
+                 "result": (result or "")[:500], "at": int(time.time())})
+            job["current_index"] = i + 1
+            save_desktop_jobs(jobs)
+            if i + 1 < len(job.get("steps", [])):
+                time.sleep(DESKTOP_JOB_STEP_DELAY_SECONDS)
+        jobs = load_desktop_jobs()
+        job = next((j for j in jobs if j.get("id") == job_id), None)
+        if job and job.get("status") == "running":
+            job["status"] = "done"
+            job["finished_at"] = int(time.time())
+            save_desktop_jobs(jobs)
+    except Exception:
+        try:
+            jobs = load_desktop_jobs()
+            job = next((j for j in jobs if j.get("id") == job_id), None)
+            if job and job.get("status") == "running":
+                job["status"] = "failed"
+                job["finished_at"] = int(time.time())
+                save_desktop_jobs(jobs)
+        except Exception:
+            pass
+
+
+@app.post("/api/desktop/job", status_code=201)
+def create_desktop_job(body: dict):
+    steps = _validate_desktop_job_steps(body.get("steps"))
+    perms = load_permissions()
+    if not perms.get("global", {}).get("desktop", True):
+        raise HTTPException(403, "Desktop control is off (Settings > Permissions).")
+    for step in steps:
+        tool_name = f"desktop_{step['action']}"
+        if not perms.get("tools", {}).get(tool_name, True):
+            raise HTTPException(403, f"Tool {tool_name} is disabled (Library > Tools).")
+    job = {"id": uuid.uuid4().hex[:8], "steps": steps,
+           "plain": [_desktop_job_plain(s) for s in steps],
+           "status": "running", "current_index": 0,
+           "current_plain": _desktop_job_plain(steps[0]),
+           "results": [], "created_at": int(time.time()), "finished_at": None}
+    jobs = load_desktop_jobs()
+    jobs.append(job)
+    save_desktop_jobs(jobs)
+    threading.Thread(target=_run_desktop_job, args=(job["id"],),
+                     daemon=True).start()
+    return job
+
+
+@app.get("/api/desktop/jobs")
+def list_desktop_jobs():
+    return sorted(load_desktop_jobs(),
+                  key=lambda j: j.get("created_at", 0), reverse=True)[:20]
+
+
+@app.get("/api/desktop/job/{job_id}")
+def get_desktop_job(job_id: str):
+    job = next((j for j in load_desktop_jobs() if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "Desktop job not found")
+    return job
+
+
+@app.post("/api/desktop/job/{job_id}/stop")
+def stop_desktop_job(job_id: str):
+    jobs = load_desktop_jobs()
+    job = next((j for j in jobs if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "Desktop job not found")
+    if job.get("status") != "running":
+        raise HTTPException(400, f"This job is already {job.get('status')} — there is nothing to stop.")
+    job["status"] = "stopped"
+    job["finished_at"] = int(time.time())
+    save_desktop_jobs(jobs)
+    _desktop_log("job_stop", job_id, "desktop-job",
+                 f"Stopped by the user at step {job.get('current_index', 0) + 1} "
+                 f"of {len(job.get('steps', []))}: {job.get('current_plain', '')}",
+                 False)
+    return job
 
 
 @app.get("/api/desktop/log")

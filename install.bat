@@ -32,3 +32,7 @@ echo   No separate downloads. No Git needed.
 echo ============================================================
 echo.
 call start.bat %*
+echo.
+echo LocalBotz install finished. If the window above shows an error,
+echo read it now — the window stays open on purpose. Press any key to close it.
+pause
