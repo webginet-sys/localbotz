@@ -139,6 +139,9 @@ where lms >nul 2>&1
 if not errorlevel 1 goto :have_lmstudio
 if exist "%LOCALAPPDATA%\LM-Studio\LM Studio.exe" goto :have_lmstudio
 if exist "%LOCALAPPDATA%\Programs\LM-Studio\LM Studio.exe" goto :have_lmstudio
+if exist "%LOCALAPPDATA%\Programs\LM Studio\LM Studio.exe" goto :have_lmstudio
+if exist "%USERPROFILE%\.lmstudio\bin\lms.exe" goto :have_lmstudio
+if exist "%USERPROFILE%\.cache\lm-studio\bin\lms.exe" goto :have_lmstudio
 echo [LocalBotz] LM Studio was not found - installing it for you now.
 echo [LocalBotz] LM Studio was not found - installing it for you now. >> install.log
 echo [LocalBotz] This is part of the LocalBotz install. No separate download.
@@ -170,6 +173,8 @@ REM starts, and its status line tells you LM Studio is not reachable yet.
 where lms >nul 2>&1
 if errorlevel 1 (
   if exist "%LOCALAPPDATA%\LM-Studio\bin\lms.exe" set "PATH=%LOCALAPPDATA%\LM-Studio\bin\;%PATH%"
+  if exist "%USERPROFILE%\.lmstudio\bin\lms.exe" set "PATH=%USERPROFILE%\.lmstudio\bin\;%PATH%"
+  if exist "%USERPROFILE%\.cache\lm-studio\bin\lms.exe" set "PATH=%USERPROFILE%\.cache\lm-studio\bin\;%PATH%"
 )
 where lms >nul 2>&1
 if errorlevel 1 goto :venv
@@ -189,6 +194,10 @@ lms load qwen3.5-9b --yes >nul 2>&1
 if errorlevel 1 lms load qwen/qwen3.5-9b --yes >nul 2>&1
 lms server start >nul 2>&1
 echo [LocalBotz] LM Studio server should now be on http://localhost:1234
+lms ls 2>nul | findstr /I "qwen3.5" >nul
+if errorlevel 1 echo [LocalBotz] NOTE: no Qwen3.5 model was found in LM Studio, so chat cannot answer yet.
+if errorlevel 1 echo [LocalBotz] NOTE: open LM Studio, download the Qwen3.5 model, load it, then start its server - or run start.bat again.
+if errorlevel 1 echo [LocalBotz] NOTE: no Qwen3.5 model was found in LM Studio, so chat cannot answer yet. >> install.log
 echo [LocalBotz] LM Studio server should now be on http://localhost:1234 >> install.log
 
 REM ---------- Where should the data live? Asked once, on first install. ----------
